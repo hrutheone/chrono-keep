@@ -1,6 +1,7 @@
 import './style.css';
 import { COLOR_BG } from './palette';
 import { createNewGameState } from './state';
+import { enterFloor, floorToAscii } from './mapgen';
 import { PLAYER_SPRITE } from './sprites';
 import type { GameState } from './types';
 
@@ -49,3 +50,8 @@ function frame(): void {
 requestAnimationFrame(frame);
 
 console.log(`Chrono-Keep initialized — seed ${state.persistent.rngSeed}`);
+
+// Phase 1: generate Floor 1 into the state. Canvas rendering arrives in
+// Phase 2; until then, eyeball the layout via this temporary console dump.
+const floor1 = enterFloor(state, 1);
+console.log(`Floor 1 layout:\n${floorToAscii(floor1)}`);
