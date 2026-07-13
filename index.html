@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chrono-Keep</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%231a0f00'/><text x='8' y='13' font-size='12' text-anchor='middle' fill='%23ffb300'>⌛</text></svg>" />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <!-- Game world only — all UI lives in the HTML overlays below -->
+      <canvas id="game"></canvas>
+
+      <!-- HUD bars (Phase 2) -->
+      <div id="hud-top" class="overlay"></div>
+      <div id="hud-bottom" class="overlay"></div>
+
+      <!-- Full-screen menus: inventory, skill menu, upgrade shop,
+           title/death/victory (Phases 3, 5, 6) -->
+      <div id="screen-overlay" class="overlay"></div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

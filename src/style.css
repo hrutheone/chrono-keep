@@ -1,0 +1,58 @@
+:root {
+  --color-bg: #1a0f00;
+  --color-light: #ffb300;
+  --color-mid: #996600;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--color-bg);
+  color: var(--color-light);
+  font-family: "Courier New", Courier, monospace;
+}
+
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Wrapper sized to the canvas so overlays align with the game view */
+#app {
+  position: relative;
+}
+
+#game {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none; /* re-enabled per-screen once menus exist */
+}
+
+#hud-top {
+  top: 0;
+}
+
+#hud-bottom {
+  bottom: 0;
+}
+
+#screen-overlay {
+  top: 0;
+  bottom: 0;
+}
