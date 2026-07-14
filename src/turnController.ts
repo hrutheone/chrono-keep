@@ -9,6 +9,7 @@ import { runEnemyPhase } from './enemyAI';
 import { enterFloor, TILE } from './mapgen';
 import { BASE_MAX_HP, BASE_MAX_STAMINA, BASE_TURNS } from './state';
 import { logLine } from './turns';
+import { PLAYER_ID, notifyDeath } from './animation';
 import type { GameState } from './types';
 
 export type PlayerActionKind = 'move' | 'attack' | 'wait';
@@ -60,6 +61,9 @@ function runTickPhase(state: GameState, actionKind: PlayerActionKind): void {
 /** Minimal loss path (full Time Loop/Echoes economy arrives in Phase 5): reload Floor 1. */
 function triggerLossReset(state: GameState): void {
   const reason = state.run.currentHp <= 0 ? 'You have fallen. The loop resets.' : 'Time has run out. The loop resets.';
+  if (state.run.currentHp <= 0) {
+    notifyDeath(PLAYER_ID, 'PLAYER', state.run.playerX, state.run.playerY, state.run.facing);
+  }
   state.persistent.loopCount += 1;
 
   state.run.maxHp = BASE_MAX_HP + state.persistent.maxHpUpgrade * 5;

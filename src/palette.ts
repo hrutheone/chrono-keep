@@ -17,3 +17,6 @@ export const COLOR_PLAYER_MID = '#1c7a8c';
 /** Enemy accent (warm alarm red) — never used for terrain, so monsters always pop. */
 export const COLOR_ENEMY_LIGHT = '#ff5c5c';
 export const COLOR_ENEMY_MID = '#992424';
+
+/** Hit-flash — briefly overrides an entity's own colors on a damage tick. */
+export const COLOR_FLASH = '#ffffff';

@@ -10,8 +10,11 @@ import {
   COLOR_PLAYER_MID,
   COLOR_ENEMY_LIGHT,
   COLOR_ENEMY_MID,
+  COLOR_FLASH,
 } from './palette';
 import { TILE } from './mapgen';
+import { PLAYER_ID, updateAnimations, getEntityVisual, getDeathGhosts } from './animation';
+import type { GhostVisual } from './animation';
 import type { GameState, Enemy } from './types';
 import type { Sprite } from './sprites';
 import {
@@ -46,6 +49,7 @@ export interface SpriteColors {
 const TERRAIN_COLORS: SpriteColors = { light: COLOR_LIGHT, mid: COLOR_MID };
 const PLAYER_COLORS: SpriteColors = { light: COLOR_PLAYER_LIGHT, mid: COLOR_PLAYER_MID };
 const ENEMY_COLORS: SpriteColors = { light: COLOR_ENEMY_LIGHT, mid: COLOR_ENEMY_MID };
+const FLASH_COLORS: SpriteColors = { light: COLOR_FLASH, mid: COLOR_FLASH };
 
 /** Draws an 8x8 sprite matrix at pixel (px, py); 0 = transparent, 1 = light, 2 = midtone. */
 export function drawSprite(
@@ -98,25 +102,57 @@ export function computeCamera(state: GameState): { x: number; y: number } {
   };
 }
 
-function drawPlayer(ctx: CanvasRenderingContext2D, facing: GameState['run']['facing'], px: number, py: number): void {
+function drawPlayer(
+  ctx: CanvasRenderingContext2D,
+  facing: GameState['run']['facing'],
+  px: number,
+  py: number,
+  colors: SpriteColors,
+): void {
   switch (facing) {
     case 'DOWN':
-      drawSprite(ctx, PLAYER_SPRITE, px, py, false, PLAYER_COLORS);
+      drawSprite(ctx, PLAYER_SPRITE, px, py, false, colors);
       break;
     case 'UP':
-      drawSprite(ctx, PLAYER_SPRITE_UP, px, py, false, PLAYER_COLORS);
+      drawSprite(ctx, PLAYER_SPRITE_UP, px, py, false, colors);
       break;
     case 'RIGHT':
-      drawSprite(ctx, PLAYER_SPRITE_SIDE, px, py, false, PLAYER_COLORS);
+      drawSprite(ctx, PLAYER_SPRITE_SIDE, px, py, false, colors);
       break;
     case 'LEFT':
-      drawSprite(ctx, PLAYER_SPRITE_SIDE, px, py, true, PLAYER_COLORS);
+      drawSprite(ctx, PLAYER_SPRITE_SIDE, px, py, true, colors);
       break;
   }
 }
 
+/** A 2px enemy health bar, drawn just above the sprite: a dark backdrop row plus a red fill/track row. */
+function drawHealthBar(ctx: CanvasRenderingContext2D, px: number, py: number, hp: number, maxHp: number): void {
+  const pct = Math.max(0, hp / maxHp);
+  const barY = py - 2;
+  ctx.fillStyle = COLOR_BG;
+  ctx.fillRect(px, barY, TILE_SIZE, 1);
+  ctx.fillStyle = COLOR_ENEMY_MID;
+  ctx.fillRect(px, barY + 1, TILE_SIZE, 1);
+  const filled = Math.max(pct > 0 ? 1 : 0, Math.round(TILE_SIZE * pct));
+  ctx.fillStyle = COLOR_ENEMY_LIGHT;
+  ctx.fillRect(px, barY + 1, filled, 1);
+}
+
+/** Draws one fading death ghost (enemy corpse or the player's death flash) with alpha. */
+function drawGhost(ctx: CanvasRenderingContext2D, ghost: GhostVisual, px: number, py: number): void {
+  ctx.globalAlpha = ghost.alpha;
+  if (ghost.kind === 'PLAYER') {
+    drawPlayer(ctx, ghost.facing ?? 'DOWN', px, py, PLAYER_COLORS);
+  } else {
+    drawSprite(ctx, ENEMY_SPRITES[ghost.kind], px, py, false, ENEMY_COLORS);
+  }
+  ctx.globalAlpha = 1;
+}
+
 /** Renders the full game world for the current frame: tiles, items, enemies, player. */
 export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, viewW: number, viewH: number): void {
+  updateAnimations(state);
+
   ctx.fillStyle = COLOR_BG;
   ctx.fillRect(0, 0, viewW, viewH);
 
@@ -146,8 +182,23 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     const sx = e.x - cam.x;
     const sy = e.y - cam.y;
     if (sx < 0 || sx >= VIEWPORT_TILES_W || sy < 0 || sy >= VIEWPORT_TILES_H) continue;
-    drawSprite(ctx, ENEMY_SPRITES[e.kind], sx * TILE_SIZE, sy * TILE_SIZE, false, ENEMY_COLORS);
+
+    const visual = getEntityVisual(e.id, e.x, e.y);
+    const px = Math.round((visual.tileX - cam.x) * TILE_SIZE);
+    const py = Math.round((visual.tileY - cam.y) * TILE_SIZE);
+    if (e.hp < e.maxHp) drawHealthBar(ctx, px, py, e.hp, e.maxHp);
+    drawSprite(ctx, ENEMY_SPRITES[e.kind], px, py, false, visual.flashing ? FLASH_COLORS : ENEMY_COLORS);
   }
 
-  drawPlayer(ctx, state.run.facing, (state.run.playerX - cam.x) * TILE_SIZE, (state.run.playerY - cam.y) * TILE_SIZE);
+  for (const ghost of getDeathGhosts()) {
+    const sx = ghost.tileX - cam.x;
+    const sy = ghost.tileY - cam.y;
+    if (sx < -1 || sx >= VIEWPORT_TILES_W || sy < -1 || sy >= VIEWPORT_TILES_H) continue;
+    drawGhost(ctx, ghost, Math.round(sx * TILE_SIZE), Math.round(sy * TILE_SIZE));
+  }
+
+  const playerVisual = getEntityVisual(PLAYER_ID, state.run.playerX, state.run.playerY);
+  const playerPx = Math.round((playerVisual.tileX - cam.x) * TILE_SIZE);
+  const playerPy = Math.round((playerVisual.tileY - cam.y) * TILE_SIZE);
+  drawPlayer(ctx, state.run.facing, playerPx, playerPy, playerVisual.flashing ? FLASH_COLORS : PLAYER_COLORS);
 }

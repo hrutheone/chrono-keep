@@ -6,6 +6,7 @@ import { ENEMY_NAME, TIME_SHARD_DROP_CHANCE, createTimeShard, rollEnemyDrop, wea
 import { totalAtk, totalDef } from './inventory';
 import { TILE } from './mapgen';
 import { logLine } from './turns';
+import { PLAYER_ID, notifyAttack, notifyDeath } from './animation';
 import type { Element, Enemy, GameState, StatusEffect } from './types';
 
 const NORMAL_ENEMY_KINDS = new Set<Enemy['kind']>(['BONE_GRUNT', 'EMBER_BAT', 'VOLT_TURRET', 'FROST_WRAITH']);
@@ -66,6 +67,7 @@ function randomWalkableTileAwayFrom(state: GameState, x: number, y: number, minD
 
 export function killEnemy(state: GameState, enemy: Enemy): void {
   state.dungeon.enemies = state.dungeon.enemies.filter((e) => e.id !== enemy.id);
+  notifyDeath(enemy.id, enemy.kind, enemy.x, enemy.y);
 
   const drop = rollEnemyDrop(Math.random, enemy.kind, `${enemy.id}-drop`);
   if (drop) state.dungeon.items.push({ item: drop, x: enemy.x, y: enemy.y });
@@ -84,6 +86,8 @@ export function killEnemy(state: GameState, enemy: Enemy): void {
 
 /** Player bump-attacks an enemy: weapon element/procs, elemental wheel, death & drops. */
 export function playerAttackEnemy(state: GameState, enemy: Enemy): void {
+  notifyAttack(PLAYER_ID, Math.sign(enemy.x - state.run.playerX), Math.sign(enemy.y - state.run.playerY));
+
   const weapon = state.run.equippedWeapon;
   const dmg = computeDamage(totalAtk(state), enemy.defense, playerElement(state), enemy.element);
   enemy.hp -= dmg;
@@ -111,6 +115,8 @@ export function playerAttackEnemy(state: GameState, enemy: Enemy): void {
 
 /** Enemy bump-attacks the player: wheel modifier vs. the player's weapon element, status procs. */
 export function enemyAttackPlayer(state: GameState, enemy: Enemy): void {
+  notifyAttack(enemy.id, Math.sign(state.run.playerX - enemy.x), Math.sign(state.run.playerY - enemy.y));
+
   const dmg = computeDamage(enemy.attack, totalDef(state), enemy.element, playerElement(state));
   state.run.currentHp = Math.max(0, state.run.currentHp - dmg);
   logLine(state, `${ENEMY_NAME[enemy.kind]} hits you for ${dmg}.`);
