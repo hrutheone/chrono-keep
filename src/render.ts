@@ -2,7 +2,15 @@
 // per-frame draw of tiles -> world items -> enemies -> player. The canvas is
 // strictly game-world — no UI is ever drawn here.
 
-import { COLOR_BG, COLOR_LIGHT, COLOR_MID } from './palette';
+import {
+  COLOR_BG,
+  COLOR_LIGHT,
+  COLOR_MID,
+  COLOR_PLAYER_LIGHT,
+  COLOR_PLAYER_MID,
+  COLOR_ENEMY_LIGHT,
+  COLOR_ENEMY_MID,
+} from './palette';
 import { TILE } from './mapgen';
 import type { GameState, Enemy } from './types';
 import type { Sprite } from './sprites';
@@ -30,6 +38,15 @@ export const TILE_SIZE = 8;
 export const VIEWPORT_TILES_W = 30; // 240 / 8
 export const VIEWPORT_TILES_H = 20; // 160 / 8
 
+export interface SpriteColors {
+  light: string;
+  mid: string;
+}
+
+const TERRAIN_COLORS: SpriteColors = { light: COLOR_LIGHT, mid: COLOR_MID };
+const PLAYER_COLORS: SpriteColors = { light: COLOR_PLAYER_LIGHT, mid: COLOR_PLAYER_MID };
+const ENEMY_COLORS: SpriteColors = { light: COLOR_ENEMY_LIGHT, mid: COLOR_ENEMY_MID };
+
 /** Draws an 8x8 sprite matrix at pixel (px, py); 0 = transparent, 1 = light, 2 = midtone. */
 export function drawSprite(
   ctx: CanvasRenderingContext2D,
@@ -37,13 +54,14 @@ export function drawSprite(
   px: number,
   py: number,
   flipX = false,
+  colors: SpriteColors = TERRAIN_COLORS,
 ): void {
   for (let y = 0; y < sprite.length; y++) {
     const row = sprite[y];
     for (let x = 0; x < row.length; x++) {
       const v = row[flipX ? row.length - 1 - x : x];
       if (v === 0) continue;
-      ctx.fillStyle = v === 1 ? COLOR_LIGHT : COLOR_MID;
+      ctx.fillStyle = v === 1 ? colors.light : colors.mid;
       ctx.fillRect(px + x, py + y, 1, 1);
     }
   }
@@ -83,16 +101,16 @@ export function computeCamera(state: GameState): { x: number; y: number } {
 function drawPlayer(ctx: CanvasRenderingContext2D, facing: GameState['run']['facing'], px: number, py: number): void {
   switch (facing) {
     case 'DOWN':
-      drawSprite(ctx, PLAYER_SPRITE, px, py);
+      drawSprite(ctx, PLAYER_SPRITE, px, py, false, PLAYER_COLORS);
       break;
     case 'UP':
-      drawSprite(ctx, PLAYER_SPRITE_UP, px, py);
+      drawSprite(ctx, PLAYER_SPRITE_UP, px, py, false, PLAYER_COLORS);
       break;
     case 'RIGHT':
-      drawSprite(ctx, PLAYER_SPRITE_SIDE, px, py);
+      drawSprite(ctx, PLAYER_SPRITE_SIDE, px, py, false, PLAYER_COLORS);
       break;
     case 'LEFT':
-      drawSprite(ctx, PLAYER_SPRITE_SIDE, px, py, true);
+      drawSprite(ctx, PLAYER_SPRITE_SIDE, px, py, true, PLAYER_COLORS);
       break;
   }
 }
@@ -128,7 +146,7 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     const sx = e.x - cam.x;
     const sy = e.y - cam.y;
     if (sx < 0 || sx >= VIEWPORT_TILES_W || sy < 0 || sy >= VIEWPORT_TILES_H) continue;
-    drawSprite(ctx, ENEMY_SPRITES[e.kind], sx * TILE_SIZE, sy * TILE_SIZE);
+    drawSprite(ctx, ENEMY_SPRITES[e.kind], sx * TILE_SIZE, sy * TILE_SIZE, false, ENEMY_COLORS);
   }
 
   drawPlayer(ctx, state.run.facing, (state.run.playerX - cam.x) * TILE_SIZE, (state.run.playerY - cam.y) * TILE_SIZE);
