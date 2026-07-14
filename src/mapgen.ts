@@ -29,6 +29,11 @@ const N = DUNGEON_SIZE;
 
 // Shortcut Gates are closed until unlocked, so pathing treats them as solid.
 const WALKABLE = new Set<number>([TILE.FLOOR, TILE.DOOR, TILE.STAIRS]);
+
+/** Shared walkability rule (generator pathing and player movement agree). */
+export function isWalkable(tile: number): boolean {
+  return WALKABLE.has(tile);
+}
 const ORTHO = [
   [1, 0],
   [-1, 0],

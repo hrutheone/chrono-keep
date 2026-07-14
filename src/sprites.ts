@@ -3,11 +3,37 @@
 
 export type Sprite = number[][];
 
+// Facing DOWN (front view): 2-pixel eye marker at row 1.
 export const PLAYER_SPRITE: Sprite = [
   [0,0,1,1,1,1,0,0],
   [0,1,2,1,1,2,1,0],
   [0,1,1,1,1,1,1,0],
   [0,0,1,2,2,1,0,0],
+  [0,1,1,1,1,1,1,0],
+  [0,1,0,1,1,0,1,0],
+  [0,0,1,1,1,1,0,0],
+  [0,1,0,0,0,0,1,0],
+];
+
+// Facing UP (back view): same silhouette, no eye marker on the back of the head.
+export const PLAYER_SPRITE_UP: Sprite = [
+  [0,0,1,1,1,1,0,0],
+  [0,1,1,1,1,1,1,0],
+  [0,1,1,1,1,1,1,0],
+  [0,0,1,2,2,1,0,0],
+  [0,1,1,1,1,1,1,0],
+  [0,1,0,1,1,0,1,0],
+  [0,0,1,1,1,1,0,0],
+  [0,1,0,0,0,0,1,0],
+];
+
+// Facing RIGHT (profile view, single eye toward the front); flipped
+// horizontally at draw time for LEFT.
+export const PLAYER_SPRITE_SIDE: Sprite = [
+  [0,0,1,1,1,1,0,0],
+  [0,1,1,1,1,2,1,0],
+  [0,1,1,1,1,1,1,0],
+  [0,0,1,1,2,1,0,0],
   [0,1,1,1,1,1,1,0],
   [0,1,0,1,1,0,1,0],
   [0,0,1,1,1,1,0,0],

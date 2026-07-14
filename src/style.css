@@ -56,3 +56,86 @@ body {
   top: 0;
   bottom: 0;
 }
+
+#hud-top,
+#hud-bottom {
+  padding: 4px 6px;
+  font-size: 10px;
+  line-height: 1.3;
+  text-shadow: 0 0 2px var(--color-bg);
+}
+
+.hud-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.turn-counter {
+  font-size: 16px;
+  font-weight: bold;
+  min-width: 2.5em;
+  text-align: center;
+}
+
+.turn-counter.tick {
+  animation: turn-pulse 0.25s ease-out;
+}
+
+@keyframes turn-pulse {
+  0% {
+    color: var(--color-mid);
+    transform: scale(1.3);
+  }
+  100% {
+    color: var(--color-light);
+    transform: scale(1);
+  }
+}
+
+.bar-stack {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bar {
+  height: 6px;
+  border: 1px solid var(--color-light);
+  background: var(--color-bg);
+}
+
+.bar-fill {
+  height: 100%;
+  background: var(--color-light);
+}
+
+.stam-bar .bar-fill {
+  background: var(--color-mid);
+}
+
+.status-icon {
+  min-width: 3em;
+  text-align: right;
+  color: var(--color-mid);
+}
+
+.status-icon.status-burn,
+.status-icon.status-stun,
+.status-icon.status-chilled {
+  color: var(--color-light);
+}
+
+.weapon-info {
+  flex: 1;
+}
+
+.skill-slot {
+  min-width: 5em;
+}
+
+.action-log {
+  margin-bottom: 4px;
+  opacity: 0.85;
+}

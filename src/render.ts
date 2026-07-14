@@ -1,0 +1,135 @@
+// Canvas world rendering (GDD Sections 4 & 8): sprites, camera, and the
+// per-frame draw of tiles -> world items -> enemies -> player. The canvas is
+// strictly game-world — no UI is ever drawn here.
+
+import { COLOR_BG, COLOR_LIGHT, COLOR_MID } from './palette';
+import { TILE } from './mapgen';
+import type { GameState, Enemy } from './types';
+import type { Sprite } from './sprites';
+import {
+  PLAYER_SPRITE,
+  PLAYER_SPRITE_UP,
+  PLAYER_SPRITE_SIDE,
+  BONE_GRUNT_SPRITE,
+  EMBER_BAT_SPRITE,
+  VOLT_TURRET_SPRITE,
+  FROST_WRAITH_SPRITE,
+  TIME_WEAVER_SPRITE,
+  CHRONO_LICH_SPRITE,
+  WALL_SPRITE,
+  DOOR_SPRITE,
+  STAIRS_SPRITE,
+  ANCHOR_SPRITE,
+  SHORTCUT_GATE_SPRITE,
+  BOSS_GATE_SPRITE,
+  CHEST_SPRITE,
+  FIRE_HAZARD_SPRITE,
+} from './sprites';
+
+export const TILE_SIZE = 8;
+export const VIEWPORT_TILES_W = 30; // 240 / 8
+export const VIEWPORT_TILES_H = 20; // 160 / 8
+
+/** Draws an 8x8 sprite matrix at pixel (px, py); 0 = transparent, 1 = light, 2 = midtone. */
+export function drawSprite(
+  ctx: CanvasRenderingContext2D,
+  sprite: Sprite,
+  px: number,
+  py: number,
+  flipX = false,
+): void {
+  for (let y = 0; y < sprite.length; y++) {
+    const row = sprite[y];
+    for (let x = 0; x < row.length; x++) {
+      const v = row[flipX ? row.length - 1 - x : x];
+      if (v === 0) continue;
+      ctx.fillStyle = v === 1 ? COLOR_LIGHT : COLOR_MID;
+      ctx.fillRect(px + x, py + y, 1, 1);
+    }
+  }
+}
+
+const TILE_SPRITES: Partial<Record<number, Sprite>> = {
+  [TILE.WALL]: WALL_SPRITE,
+  [TILE.DOOR]: DOOR_SPRITE,
+  [TILE.STAIRS]: STAIRS_SPRITE,
+  [TILE.SHORTCUT_GATE]: SHORTCUT_GATE_SPRITE,
+  [TILE.BOSS_GATE]: BOSS_GATE_SPRITE,
+  [TILE.FIRE_HAZARD]: FIRE_HAZARD_SPRITE,
+};
+
+const ENEMY_SPRITES: Record<Enemy['kind'], Sprite> = {
+  BONE_GRUNT: BONE_GRUNT_SPRITE,
+  EMBER_BAT: EMBER_BAT_SPRITE,
+  VOLT_TURRET: VOLT_TURRET_SPRITE,
+  FROST_WRAITH: FROST_WRAITH_SPRITE,
+  TIME_WEAVER: TIME_WEAVER_SPRITE,
+  CHRONO_LICH: CHRONO_LICH_SPRITE,
+};
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.min(Math.max(v, lo), hi);
+}
+
+/** Top-left tile of the viewport: centered on the player, clamped to map bounds. */
+export function computeCamera(state: GameState): { x: number; y: number } {
+  const { width, height } = state.dungeon;
+  return {
+    x: clamp(state.run.playerX - (VIEWPORT_TILES_W >> 1), 0, Math.max(0, width - VIEWPORT_TILES_W)),
+    y: clamp(state.run.playerY - (VIEWPORT_TILES_H >> 1), 0, Math.max(0, height - VIEWPORT_TILES_H)),
+  };
+}
+
+function drawPlayer(ctx: CanvasRenderingContext2D, facing: GameState['run']['facing'], px: number, py: number): void {
+  switch (facing) {
+    case 'DOWN':
+      drawSprite(ctx, PLAYER_SPRITE, px, py);
+      break;
+    case 'UP':
+      drawSprite(ctx, PLAYER_SPRITE_UP, px, py);
+      break;
+    case 'RIGHT':
+      drawSprite(ctx, PLAYER_SPRITE_SIDE, px, py);
+      break;
+    case 'LEFT':
+      drawSprite(ctx, PLAYER_SPRITE_SIDE, px, py, true);
+      break;
+  }
+}
+
+/** Renders the full game world for the current frame: tiles, items, enemies, player. */
+export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, viewW: number, viewH: number): void {
+  ctx.fillStyle = COLOR_BG;
+  ctx.fillRect(0, 0, viewW, viewH);
+
+  const cam = computeCamera(state);
+  const { tiles, width, height } = state.dungeon;
+
+  for (let y = 0; y < VIEWPORT_TILES_H; y++) {
+    const ty = cam.y + y;
+    if (ty < 0 || ty >= height) continue;
+    const row = tiles[ty];
+    for (let x = 0; x < VIEWPORT_TILES_W; x++) {
+      const tx = cam.x + x;
+      if (tx < 0 || tx >= width) continue;
+      const sprite = TILE_SPRITES[row[tx]];
+      if (sprite) drawSprite(ctx, sprite, x * TILE_SIZE, y * TILE_SIZE);
+    }
+  }
+
+  for (const wi of state.dungeon.items) {
+    const sx = wi.x - cam.x;
+    const sy = wi.y - cam.y;
+    if (sx < 0 || sx >= VIEWPORT_TILES_W || sy < 0 || sy >= VIEWPORT_TILES_H) continue;
+    drawSprite(ctx, wi.item.kind === 'ANCHOR' ? ANCHOR_SPRITE : CHEST_SPRITE, sx * TILE_SIZE, sy * TILE_SIZE);
+  }
+
+  for (const e of state.dungeon.enemies) {
+    const sx = e.x - cam.x;
+    const sy = e.y - cam.y;
+    if (sx < 0 || sx >= VIEWPORT_TILES_W || sy < 0 || sy >= VIEWPORT_TILES_H) continue;
+    drawSprite(ctx, ENEMY_SPRITES[e.kind], sx * TILE_SIZE, sy * TILE_SIZE);
+  }
+
+  drawPlayer(ctx, state.run.facing, (state.run.playerX - cam.x) * TILE_SIZE, (state.run.playerY - cam.y) * TILE_SIZE);
+}

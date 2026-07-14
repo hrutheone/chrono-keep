@@ -1,12 +1,10 @@
 import './style.css';
-import { COLOR_BG } from './palette';
 import { createNewGameState } from './state';
-import { enterFloor, floorToAscii } from './mapgen';
-import { PLAYER_SPRITE } from './sprites';
+import { enterFloor } from './mapgen';
+import { renderWorld } from './render';
+import { installInput } from './movement';
+import { initHud, updateHud } from './hud';
 import type { GameState } from './types';
-
-/** Tile size in logical pixels — all sprites are 8x8. */
-export const TILE_SIZE = PLAYER_SPRITE.length;
 
 // Fixed internal resolution: a 30x20-tile viewport into the 32x32 map.
 // The camera (Phase 2) pans this view; resize only changes the CSS scale.
@@ -36,22 +34,15 @@ function resize(): void {
 window.addEventListener('resize', resize);
 resize();
 
-function render(): void {
-  ctx.fillStyle = COLOR_BG;
-  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-  // Phase 1+: tiles, entities, and particles draw here.
-}
-
 function frame(): void {
-  render();
+  renderWorld(ctx, state, VIEW_W, VIEW_H);
+  updateHud(state);
   requestAnimationFrame(frame);
 }
 
+initHud();
+installInput(state);
+enterFloor(state, 1);
+state.ui.currentScreen = 'GAME';
+
 requestAnimationFrame(frame);
-
-console.log(`Chrono-Keep initialized — seed ${state.persistent.rngSeed}`);
-
-// Phase 1: generate Floor 1 into the state. Canvas rendering arrives in
-// Phase 2; until then, eyeball the layout via this temporary console dump.
-const floor1 = enterFloor(state, 1);
-console.log(`Floor 1 layout:\n${floorToAscii(floor1)}`);

@@ -1,5 +1,6 @@
 # Design docs & notes
 *.md
+*.code-workspace
 
 # Dependencies
 node_modules/
