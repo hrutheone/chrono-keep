@@ -46,17 +46,20 @@ function applyMaxHpDelta(state: GameState, delta: number): void {
   state.run.currentHp = Math.min(state.run.currentHp, state.run.maxHp);
 }
 
-/** Adds a WorldItem standing at (x, y) to the inventory and removes it from the floor. */
+/** Adds every WorldItem standing at (x, y) to the inventory, removing each from the floor.
+ * A tile can hold more than one drop (e.g. a kill's item plus a separately-rolled Time Shard). */
 export function pickupItemsAt(state: GameState, x: number, y: number): void {
-  const idx = state.dungeon.items.findIndex((wi) => wi.x === x && wi.y === y);
-  if (idx === -1) return;
-  if (state.run.inventory.length >= INVENTORY_CAP) {
-    logLine(state, 'Inventory full.');
-    return;
+  for (;;) {
+    const idx = state.dungeon.items.findIndex((wi) => wi.x === x && wi.y === y);
+    if (idx === -1) return;
+    if (state.run.inventory.length >= INVENTORY_CAP) {
+      logLine(state, 'Inventory full.');
+      return;
+    }
+    const [worldItem] = state.dungeon.items.splice(idx, 1);
+    state.run.inventory.push(worldItem.item);
+    logLine(state, `Picked up ${worldItem.item.name}.`);
   }
-  const [worldItem] = state.dungeon.items.splice(idx, 1);
-  state.run.inventory.push(worldItem.item);
-  logLine(state, `Picked up ${worldItem.item.name}.`);
 }
 
 function equipWeapon(state: GameState, invIndex: number, weapon: Weapon): void {

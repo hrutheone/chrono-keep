@@ -1,10 +1,12 @@
-// Player movement & input (GDD Sections 7 & 8, Phase 2 slice only).
-// Full turn controller (enemy phase, tick/status, loop-reset check) is Phase 4:
-// here a move or pass only updates position/facing and decrements the counter.
+// Player movement, bump-combat entry point, and input (GDD Sections 7 & 8).
+// A move/attack/wait here is the Player Move Phase; resolvePlayerTurn runs
+// the rest (Enemy -> Tick -> Check) for every turn-costing action.
 
-import { enterFloor, isWalkable, TILE } from './mapgen';
+import { playerAttackEnemy } from './combat';
 import { pickupItemsAt } from './inventory';
-import { spendTurn, logLine } from './turns';
+import { enterFloor, isWalkable, TILE } from './mapgen';
+import { resolvePlayerTurn } from './turnController';
+import { logLine } from './turns';
 import type { GameState } from './types';
 
 type Facing = GameState['run']['facing'];
@@ -22,22 +24,35 @@ const DIRECTIONS: Record<string, { dx: number; dy: number; facing: Facing }> = {
   d: { dx: 1, dy: 0, facing: 'RIGHT' },
 };
 
-/** Attempts one tile of movement; always updates facing, only moves/spends a turn if unblocked. */
+/** A Stunned player skips this action entirely; the turn still advances. */
+function consumeStunnedAction(state: GameState): boolean {
+  if (state.run.status !== 'STUN') return false;
+  logLine(state, 'You are stunned and cannot act!');
+  resolvePlayerTurn(state, 'wait');
+  return true;
+}
+
+/** Attempts one tile of movement, or a bump-attack if an enemy occupies the target tile. */
 export function tryMove(state: GameState, dx: number, dy: number, facing: Facing): void {
   state.run.facing = facing;
+  if (consumeStunnedAction(state)) return;
+
   const nx = state.run.playerX + dx;
   const ny = state.run.playerY + dy;
   if (nx < 0 || nx >= state.dungeon.width || ny < 0 || ny >= state.dungeon.height) return;
 
-  // Bumping an enemy just sets facing for now — combat arrives in Phase 4.
-  if (state.dungeon.enemies.some((e) => e.x === nx && e.y === ny)) return;
+  const enemy = state.dungeon.enemies.find((e) => e.x === nx && e.y === ny);
+  if (enemy) {
+    playerAttackEnemy(state, enemy);
+    resolvePlayerTurn(state, 'attack');
+    return;
+  }
 
   const tile = state.dungeon.tiles[ny][nx];
   if (!isWalkable(tile)) return;
 
   state.run.playerX = nx;
   state.run.playerY = ny;
-  spendTurn(state);
   logLine(state, `You move ${facing.toLowerCase()}.`);
   pickupItemsAt(state, nx, ny);
 
@@ -45,11 +60,14 @@ export function tryMove(state: GameState, dx: number, dy: number, facing: Facing
     enterFloor(state, state.run.currentFloor + 1);
     logLine(state, `You descend to Floor ${state.run.currentFloor}.`);
   }
+
+  resolvePlayerTurn(state, 'move');
 }
 
 export function passTurn(state: GameState): void {
-  spendTurn(state);
+  if (consumeStunnedAction(state)) return;
   logLine(state, 'You wait.');
+  resolvePlayerTurn(state, 'wait');
 }
 
 /** Wires WASD/Arrows (move) and Space (pass) to the game state. */

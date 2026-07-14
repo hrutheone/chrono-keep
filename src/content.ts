@@ -38,6 +38,15 @@ export const BESTIARY: Record<EnemyKind, EnemyTemplate> = {
   CHRONO_LICH: { hp: 150, attack: 12, defense: 5, speed: 1, element: 'CHRONO' },
 };
 
+export const ENEMY_NAME: Record<EnemyKind, string> = {
+  BONE_GRUNT: 'Bone-Grunt',
+  EMBER_BAT: 'Ember-Bat',
+  VOLT_TURRET: 'Volt-Turret',
+  FROST_WRAITH: 'Frost-Wraith',
+  TIME_WEAVER: 'Time-Weaver',
+  CHRONO_LICH: 'Chrono-Lich',
+};
+
 export function createEnemy(kind: EnemyKind, id: string, x: number, y: number): Enemy {
   const t = BESTIARY[kind];
   return {
