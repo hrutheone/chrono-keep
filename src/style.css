@@ -139,3 +139,129 @@ body {
   margin-bottom: 4px;
   opacity: 0.85;
 }
+
+/* Inventory & Skill Setting overlays (Phase 3) */
+#screen-overlay.active {
+  pointer-events: auto;
+  background: var(--color-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+}
+
+.menu {
+  width: 100%;
+  height: 100%;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.menu h2 {
+  font-size: 13px;
+  letter-spacing: 0.05em;
+}
+
+.inventory-menu {
+  flex-direction: row;
+  gap: 12px;
+}
+
+.menu-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.left-pane {
+  flex: 1;
+}
+
+.right-pane {
+  flex: 1.4;
+}
+
+.stat-line {
+  opacity: 0.9;
+}
+
+.menu button {
+  font-family: inherit;
+  font-size: 10px;
+  color: var(--color-light);
+  background: var(--color-bg);
+  border: 1px solid var(--color-mid);
+  cursor: pointer;
+  text-align: left;
+  padding: 3px 5px;
+}
+
+.menu button:hover:not(:disabled) {
+  border-color: var(--color-light);
+  background: var(--color-mid);
+}
+
+.menu button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.equip-slot {
+  width: 100%;
+}
+
+.danger-banner {
+  color: var(--color-light);
+  border: 1px solid var(--color-light);
+  padding: 3px 5px;
+  text-align: center;
+  animation: turn-pulse 0.6s ease-in-out infinite alternate;
+}
+
+.inventory-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-auto-rows: minmax(20px, 1fr);
+  gap: 4px;
+  flex: 1;
+}
+
+.inv-slot {
+  border: 1px solid var(--color-mid);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.inv-slot.empty {
+  border-style: dashed;
+  opacity: 0.4;
+}
+
+.skill-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.skill-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.skill-row.locked {
+  opacity: 0.5;
+}
+
+.skill-name {
+  flex: 1;
+}
+
+.menu-hint {
+  opacity: 0.6;
+  margin-top: auto;
+}

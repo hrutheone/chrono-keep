@@ -3,6 +3,8 @@
 // here a move or pass only updates position/facing and decrements the counter.
 
 import { enterFloor, isWalkable, TILE } from './mapgen';
+import { pickupItemsAt } from './inventory';
+import { spendTurn, logLine } from './turns';
 import type { GameState } from './types';
 
 type Facing = GameState['run']['facing'];
@@ -19,15 +21,6 @@ const DIRECTIONS: Record<string, { dx: number; dy: number; facing: Facing }> = {
   arrowright: { dx: 1, dy: 0, facing: 'RIGHT' },
   d: { dx: 1, dy: 0, facing: 'RIGHT' },
 };
-
-function spendTurn(state: GameState): void {
-  state.run.turnsRemaining = Math.max(0, state.run.turnsRemaining - 1);
-}
-
-function logLine(state: GameState, line: string): void {
-  state.ui.log.push(line);
-  if (state.ui.log.length > 3) state.ui.log.shift();
-}
 
 /** Attempts one tile of movement; always updates facing, only moves/spends a turn if unblocked. */
 export function tryMove(state: GameState, dx: number, dy: number, facing: Facing): void {
@@ -46,6 +39,7 @@ export function tryMove(state: GameState, dx: number, dy: number, facing: Facing
   state.run.playerY = ny;
   spendTurn(state);
   logLine(state, `You move ${facing.toLowerCase()}.`);
+  pickupItemsAt(state, nx, ny);
 
   if (tile === TILE.STAIRS && state.run.currentFloor < MAX_PLAYABLE_FLOOR) {
     enterFloor(state, state.run.currentFloor + 1);

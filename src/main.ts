@@ -4,6 +4,7 @@ import { enterFloor } from './mapgen';
 import { renderWorld } from './render';
 import { installInput } from './movement';
 import { initHud, updateHud } from './hud';
+import { initMenus, updateMenus } from './menus';
 import type { GameState } from './types';
 
 // Fixed internal resolution: a 30x20-tile viewport into the 32x32 map.
@@ -37,11 +38,13 @@ resize();
 function frame(): void {
   renderWorld(ctx, state, VIEW_W, VIEW_H);
   updateHud(state);
+  updateMenus(state);
   requestAnimationFrame(frame);
 }
 
 initHud();
 installInput(state);
+initMenus(state);
 enterFloor(state, 1);
 state.ui.currentScreen = 'GAME';
 

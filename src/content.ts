@@ -4,6 +4,7 @@
 import type { Accessory, Element, Enemy, Item, Weapon } from './types';
 
 export type EnemyKind = Enemy['kind'];
+type Rng = () => number;
 
 // Elemental Wheel: Fire > Frost > Volt > Physical > Fire. Chrono sits outside it.
 // A monster's weakness is the element that beats its own — never hand-assigned.
@@ -123,4 +124,44 @@ const CHEST_POOL_F3: ChestRoll[] = [...CHEST_POOL_F2, (id) => createAccessory('G
 export function rollChestItem(rng: () => number, floorNumber: number, id: string): Item {
   const pool = floorNumber >= 3 ? CHEST_POOL_F3 : floorNumber === 2 ? CHEST_POOL_F2 : CHEST_POOL_F1;
   return pool[Math.floor(rng() * pool.length)](id);
+}
+
+// Skills (Section 6B). Levels/upgrades are purchased with Echoes in Phase 5's
+// Upgrade Shop; only stamina cost and identity matter for the Phase 3 menu.
+export const SKILLS: Record<string, { name: string; element: Element; stamina: number }> = {
+  dash: { name: 'Dash', element: 'PHYSICAL', stamina: 2 },
+  cleave: { name: 'Cleave', element: 'PHYSICAL', stamina: 3 },
+  flame_arc: { name: 'Flame Arc', element: 'FIRE', stamina: 4 },
+  static_shift: { name: 'Static Shift', element: 'VOLT', stamina: 3 },
+  ice_aegis: { name: 'Ice Aegis', element: 'FROST', stamina: 4 },
+};
+
+export type SkillId = keyof typeof SKILLS;
+
+// Enemy death drops (Section 6A/6C). Phase 3 only wires the data + roll
+// function; nothing calls this until Phase 4 implements enemy death.
+type DropRoll = (id: string) => Item;
+
+const ENEMY_DROPS: Partial<Record<EnemyKind, DropRoll[]>> = {
+  BONE_GRUNT: [(id) => createWeapon('RUSTY_SWORD', id), createPotion],
+  EMBER_BAT: [(id) => createWeapon('EMBER_BLADE', id)],
+  VOLT_TURRET: [(id) => createWeapon('VOLT_SPEAR', id)],
+  FROST_WRAITH: [(id) => createWeapon('FROST_WAND', id)],
+  TIME_WEAVER: [(id) => createWeapon('CHRONO_BLADE', id), (id) => ({ ...createPotion(id), name: 'Max Potion', value: 999 })],
+};
+
+/** Rolls one item from this enemy kind's drop table (null if it has none, e.g. the Boss). */
+export function rollEnemyDrop(rng: Rng, kind: EnemyKind, id: string): Item | null {
+  const table = ENEMY_DROPS[kind];
+  if (!table || table.length === 0) return null;
+  return table[Math.floor(rng() * table.length)](id);
+}
+
+// Time Shards (Section 6C): 25% drop chance from normal (non-Elite/Boss)
+// enemies, rolled with gameplay RNG (Math.random()), not the seeded generator
+// stream — intentionally non-deterministic across loops.
+export const TIME_SHARD_DROP_CHANCE = 0.25;
+
+export function createTimeShard(id: string): Item {
+  return { id, kind: 'TIME_SHARD', name: 'Time Shard', value: 2 };
 }
