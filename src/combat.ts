@@ -6,6 +6,8 @@ import { ENEMY_NAME, TIME_SHARD_DROP_CHANCE, createTimeShard, rollEnemyDrop, wea
 import { totalAtk, totalDef } from './inventory';
 import { TILE } from './mapgen';
 import { logLine } from './turns';
+import { awardEchoes, markFloorDamageTaken } from './echoes';
+import { playAttackSfx, playEnemyHitPlayerSfx, playStatusApplySfx } from './audio';
 import { PLAYER_ID, notifyAttack, notifyDeath } from './animation';
 import type { Element, Enemy, GameState, StatusEffect } from './types';
 
@@ -35,6 +37,7 @@ function playerElement(state: GameState): Element {
 export function applyEnemyStatus(enemy: Enemy, status: StatusEffect, turns: number): void {
   enemy.status = status;
   enemy.statusTurns = turns;
+  playStatusApplySfx(status);
 }
 
 const STATUS_IMMUNITY: Partial<Record<StatusEffect, string>> = {
@@ -47,6 +50,7 @@ export function applyPlayerStatus(state: GameState, status: StatusEffect, turns:
   if (state.run.equippedAccessory?.passive === STATUS_IMMUNITY[status]) return;
   state.run.status = status;
   state.run.statusTurns = turns;
+  playStatusApplySfx(status);
 }
 
 function randomWalkableTileAwayFrom(state: GameState, x: number, y: number, minDist: number): { x: number; y: number } | null {
@@ -65,7 +69,10 @@ function randomWalkableTileAwayFrom(state: GameState, x: number, y: number, minD
   return candidates[Math.floor(Math.random() * candidates.length)];
 }
 
-export function killEnemy(state: GameState, enemy: Enemy): void {
+const ELITE_ENEMY_KINDS = new Set<Enemy['kind']>(['TIME_WEAVER']);
+
+/** Killing blow source: Execution Stamina Refund (Section 7) only fires for `'skill'`. */
+export function killEnemy(state: GameState, enemy: Enemy, source: 'bump' | 'skill' = 'bump'): void {
   state.dungeon.enemies = state.dungeon.enemies.filter((e) => e.id !== enemy.id);
   notifyDeath(enemy.id, enemy.kind, enemy.x, enemy.y);
 
@@ -81,7 +88,30 @@ export function killEnemy(state: GameState, enemy: Enemy): void {
     logLine(state, 'The Chrono-Blade steals back a turn.');
   }
 
+  if (NORMAL_ENEMY_KINDS.has(enemy.kind)) awardEchoes(state, 1, 'kill');
+  else if (ELITE_ENEMY_KINDS.has(enemy.kind)) awardEchoes(state, 5, 'Elite kill');
+
+  if (source === 'skill') {
+    state.run.currentStamina = Math.min(state.run.maxStamina, state.run.currentStamina + 1);
+    logLine(state, 'Execution refund: +1 Stamina.');
+  }
+
   logLine(state, `${ENEMY_NAME[enemy.kind]} defeated!`);
+}
+
+/** Skill damage to an enemy (Cleave/Flame Arc): the skill's own element, not the
+ * equipped weapon's. Returns true if the hit killed the enemy. */
+export function skillDamageEnemy(state: GameState, enemy: Enemy, rawAtk: number, element: Element, label: string): boolean {
+  const dmg = computeDamage(rawAtk, enemy.defense, element, enemy.element);
+  const mult = elementalMultiplier(element, enemy.element);
+  enemy.hp -= dmg;
+  logLine(state, `${label} hits ${ENEMY_NAME[enemy.kind]} for ${dmg}.`);
+  playAttackSfx(element, mult);
+  if (enemy.hp <= 0) {
+    killEnemy(state, enemy, 'skill');
+    return true;
+  }
+  return false;
 }
 
 /** Player bump-attacks an enemy: weapon element/procs, elemental wheel, death & drops. */
@@ -89,9 +119,11 @@ export function playerAttackEnemy(state: GameState, enemy: Enemy): void {
   notifyAttack(PLAYER_ID, Math.sign(enemy.x - state.run.playerX), Math.sign(enemy.y - state.run.playerY));
 
   const weapon = state.run.equippedWeapon;
-  const dmg = computeDamage(totalAtk(state), enemy.defense, playerElement(state), enemy.element);
+  const element = playerElement(state);
+  const dmg = computeDamage(totalAtk(state), enemy.defense, element, enemy.element);
   enemy.hp -= dmg;
   logLine(state, `You hit the ${ENEMY_NAME[enemy.kind]} for ${dmg}.`);
+  playAttackSfx(element, elementalMultiplier(element, enemy.element));
 
   if (weapon?.passive === 'burn_25' && Math.random() < 0.25) {
     applyEnemyStatus(enemy, 'BURN', 3);
@@ -99,7 +131,7 @@ export function playerAttackEnemy(state: GameState, enemy: Enemy): void {
   }
 
   if (enemy.hp <= 0) {
-    killEnemy(state, enemy);
+    killEnemy(state, enemy, 'bump');
     return;
   }
 
@@ -113,13 +145,24 @@ export function playerAttackEnemy(state: GameState, enemy: Enemy): void {
   }
 }
 
-/** Enemy bump-attacks the player: wheel modifier vs. the player's weapon element, status procs. */
+/** Enemy bump-attacks the player: wheel modifier vs. the player's weapon element, status procs.
+ * Ice Aegis (Section 6B) blocks the hit entirely while it has charges. */
 export function enemyAttackPlayer(state: GameState, enemy: Enemy): void {
   notifyAttack(enemy.id, Math.sign(state.run.playerX - enemy.x), Math.sign(state.run.playerY - enemy.y));
 
+  if (state.run.iceAegisCharges > 0) {
+    state.run.iceAegisCharges -= 1;
+    logLine(state, `Ice Aegis blocks ${ENEMY_NAME[enemy.kind]}'s attack!`);
+    playStatusApplySfx('CHILLED');
+    if (state.run.iceAegisChillsAttacker) applyEnemyStatus(enemy, 'CHILLED', 3);
+    return;
+  }
+
   const dmg = computeDamage(enemy.attack, totalDef(state), enemy.element, playerElement(state));
   state.run.currentHp = Math.max(0, state.run.currentHp - dmg);
+  markFloorDamageTaken(state);
   logLine(state, `${ENEMY_NAME[enemy.kind]} hits you for ${dmg}.`);
+  playEnemyHitPlayerSfx();
 
   if (enemy.kind === 'FROST_WRAITH' && Math.random() < 0.25) {
     applyPlayerStatus(state, 'CHILLED', 3);

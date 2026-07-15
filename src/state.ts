@@ -46,6 +46,11 @@ export function createNewGameState(): GameState {
       activeSkills: ['dash'],
       status: 'NONE',
       statusTurns: 0,
+      braced: false,
+      iceAegisCharges: 0,
+      iceAegisChillsAttacker: false,
+      floorDamageTaken: false,
+      floorsVisitedThisLoop: [],
     },
 
     dungeon: {
@@ -54,6 +59,7 @@ export function createNewGameState(): GameState {
       tiles: [], // Generated deterministically on floor entry (Phase 1)
       enemies: [],
       items: [],
+      expiringTiles: [],
     },
 
     ui: {
@@ -61,4 +67,15 @@ export function createNewGameState(): GameState {
       log: [],
     },
   };
+}
+
+/** New Game (Section 7, point 9): rerolls the seed and wipes `persistent`,
+ * mutating the existing state object in place so every module's reference
+ * to it stays valid. */
+export function resetToNewGame(state: GameState): void {
+  const fresh = createNewGameState();
+  state.persistent = fresh.persistent;
+  state.run = fresh.run;
+  state.dungeon = fresh.dungeon;
+  state.ui = fresh.ui;
 }

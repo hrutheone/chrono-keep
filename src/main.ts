@@ -1,8 +1,12 @@
 import './style.css';
 import { createNewGameState } from './state';
 import { enterFloor } from './mapgen';
+import { onFloorEntered } from './echoes';
+import { loadPersistent } from './persistence';
 import { renderWorld } from './render';
 import { installInput } from './movement';
+import { installSkillInput } from './skills';
+import { initAudio } from './audio';
 import { initHud, updateHud } from './hud';
 import { initMenus, updateMenus } from './menus';
 import type { GameState } from './types';
@@ -12,8 +16,11 @@ import type { GameState } from './types';
 export const VIEW_W = 240;
 export const VIEW_H = 160;
 
-// Single centralized game state.
+// Single centralized game state. A saved `persistent` block (Section 7, point
+// 9) resumes the same seed/upgrades/skills/shortcuts; only New Game rerolls.
 export const state: GameState = createNewGameState();
+const savedPersistent = loadPersistent();
+if (savedPersistent) state.persistent = savedPersistent;
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game')!;
 const ctx = canvas.getContext('2d')!;
@@ -43,9 +50,12 @@ function frame(): void {
 }
 
 initHud();
+initAudio();
 installInput(state);
+installSkillInput(state);
 initMenus(state);
 enterFloor(state, 1);
+onFloorEntered(state);
 state.ui.currentScreen = 'GAME';
 
 requestAnimationFrame(frame);

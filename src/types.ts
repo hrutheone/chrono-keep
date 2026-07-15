@@ -49,6 +49,18 @@ export interface GameState {
     activeSkills: string[];    // 2 skill IDs mapped to hotkeys Q and E
     status: StatusEffect;
     statusTurns: number;
+
+    // Section 7/8 Tactical Brace: +1 DEF until the start of the player's next
+    // turn. Kept separate from `status` so it can coexist with Burn/Stun/Chilled.
+    braced: boolean;
+    // Ice Aegis shield charges (blocks the next N attacks) and whether Lvl3's
+    // "attackers are Chilled" is active for the current shield.
+    iceAegisCharges: number;
+    iceAegisChillsAttacker: boolean;
+
+    // Section 7 Echo Economy bookkeeping for the current loop.
+    floorDamageTaken: boolean;      // Cleared on floor entry; set on any HP loss (Flawless Floor bonus).
+    floorsVisitedThisLoop: number[]; // Floor numbers already awarded the "first reached" bonus this loop.
   };
 
   // Map and Entities (regenerated deterministically on floor entry)
@@ -60,11 +72,16 @@ export interface GameState {
                              // 7 = Fire Hazard (from Flame Arc Lvl 3 / boss)
     enemies: Enemy[];
     items: WorldItem[];
+    // Player-created tile mutations (Flame Arc Lvl 3's Fire Hazard). Kept off
+    // the deterministic `tiles` grid entirely; restored to FLOOR on expiry.
+    expiringTiles: { x: number; y: number; turnsLeft: number }[];
   };
 
   // Engine state
   ui: {
-    currentScreen: 'TITLE' | 'GAME' | 'INVENTORY' | 'SKILL_MENU' | 'UPGRADE_SHOP' | 'DEATH' | 'VICTORY';
+    // 'HELP' added for Section 8's Quick Controls Help overlay (Phase 5); not
+    // in the GDD's Section 3 enum literal, but required by Section 8's content.
+    currentScreen: 'TITLE' | 'GAME' | 'INVENTORY' | 'SKILL_MENU' | 'UPGRADE_SHOP' | 'HELP' | 'DEATH' | 'VICTORY';
     log: string[];           // Message log for combat actions (last 3 shown in HUD)
   };
 }
@@ -109,4 +126,8 @@ export interface WorldItem {
   item: Item;
   x: number;
   y: number;
+  // Section 7 Dynamic Chest Loot: true for mapgen-placed loot chests (not the
+  // Anchor). Contents are rerolled from gameplay RNG at pickup time so a
+  // chest's *contents* vary loop to loop while its *position* stays seeded.
+  chestLoot?: boolean;
 }

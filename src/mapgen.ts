@@ -28,7 +28,9 @@ const MAX_ATTEMPTS = 50;
 const N = DUNGEON_SIZE;
 
 // Shortcut Gates are closed until unlocked, so pathing treats them as solid.
-const WALKABLE = new Set<number>([TILE.FLOOR, TILE.DOOR, TILE.STAIRS]);
+// Fire Hazard is walkable (that's the point — standing on it inflicts Burn);
+// the generator itself never places one, so this only matters at runtime.
+const WALKABLE = new Set<number>([TILE.FLOOR, TILE.DOOR, TILE.STAIRS, TILE.FIRE_HAZARD]);
 
 /** Shared walkability rule (generator pathing and player movement agree). */
 export function isWalkable(tile: number): boolean {
@@ -344,7 +346,16 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
     if (spots.length === 0) return null;
     const pos = pick(rng, spots);
     occupied.add(pos.y * N + pos.x);
-    items.push({ item: rollChestItem(rng, floorNumber, `f${floorNumber}-chest-${i}`), x: pos.x, y: pos.y });
+    // Contents are placeholder-rolled here (deterministic stream, keeps this
+    // function's output self-consistent for the same seed); inventory.ts
+    // rerolls the real contents from Math.random() at pickup time (Section 7
+    // Dynamic Chest Loot) — position stays exactly where generated.
+    items.push({
+      item: rollChestItem(rng, floorNumber, `f${floorNumber}-chest-${i}`),
+      x: pos.x,
+      y: pos.y,
+      chestLoot: true,
+    });
   }
 
   return {
@@ -374,6 +385,7 @@ export function enterFloor(state: GameState, floorNumber: number): GeneratedFloo
   state.dungeon.tiles = floor.tiles;
   state.dungeon.enemies = floor.enemies;
   state.dungeon.items = floor.items;
+  state.dungeon.expiringTiles = [];
   return floor;
 }
 

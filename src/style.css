@@ -127,6 +127,23 @@ body {
   color: var(--color-light);
 }
 
+.brace-icon {
+  min-width: 5.5em;
+  text-align: right;
+  color: transparent;
+}
+
+.brace-icon.active {
+  color: #66f2ff;
+  text-shadow: 0 0 4px #1c7a8c;
+}
+
+.hint-strip {
+  opacity: 0.55;
+  font-size: 9px;
+  margin-top: 2px;
+}
+
 .weapon-info {
   flex: 1;
 }
@@ -264,4 +281,61 @@ body {
 .menu-hint {
   opacity: 0.6;
   margin-top: auto;
+}
+
+/* Upgrade Shop & Help overlays (Phase 5) */
+.upgrade-shop,
+.help-menu {
+  overflow-y: auto;
+}
+
+.shop-section h3 {
+  font-size: 11px;
+  opacity: 0.8;
+  margin: 6px 0 4px;
+}
+
+.shop-row,
+.help-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.shop-name {
+  flex: 1;
+}
+
+.continue-btn,
+.new-game-btn {
+  width: 100%;
+  margin-top: 6px;
+}
+
+.new-game-btn {
+  opacity: 0.7;
+}
+
+.help-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+}
+
+.help-key {
+  min-width: 9em;
+  color: var(--color-light);
+  font-weight: bold;
+}
+
+.help-action {
+  flex: 1;
+}
+
+.help-screen {
+  opacity: 0.6;
+  min-width: 10em;
+  text-align: right;
 }

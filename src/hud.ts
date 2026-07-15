@@ -17,6 +17,19 @@ function el(id: string): HTMLElement {
   return document.getElementById(id)!;
 }
 
+/** Section 8's Quick Controls Help hint strip: the 3-4 keys most relevant to
+ * the current screen, always visible in the HUD bottom bar. */
+const HINT_STRIP: Record<GameState['ui']['currentScreen'], string> = {
+  TITLE: 'Enter: Start',
+  GAME: 'WASD Move · Space Brace · Q/E Skill · I Inv · K Skills · ? Help',
+  INVENTORY: 'Click: Equip/Use · I/Esc: Close',
+  SKILL_MENU: 'Click: Assign Q/E · K/Esc: Close',
+  UPGRADE_SHOP: 'Click: Buy · Esc: Continue',
+  HELP: '?/F1/Esc: Close',
+  DEATH: 'Esc: Continue',
+  VICTORY: 'Esc: Continue',
+};
+
 /** Builds the HUD DOM once into the #hud-top / #hud-bottom overlay containers. */
 export function initHud(): void {
   const top = document.querySelector<HTMLElement>('#hud-top')!;
@@ -29,6 +42,7 @@ export function initHud(): void {
         <div class="bar hp-bar"><div id="hp-fill" class="bar-fill"></div></div>
         <div class="bar stam-bar"><div id="stam-fill" class="bar-fill"></div></div>
       </div>
+      <span id="brace-icon" class="brace-icon"></span>
       <span id="status-icon" class="status-icon"></span>
     </div>`;
 
@@ -38,7 +52,8 @@ export function initHud(): void {
       <span id="weapon-info" class="weapon-info">Unarmed</span>
       <span id="skill-q" class="skill-slot">Q: --</span>
       <span id="skill-e" class="skill-slot">E: --</span>
-    </div>`;
+    </div>
+    <div id="hint-strip" class="hint-strip"></div>`;
 }
 
 function setBar(fillId: string, current: number, max: number): void {
@@ -63,16 +78,24 @@ export function updateHud(state: GameState): void {
   setBar('hp-fill', run.currentHp, run.maxHp);
   setBar('stam-fill', run.currentStamina, run.maxStamina);
 
+  const braceEl = el('brace-icon');
+  braceEl.textContent = run.braced ? 'BRACED +1DEF' : '';
+  braceEl.className = `brace-icon${run.braced ? ' active' : ''}`;
+
   const statusEl = el('status-icon');
   statusEl.textContent = STATUS_LABEL[run.status];
   statusEl.className = `status-icon status-${run.status.toLowerCase()}`;
 
   el('weapon-info').textContent = run.equippedWeapon ? run.equippedWeapon.name : 'Unarmed';
-  el('skill-q').textContent = `Q: ${run.activeSkills[0] ?? '--'}`;
-  el('skill-e').textContent = `E: ${run.activeSkills[1] ?? '--'}`;
+  const q = run.activeSkills[0];
+  const e = run.activeSkills[1];
+  el('skill-q').textContent = `Q: ${q ? `${q} (Lv${state.persistent.skills[q] ?? 0})` : '--'}`;
+  el('skill-e').textContent = `E: ${e ? `${e} (Lv${state.persistent.skills[e] ?? 0})` : '--'}`;
 
   el('action-log').innerHTML = state.ui.log
     .slice(-3)
     .map((line) => `<div>${line}</div>`)
     .join('');
+
+  el('hint-strip').textContent = HINT_STRIP[state.ui.currentScreen] ?? '';
 }

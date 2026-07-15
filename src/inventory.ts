@@ -4,6 +4,9 @@
 import { PLAYER_BASE_ATK, PLAYER_BASE_DEF } from './types';
 import type { Accessory, GameState, Weapon } from './types';
 import { spendTurn, logLine } from './turns';
+import { rollChestItem } from './content';
+import { awardEchoes } from './echoes';
+import { playAnchorSfx, playEquipSfx, playPickupSfx, playPotionSfx, playTimeShardSfx, playUnequipSfx } from './audio';
 
 export const INVENTORY_CAP = 10;
 
@@ -23,7 +26,8 @@ export function totalAtk(state: GameState): number {
 }
 
 export function totalDef(state: GameState): number {
-  return PLAYER_BASE_DEF + accessoryDefBonus(state.run.equippedAccessory);
+  const brace = state.run.braced ? 1 : 0;
+  return PLAYER_BASE_DEF + accessoryDefBonus(state.run.equippedAccessory) + brace;
 }
 
 export function isThreatNearby(state: GameState): boolean {
@@ -47,18 +51,43 @@ function applyMaxHpDelta(state: GameState, delta: number): void {
 }
 
 /** Adds every WorldItem standing at (x, y) to the inventory, removing each from the floor.
- * A tile can hold more than one drop (e.g. a kill's item plus a separately-rolled Time Shard). */
+ * A tile can hold more than one drop (e.g. a kill's item plus a separately-rolled Time Shard).
+ * Anchors and Time Shards are instant effects and never occupy a slot (Section 7).
+ * Chest-loot items (Section 7 Dynamic Chest Loot) are rerolled from gameplay RNG
+ * here, at pickup time, so contents vary loop to loop while position stays seeded. */
 export function pickupItemsAt(state: GameState, x: number, y: number): void {
   for (;;) {
     const idx = state.dungeon.items.findIndex((wi) => wi.x === x && wi.y === y);
     if (idx === -1) return;
+    const worldItem = state.dungeon.items[idx];
+    const item = worldItem.item;
+
+    if (item.kind === 'ANCHOR') {
+      state.dungeon.items.splice(idx, 1);
+      state.run.anchorsCollected += 1;
+      awardEchoes(state, 5, 'Anchor collected');
+      logLine(state, 'Temporal Anchor secured!');
+      playAnchorSfx();
+      continue;
+    }
+
+    if (item.kind === 'TIME_SHARD') {
+      state.dungeon.items.splice(idx, 1);
+      state.run.turnsRemaining += item.value;
+      logLine(state, `Time Shard! +${item.value} Turns.`);
+      playTimeShardSfx();
+      continue;
+    }
+
     if (state.run.inventory.length >= INVENTORY_CAP) {
       logLine(state, 'Inventory full.');
       return;
     }
-    const [worldItem] = state.dungeon.items.splice(idx, 1);
-    state.run.inventory.push(worldItem.item);
-    logLine(state, `Picked up ${worldItem.item.name}.`);
+    state.dungeon.items.splice(idx, 1);
+    const finalItem = worldItem.chestLoot ? rollChestItem(Math.random, state.run.currentFloor, item.id) : item;
+    state.run.inventory.push(finalItem);
+    logLine(state, `Picked up ${finalItem.name}.`);
+    playPickupSfx();
   }
 }
 
@@ -70,6 +99,7 @@ function equipWeapon(state: GameState, invIndex: number, weapon: Weapon): void {
   if (prior) state.run.inventory.push(prior);
   chargeInventoryAction(state, freeAlways);
   logLine(state, `Equipped ${weapon.name}.`);
+  playEquipSfx();
 }
 
 function equipAccessory(state: GameState, invIndex: number, accessory: Accessory): void {
@@ -81,6 +111,7 @@ function equipAccessory(state: GameState, invIndex: number, accessory: Accessory
   if (prior) state.run.inventory.push(prior);
   chargeInventoryAction(state, false);
   logLine(state, `Equipped ${accessory.name}.`);
+  playEquipSfx();
 }
 
 /** Equips the WEAPON or ACCESSORY at this inventory slot, swapping any prior gear back in. */
@@ -102,6 +133,7 @@ export function unequipWeapon(state: GameState): void {
   state.run.inventory.push(weapon);
   chargeInventoryAction(state, weapon.passive === 'free_swap');
   logLine(state, `Unequipped ${weapon.name}.`);
+  playUnequipSfx();
 }
 
 export function unequipAccessory(state: GameState): void {
@@ -116,6 +148,7 @@ export function unequipAccessory(state: GameState): void {
   state.run.inventory.push(accessory);
   chargeInventoryAction(state, false);
   logLine(state, `Unequipped ${accessory.name}.`);
+  playUnequipSfx();
 }
 
 /** Consumes the POTION at this inventory slot, healing by its value (capped at maxHp). */
@@ -126,4 +159,5 @@ export function usePotion(state: GameState, invIndex: number): void {
   state.run.currentHp = Math.min(state.run.maxHp, state.run.currentHp + item.value);
   chargeInventoryAction(state, false);
   logLine(state, `Used ${item.name}, healed ${item.value} HP.`);
+  playPotionSfx();
 }

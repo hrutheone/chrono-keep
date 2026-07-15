@@ -4,14 +4,29 @@
 
 import { playerAttackEnemy } from './combat';
 import { pickupItemsAt } from './inventory';
+import { onFloorCleared, onFloorEntered } from './echoes';
 import { enterFloor, isWalkable, TILE } from './mapgen';
 import { resolvePlayerTurn } from './turnController';
 import { logLine } from './turns';
+import { playBlockedSfx, playMoveSfx } from './audio';
 import type { GameState } from './types';
 
 type Facing = GameState['run']['facing'];
 
-const MAX_PLAYABLE_FLOOR = 3; // Floor 4 (Boss Arena) arrives in Phase 6.
+export const MAX_PLAYABLE_FLOOR = 3; // Floor 4 (Boss Arena) arrives in Phase 6.
+
+/** Descends to the next floor if the player is standing on Stairs, awarding the
+ * Flawless Floor bonus for the floor just left and the first-visit bonus for
+ * the one just entered (Section 7). Shared by move, Dash, and Static Shift. */
+export function tryDescendIfOnStairs(state: GameState): void {
+  const tile = state.dungeon.tiles[state.run.playerY][state.run.playerX];
+  if (tile !== TILE.STAIRS || state.run.currentFloor >= MAX_PLAYABLE_FLOOR) return;
+  onFloorCleared(state);
+  const next = state.run.currentFloor + 1;
+  enterFloor(state, next);
+  onFloorEntered(state);
+  logLine(state, `You descend to Floor ${next}.`);
+}
 
 const DIRECTIONS: Record<string, { dx: number; dy: number; facing: Facing }> = {
   arrowup: { dx: 0, dy: -1, facing: 'UP' },
@@ -24,9 +39,11 @@ const DIRECTIONS: Record<string, { dx: number; dy: number; facing: Facing }> = {
   d: { dx: 1, dy: 0, facing: 'RIGHT' },
 };
 
-/** A Stunned player skips this action entirely; the turn still advances. */
-function consumeStunnedAction(state: GameState): boolean {
+/** A Stunned player skips this action entirely; the turn still advances. Exported
+ * so skills.ts (another player-action entry point) can share the same check. */
+export function consumeStunnedAction(state: GameState): boolean {
   if (state.run.status !== 'STUN') return false;
+  state.run.braced = false;
   logLine(state, 'You are stunned and cannot act!');
   resolvePlayerTurn(state, 'wait');
   return true;
@@ -36,6 +53,7 @@ function consumeStunnedAction(state: GameState): boolean {
 export function tryMove(state: GameState, dx: number, dy: number, facing: Facing): void {
   state.run.facing = facing;
   if (consumeStunnedAction(state)) return;
+  state.run.braced = false; // Brace only covers the Enemy Phase right after a Wait.
 
   const nx = state.run.playerX + dx;
   const ny = state.run.playerY + dy;
@@ -49,24 +67,26 @@ export function tryMove(state: GameState, dx: number, dy: number, facing: Facing
   }
 
   const tile = state.dungeon.tiles[ny][nx];
-  if (!isWalkable(tile)) return;
+  if (!isWalkable(tile)) {
+    playBlockedSfx();
+    return;
+  }
 
   state.run.playerX = nx;
   state.run.playerY = ny;
   logLine(state, `You move ${facing.toLowerCase()}.`);
+  playMoveSfx();
   pickupItemsAt(state, nx, ny);
-
-  if (tile === TILE.STAIRS && state.run.currentFloor < MAX_PLAYABLE_FLOOR) {
-    enterFloor(state, state.run.currentFloor + 1);
-    logLine(state, `You descend to Floor ${state.run.currentFloor}.`);
-  }
+  tryDescendIfOnStairs(state);
 
   resolvePlayerTurn(state, 'move');
 }
 
+/** Space: Brace (GDD Section 7/8) — +1 DEF until the start of the player's next turn. */
 export function passTurn(state: GameState): void {
   if (consumeStunnedAction(state)) return;
-  logLine(state, 'You wait.');
+  state.run.braced = true;
+  logLine(state, 'You brace, +1 DEF until your next turn.');
   resolvePlayerTurn(state, 'wait');
 }
 
