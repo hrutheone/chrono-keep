@@ -55,6 +55,8 @@ export interface GeneratedFloor {
   stairsY: number;
   gateX: number;
   gateY: number;
+  gateStairsSideX: number;
+  gateStairsSideY: number;
   shortcutId: string;
 }
 
@@ -231,11 +233,17 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
   carveL(spawn, roomCenter(stairsRoom));
   const shortcutTiles = [...corridor].filter((idx) => !beforeShortcut.has(idx));
   if (shortcutTiles.length === 0) return null; // nowhere to put a gate
-  const gateIdx = shortcutTiles[shortcutTiles.length >> 1];
+  const gateListIdx = shortcutTiles.length >> 1;
+  const gateIdx = shortcutTiles[gateListIdx];
   const gateX = gateIdx % N;
   const gateY = Math.floor(gateIdx / N);
   tiles[gateY][gateX] = TILE.SHORTCUT_GATE;
   corridor.delete(gateIdx);
+  // shortcutTiles walks spawn -> stairsRoom (Section 7: "opens only from the
+  // stairwell side"); the entry just past the gate is that stairwell-side tile.
+  const stairsSideIdx = shortcutTiles[Math.min(shortcutTiles.length - 1, gateListIdx + 1)];
+  const gateStairsSideX = stairsSideIdx % N;
+  const gateStairsSideY = Math.floor(stairsSideIdx / N);
 
   // 5. Walls around all carved space, then doors where a 1-wide corridor meets
   //    a room.
@@ -370,6 +378,8 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
     stairsY: stairs.y,
     gateX,
     gateY,
+    gateStairsSideX,
+    gateStairsSideY,
     shortcutId: `f${floorNumber}-shortcut`,
   };
 }
@@ -386,6 +396,18 @@ export function enterFloor(state: GameState, floorNumber: number): GeneratedFloo
   state.dungeon.enemies = floor.enemies;
   state.dungeon.items = floor.items;
   state.dungeon.expiringTiles = [];
+  state.dungeon.telegraphTiles = [];
+  state.dungeon.shortcutGate = {
+    x: floor.gateX,
+    y: floor.gateY,
+    stairsSideX: floor.gateStairsSideX,
+    stairsSideY: floor.gateStairsSideY,
+    shortcutId: floor.shortcutId,
+  };
+  // Section 7: a Shortcut Gate opened in an earlier loop stays open forever.
+  if (state.persistent.unlockedShortcuts.includes(floor.shortcutId)) {
+    state.dungeon.tiles[floor.gateY][floor.gateX] = TILE.FLOOR;
+  }
   return floor;
 }
 

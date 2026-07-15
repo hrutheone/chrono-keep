@@ -27,6 +27,14 @@ export function loadPersistent(): GameState['persistent'] | null {
   }
 }
 
+export function hasSave(): boolean {
+  try {
+    return localStorage.getItem(SAVE_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
 export function clearSave(): void {
   try {
     localStorage.removeItem(SAVE_KEY);

@@ -1,10 +1,11 @@
 // Enemy Phase (GDD Sections 6C & 7): wake radius, per-kind behavior, and the
 // status effects that gate a turn (Burn tick, Stun skip, Chilled half-speed).
 
-import { ENEMY_NAME } from './content';
+import { createEnemy, ENEMY_NAME } from './content';
 import { enemyAttackPlayer, killEnemy } from './combat';
 import { isWalkable } from './mapgen';
 import { logLine } from './turns';
+import { playBossTelegraphSfx } from './audio';
 import type { Enemy, GameState } from './types';
 
 const WAKE_RADIUS = 7;
@@ -122,6 +123,67 @@ function turretAct(state: GameState, enemy: Enemy): void {
   }
 }
 
+// Chrono-Lich (GDD Section 6C): activation counter driving its attack cadence,
+// keyed by enemy id (a single boss today, but keyed the same way as turrets).
+const bossTimers = new Map<string, number>();
+const TIME_BLAST_WARNING_TURNS = 2;
+
+function pruneBossTimers(state: GameState): void {
+  const liveIds = new Set(state.dungeon.enemies.map((e) => e.id));
+  for (const id of bossTimers.keys()) if (!liveIds.has(id)) bossTimers.delete(id);
+}
+
+/** Marks the player's tile and its 4 neighbors; turnController.ts's Tick Phase
+ * detonates them (Stun on hit) after 2 turns of warning. */
+function castTimeBlast(state: GameState, enemy: Enemy): void {
+  const targets = [
+    { x: state.run.playerX, y: state.run.playerY },
+    ...ORTHO.map(([dx, dy]) => ({ x: state.run.playerX + dx, y: state.run.playerY + dy })),
+  ];
+  for (const t of targets) {
+    if (!inBounds(state, t.x, t.y) || !isWalkable(state.dungeon.tiles[t.y][t.x])) continue;
+    state.dungeon.telegraphTiles.push({ x: t.x, y: t.y, turnsUntil: TIME_BLAST_WARNING_TURNS });
+  }
+  logLine(state, `${ENEMY_NAME[enemy.kind]} channels a Time-Blast!`);
+  playBossTelegraphSfx();
+}
+
+function summonGrunt(state: GameState, enemy: Enemy): void {
+  for (const [dx, dy] of shuffled(ORTHO)) {
+    const nx = enemy.x + dx;
+    const ny = enemy.y + dy;
+    if (!inBounds(state, nx, ny) || !isWalkable(state.dungeon.tiles[ny][nx])) continue;
+    if (occupiedByOtherEnemy(state, enemy, nx, ny) || (nx === state.run.playerX && ny === state.run.playerY)) continue;
+    const grunt = createEnemy('BONE_GRUNT', `${enemy.id}-summon-${state.dungeon.enemies.length}-${Date.now()}`, nx, ny);
+    grunt.awake = true;
+    state.dungeon.enemies.push(grunt);
+    logLine(state, `${ENEMY_NAME[enemy.kind]} summons a Bone-Grunt!`);
+    return;
+  }
+}
+
+/** Chrono-Lich: bump-attacks when adjacent, otherwise cycles between chasing,
+ * a telegraphed Time-Blast, and summoning Grunt reinforcements. */
+function bossAct(state: GameState, enemy: Enemy): void {
+  const count = (bossTimers.get(enemy.id) ?? 0) + 1;
+  bossTimers.set(enemy.id, count);
+
+  const adjacent = Math.abs(enemy.x - state.run.playerX) + Math.abs(enemy.y - state.run.playerY) <= 1;
+  if (adjacent) {
+    enemyAttackPlayer(state, enemy);
+    return;
+  }
+  if (count % 4 === 0) {
+    castTimeBlast(state, enemy);
+    return;
+  }
+  if (count % 6 === 0 && state.dungeon.enemies.length < 5) {
+    summonGrunt(state, enemy);
+    return;
+  }
+  chaseStep(state, enemy, enemy.speed, true);
+}
+
 function actEnemy(state: GameState, enemy: Enemy): void {
   const speed = enemy.status === 'CHILLED' ? Math.max(1, Math.floor(enemy.speed / 2)) : enemy.speed;
   switch (enemy.kind) {
@@ -139,13 +201,15 @@ function actEnemy(state: GameState, enemy: Enemy): void {
       turretAct(state, enemy);
       break;
     case 'CHRONO_LICH':
-      break; // Boss AI arrives in Phase 6.
+      bossAct(state, enemy);
+      break;
   }
 }
 
 /** Runs one Enemy Phase: wake checks, Burn/Stun gating, then each awake enemy's behavior. */
 export function runEnemyPhase(state: GameState): void {
   pruneTurretTimers(state);
+  pruneBossTimers(state);
 
   for (const enemy of state.dungeon.enemies) {
     wakeIfNear(state, enemy);

@@ -37,6 +37,38 @@ body {
   image-rendering: crisp-edges;
 }
 
+/* CRT Time-Warp (Section 11): plays once on death/timeout, before the DEATH
+ * screen appears. Pure CSS on the canvas element only. */
+#game.death-warp {
+  animation: crt-warp 0.6s ease-in forwards;
+}
+
+@keyframes crt-warp {
+  0% {
+    filter: none;
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  25% {
+    filter: invert(1);
+  }
+  70% {
+    filter: invert(1);
+    transform: scaleX(0);
+  }
+  100% {
+    filter: invert(1);
+    transform: scaleX(0);
+    opacity: 0;
+  }
+}
+
+#hud-top.death-fade,
+#hud-bottom.death-fade {
+  transition: opacity 0.25s ease-out;
+  opacity: 0;
+}
+
 .overlay {
   position: absolute;
   left: 0;
@@ -338,4 +370,31 @@ body {
   opacity: 0.6;
   min-width: 10em;
   text-align: right;
+}
+
+/* TITLE, DEATH, VICTORY screens (Phase 6) */
+.title-menu,
+.death-menu,
+.victory-menu {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 10px;
+}
+
+.title-menu h1,
+.victory-menu h1 {
+  font-size: 22px;
+  letter-spacing: 0.08em;
+}
+
+.death-menu h2,
+.victory-menu h2 {
+  font-size: 14px;
+}
+
+.title-menu button,
+.death-menu button,
+.victory-menu button {
+  width: 12em;
 }

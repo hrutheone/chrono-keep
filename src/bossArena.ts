@@ -1,0 +1,73 @@
+// Floor 4 Boss Arena (GDD Section 7): a fixed, hand-authored layout — never
+// touches rng.ts/mapgen.ts's seeded generator. Reached through the Boss Gate
+// once `run.anchorsCollected === 3` (movement.ts wires the actual check).
+
+import { createEnemy } from './content';
+import { TILE } from './mapgen';
+import { DUNGEON_SIZE } from './state';
+import type { Enemy, GameState, WorldItem } from './types';
+
+const N = DUNGEON_SIZE;
+
+export const BOSS_ID = 'chrono-lich-boss';
+
+interface BossFloor {
+  tiles: number[][];
+  enemies: Enemy[];
+  items: WorldItem[];
+  spawnX: number;
+  spawnY: number;
+}
+
+function buildArena(): BossFloor {
+  const tiles: number[][] = Array.from({ length: N }, () => new Array<number>(N).fill(TILE.VOID));
+
+  // A single square arena, walled on all sides, with 4 corner pillars for cover.
+  const rx = 6;
+  const ry = 6;
+  const rw = 20;
+  const rh = 20;
+  for (let y = ry; y < ry + rh; y++) {
+    for (let x = rx; x < rx + rw; x++) tiles[y][x] = TILE.FLOOR;
+  }
+  for (let x = rx - 1; x <= rx + rw; x++) {
+    tiles[ry - 1][x] = TILE.WALL;
+    tiles[ry + rh][x] = TILE.WALL;
+  }
+  for (let y = ry - 1; y <= ry + rh; y++) {
+    tiles[y][rx - 1] = TILE.WALL;
+    tiles[y][rx + rw] = TILE.WALL;
+  }
+
+  const pillars: [number, number][] = [
+    [rx + 4, ry + 4],
+    [rx + rw - 5, ry + 4],
+    [rx + 4, ry + rh - 5],
+    [rx + rw - 5, ry + rh - 5],
+  ];
+  for (const [px, py] of pillars) tiles[py][px] = TILE.WALL;
+
+  const spawnX = rx + (rw >> 1);
+  const spawnY = ry + rh - 2;
+
+  const boss = createEnemy('CHRONO_LICH', BOSS_ID, rx + (rw >> 1), ry + 2);
+  boss.awake = true; // No sneaking up on the Chrono-Lich.
+
+  return { tiles, enemies: [boss], items: [], spawnX, spawnY };
+}
+
+/** Generates the arena and installs it into game state, replacing Floor 1-3's dungeon. */
+export function enterBossFloor(state: GameState): void {
+  const floor = buildArena();
+  state.run.currentFloor = 4;
+  state.run.playerX = floor.spawnX;
+  state.run.playerY = floor.spawnY;
+  state.dungeon.width = N;
+  state.dungeon.height = N;
+  state.dungeon.tiles = floor.tiles;
+  state.dungeon.enemies = floor.enemies;
+  state.dungeon.items = floor.items;
+  state.dungeon.expiringTiles = [];
+  state.dungeon.telegraphTiles = [];
+  state.dungeon.shortcutGate = null;
+}

@@ -4,13 +4,14 @@
 // Inventory actions follow Phase 3's separate context-sensitive rule and
 // never go through here.
 
-import { applyPlayerStatus } from './combat';
+import { applyEnemyStatus, applyPlayerStatus } from './combat';
 import { runEnemyPhase } from './enemyAI';
 import { enterFloor, TILE } from './mapgen';
-import { BASE_MAX_HP, BASE_MAX_STAMINA, BASE_TURNS } from './state';
+import { resetRunForNewLoop } from './state';
 import { logLine } from './turns';
 import { markFloorDamageTaken, onFloorEntered } from './echoes';
 import { saveGame } from './persistence';
+import { playDeathSfx, playLoopResetSfx } from './audio';
 import { PLAYER_ID, notifyDeath } from './animation';
 import type { GameState } from './types';
 
@@ -37,6 +38,23 @@ function applyFireHazard(state: GameState): void {
 function tickExpiringTiles(state: GameState): void {
   for (const tile of state.dungeon.expiringTiles) tile.turnsLeft -= 1;
   state.dungeon.expiringTiles = state.dungeon.expiringTiles.filter((t) => t.turnsLeft > 0);
+}
+
+/** Chrono-Lich Time-Blast (Section 6C): decrements the 2-turn warning, then
+ * Stuns whoever is standing on a tile the instant it detonates. */
+function tickTelegraphTiles(state: GameState): void {
+  for (const t of state.dungeon.telegraphTiles) t.turnsUntil -= 1;
+  const detonating = state.dungeon.telegraphTiles.filter((t) => t.turnsUntil <= 0);
+  for (const t of detonating) {
+    if (state.run.playerX === t.x && state.run.playerY === t.y) {
+      applyPlayerStatus(state, 'STUN', 1);
+      logLine(state, 'The Time-Blast detonates — you are Stunned!');
+    }
+    for (const enemy of state.dungeon.enemies) {
+      if (enemy.x === t.x && enemy.y === t.y && enemy.kind !== 'CHRONO_LICH') applyEnemyStatus(enemy, 'STUN', 1);
+    }
+  }
+  state.dungeon.telegraphTiles = state.dungeon.telegraphTiles.filter((t) => t.turnsUntil > 0);
 }
 
 function tickPlayerStatus(state: GameState): void {
@@ -66,6 +84,7 @@ function runTickPhase(state: GameState, actionKind: PlayerActionKind): void {
   tickPlayerStatus(state);
   tickEnemyStatuses(state);
   tickExpiringTiles(state);
+  tickTelegraphTiles(state);
 
   // Section 7: "+1 Stamina at the end of any turn in which no Stamina was
   // spent." Only skills spend Stamina today, so a skill turn skips regen.
@@ -77,46 +96,65 @@ function runTickPhase(state: GameState, actionKind: PlayerActionKind): void {
   state.run.turnsRemaining = Math.max(0, state.run.turnsRemaining - penalty);
 }
 
-/** Full Loop Reset (GDD Section 7, Phase 5): bank Echoes (already banked live
- * as earned), keep unlockedShortcuts/upgrades/skills (all in `persistent`),
- * drop the run's inventory/equipment, then hand off to the Upgrade Shop
- * before the next loop starts on Floor 1. */
-function triggerLossReset(state: GameState): void {
-  const reason = state.run.currentHp <= 0 ? 'You have fallen. The loop resets.' : 'Time has run out. The loop resets.';
+/** True once the DEATH screen has been shown for this loss, so a stray extra
+ * turn (shouldn't happen once GAME input is gated by currentScreen, but this
+ * is the safety net) can't re-trigger it. */
+let lossPending = false;
+const CRT_WARP_MS = 600;
+
+/** CRT Time-Warp (Section 11): CSS-only, on the #game canvas element and the
+ * HUD bars, kicked off the instant a loss triggers. */
+function playCrtWarp(): void {
+  document.querySelector('#game')?.classList.add('death-warp');
+  document.querySelector('#hud-top')?.classList.add('death-fade');
+  document.querySelector('#hud-bottom')?.classList.add('death-fade');
+}
+
+function clearCrtWarp(): void {
+  document.querySelector('#game')?.classList.remove('death-warp');
+  document.querySelector('#hud-top')?.classList.remove('death-fade');
+  document.querySelector('#hud-bottom')?.classList.remove('death-fade');
+}
+
+/** Check Phase (Section 7): plays the CRT Time-Warp, then shows the DEATH
+ * screen once it finishes, preserving the just-ended run's stats (floor,
+ * turns) for display. The actual Full Loop Reset happens in
+ * continueAfterDeath(), once the player dismisses it. */
+function runCheckPhase(state: GameState): void {
+  if (lossPending || (state.run.turnsRemaining > 0 && state.run.currentHp > 0)) return;
+  lossPending = true;
   if (state.run.currentHp <= 0) {
     notifyDeath(PLAYER_ID, 'PLAYER', state.run.playerX, state.run.playerY, state.run.facing);
+    logLine(state, 'You have fallen.');
+  } else {
+    logLine(state, 'Time has run out.');
   }
+  playDeathSfx();
+  playCrtWarp();
+  setTimeout(() => {
+    state.ui.currentScreen = 'DEATH';
+  }, CRT_WARP_MS);
+}
+
+/** Full Loop Reset (GDD Section 7, Phase 5/6): bank Echoes (already banked
+ * live as earned), keep unlockedShortcuts/upgrades/skills (all in
+ * `persistent`), drop the run's inventory/equipment, then hand off to the
+ * Upgrade Shop before the next loop starts on Floor 1. Called from the DEATH
+ * screen's Continue action. */
+export function continueAfterDeath(state: GameState): void {
+  lossPending = false;
+  clearCrtWarp();
   state.persistent.loopCount += 1;
   state.persistent.stats.deepestFloor = Math.max(state.persistent.stats.deepestFloor, state.run.currentFloor);
 
-  state.run.maxHp = BASE_MAX_HP + state.persistent.maxHpUpgrade * 5;
-  state.run.currentHp = state.run.maxHp;
-  state.run.maxStamina = BASE_MAX_STAMINA + state.persistent.maxStamUpgrade * 2;
-  state.run.currentStamina = state.run.maxStamina;
-  state.run.turnsRemaining = BASE_TURNS + state.persistent.turnBonusUpgrade * 5;
-  state.run.anchorsCollected = 0;
-  state.run.inventory = [];
-  state.run.equippedWeapon = null;
-  state.run.equippedAccessory = null;
-  state.run.activeSkills = state.persistent.skills.dash ? ['dash'] : [];
-  state.run.status = 'NONE';
-  state.run.statusTurns = 0;
-  state.run.facing = 'DOWN';
-  state.run.braced = false;
-  state.run.iceAegisCharges = 0;
-  state.run.iceAegisChillsAttacker = false;
-  state.run.floorsVisitedThisLoop = [];
+  resetRunForNewLoop(state);
 
   enterFloor(state, 1);
   onFloorEntered(state);
-  logLine(state, reason);
+  playLoopResetSfx();
 
   state.ui.currentScreen = 'UPGRADE_SHOP';
   saveGame(state);
-}
-
-function runCheckPhase(state: GameState): void {
-  if (state.run.turnsRemaining <= 0 || state.run.currentHp <= 0) triggerLossReset(state);
 }
 
 /** Call once per turn-costing player action, after the Player Move Phase has already applied. */

@@ -112,6 +112,62 @@ export function notifyDeath(id: string, kind: GhostKind, x: number, y: number, f
   ghosts.set(id, { kind, x, y, facing, start: performance.now() });
 }
 
+// 1-Bit Pixel Particles (Section 11): a small pooled scatter-and-fade burst,
+// same render-only/diff-free-of-gameplay-state philosophy as the rest of this
+// module. Reuses the existing palette (no new accent colors).
+interface Particle {
+  x: number;
+  y: number;
+  vx: number; // tiles/sec
+  vy: number;
+  start: number;
+  life: number; // ms
+}
+
+const particles: Particle[] = [];
+const PARTICLE_MAX = 200; // hard cap so a chain of kills can't grow this unbounded
+
+/** Scatters 10-15 single-pixel particles outward from (x, y) — an enemy death burst. */
+export function spawnDeathParticles(x: number, y: number): void {
+  const now = performance.now();
+  const count = 10 + Math.floor(Math.random() * 6);
+  for (let i = 0; i < count && particles.length < PARTICLE_MAX; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 1.5 + Math.random() * 2.5;
+    particles.push({
+      x: x + 0.5,
+      y: y + 0.5,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      start: now,
+      life: 300 + Math.random() * 250,
+    });
+  }
+}
+
+export interface ParticleVisual {
+  x: number;
+  y: number;
+  alpha: number;
+}
+
+/** Resolved render-space position + fade for every live particle this frame. */
+export function getParticles(): ParticleVisual[] {
+  const now = performance.now();
+  const out: ParticleVisual[] = [];
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    const t = now - p.start;
+    if (t > p.life) {
+      particles.splice(i, 1);
+      continue;
+    }
+    const tSec = t / 1000;
+    out.push({ x: p.x + p.vx * tSec, y: p.y + p.vy * tSec, alpha: 1 - t / p.life });
+  }
+  return out;
+}
+
 /** Triangular 0 -> 1 -> 0 tween used for the attack lunge (out and back). */
 function easeOutIn(t: number): number {
   return t < 0.5 ? t * 2 : (1 - t) * 2;

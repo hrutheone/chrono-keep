@@ -5,6 +5,7 @@
 import { SKILLS } from './content';
 import { logLine } from './turns';
 import { saveGame } from './persistence';
+import { playPurchaseSfx, playSkillUnlockSfx } from './audio';
 import type { GameState } from './types';
 
 export type StatTrack = 'maxHpUpgrade' | 'maxStamUpgrade' | 'turnBonusUpgrade';
@@ -31,6 +32,7 @@ export function buyStatUpgrade(state: GameState, track: StatTrack): boolean {
   state.persistent.echoes -= cost;
   state.persistent[track] += 1;
   logLine(state, `Upgraded ${STAT_TRACKS.find((t) => t.track === track)!.label} to Lv${state.persistent[track]}.`);
+  playPurchaseSfx();
   saveGame(state);
   return true;
 }
@@ -50,6 +52,7 @@ export function buySkillUpgrade(state: GameState, skillId: string): boolean {
   state.persistent.echoes -= cost;
   state.persistent.skills[skillId] = (state.persistent.skills[skillId] ?? 0) + 1;
   logLine(state, `${SKILLS[skillId].name} upgraded to Lv${state.persistent.skills[skillId]}.`);
+  playSkillUnlockSfx();
   saveGame(state);
   return true;
 }

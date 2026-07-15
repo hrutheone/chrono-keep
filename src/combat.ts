@@ -7,8 +7,9 @@ import { totalAtk, totalDef } from './inventory';
 import { TILE } from './mapgen';
 import { logLine } from './turns';
 import { awardEchoes, markFloorDamageTaken } from './echoes';
+import { triggerVictory } from './victory';
 import { playAttackSfx, playEnemyHitPlayerSfx, playStatusApplySfx } from './audio';
-import { PLAYER_ID, notifyAttack, notifyDeath } from './animation';
+import { PLAYER_ID, notifyAttack, notifyDeath, spawnDeathParticles } from './animation';
 import type { Element, Enemy, GameState, StatusEffect } from './types';
 
 const NORMAL_ENEMY_KINDS = new Set<Enemy['kind']>(['BONE_GRUNT', 'EMBER_BAT', 'VOLT_TURRET', 'FROST_WRAITH']);
@@ -75,6 +76,7 @@ const ELITE_ENEMY_KINDS = new Set<Enemy['kind']>(['TIME_WEAVER']);
 export function killEnemy(state: GameState, enemy: Enemy, source: 'bump' | 'skill' = 'bump'): void {
   state.dungeon.enemies = state.dungeon.enemies.filter((e) => e.id !== enemy.id);
   notifyDeath(enemy.id, enemy.kind, enemy.x, enemy.y);
+  spawnDeathParticles(enemy.x, enemy.y);
 
   const drop = rollEnemyDrop(Math.random, enemy.kind, `${enemy.id}-drop`);
   if (drop) state.dungeon.items.push({ item: drop, x: enemy.x, y: enemy.y });
@@ -94,6 +96,12 @@ export function killEnemy(state: GameState, enemy: Enemy, source: 'bump' | 'skil
   if (source === 'skill') {
     state.run.currentStamina = Math.min(state.run.maxStamina, state.run.currentStamina + 1);
     logLine(state, 'Execution refund: +1 Stamina.');
+  }
+
+  if (enemy.kind === 'CHRONO_LICH') {
+    logLine(state, 'The Chrono-Lich unravels...');
+    triggerVictory(state);
+    return;
   }
 
   logLine(state, `${ENEMY_NAME[enemy.kind]} defeated!`);

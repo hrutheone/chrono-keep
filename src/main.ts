@@ -1,7 +1,6 @@
 import './style.css';
 import { createNewGameState } from './state';
 import { enterFloor } from './mapgen';
-import { onFloorEntered } from './echoes';
 import { loadPersistent } from './persistence';
 import { renderWorld } from './render';
 import { installInput } from './movement';
@@ -54,8 +53,9 @@ initAudio();
 installInput(state);
 installSkillInput(state);
 initMenus(state);
+// A live (but not yet "entered") dungeon renders behind the TITLE overlay;
+// TITLE's Continue/New Game buttons are what actually start the run.
 enterFloor(state, 1);
-onFloorEntered(state);
-state.ui.currentScreen = 'GAME';
+state.ui.currentScreen = 'TITLE';
 
 requestAnimationFrame(frame);

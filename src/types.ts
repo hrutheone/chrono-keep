@@ -75,6 +75,13 @@ export interface GameState {
     // Player-created tile mutations (Flame Arc Lvl 3's Fire Hazard). Kept off
     // the deterministic `tiles` grid entirely; restored to FLOOR on expiry.
     expiringTiles: { x: number; y: number; turnsLeft: number }[];
+    // Chrono-Lich Time-Blast warning tiles (Phase 6): marked 2 turns before
+    // they detonate (Stun on hit), then cleared.
+    telegraphTiles: { x: number; y: number; turnsUntil: number }[];
+    // This floor's Shortcut Gate (Section 7): openable only from the
+    // stairwell-side neighbor tile, or freely if already in
+    // persistent.unlockedShortcuts. Null on Floor 4 (no shortcut there).
+    shortcutGate: { x: number; y: number; stairsSideX: number; stairsSideY: number; shortcutId: string } | null;
   };
 
   // Engine state

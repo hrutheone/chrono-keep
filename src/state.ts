@@ -60,6 +60,8 @@ export function createNewGameState(): GameState {
       enemies: [],
       items: [],
       expiringTiles: [],
+      telegraphTiles: [],
+      shortcutGate: null,
     },
 
     ui: {
@@ -78,4 +80,33 @@ export function resetToNewGame(state: GameState): void {
   state.run = fresh.run;
   state.dungeon = fresh.dungeon;
   state.ui = fresh.ui;
+}
+
+/** New Game+ (Section 7 Victory Flow): a fresh dungeon layout, but every
+ * permanent upgrade/skill/Echo/stat carries over. */
+export function rerollSeedKeepProgress(state: GameState): void {
+  state.persistent.rngSeed = Math.floor(Math.random() * 2 ** 31);
+}
+
+/** Resets `run` to a fresh loop's starting values from `persistent`'s current
+ * upgrades — shared by the Full Loop Reset (death/timeout) and New Game+
+ * (victory), both of which keep every permanent upgrade/skill. */
+export function resetRunForNewLoop(state: GameState): void {
+  state.run.maxHp = BASE_MAX_HP + state.persistent.maxHpUpgrade * 5;
+  state.run.currentHp = state.run.maxHp;
+  state.run.maxStamina = BASE_MAX_STAMINA + state.persistent.maxStamUpgrade * 2;
+  state.run.currentStamina = state.run.maxStamina;
+  state.run.turnsRemaining = BASE_TURNS + state.persistent.turnBonusUpgrade * 5;
+  state.run.anchorsCollected = 0;
+  state.run.inventory = [];
+  state.run.equippedWeapon = null;
+  state.run.equippedAccessory = null;
+  state.run.activeSkills = state.persistent.skills.dash ? ['dash'] : [];
+  state.run.status = 'NONE';
+  state.run.statusTurns = 0;
+  state.run.facing = 'DOWN';
+  state.run.braced = false;
+  state.run.iceAegisCharges = 0;
+  state.run.iceAegisChillsAttacker = false;
+  state.run.floorsVisitedThisLoop = [];
 }

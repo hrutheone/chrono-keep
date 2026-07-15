@@ -151,6 +151,17 @@ export function playUnequipSfx(): void {
   tone({ freq: 200, duration: 0.06, type: 'square', gain: 0.2, delay: 0.05 });
 }
 
+/** Boss telegraph (Section 9D): rising warning tone across the 2-turn Time-Blast warning. */
+export function playBossTelegraphSfx(): void {
+  tone({ freq: 200, duration: 0.3, type: 'sawtooth', gain: 0.2, freqEnd: 500 });
+}
+
+/** Shortcut Gate opened (Section 9D): mechanical unlock + door groan. */
+export function playUnlockSfx(): void {
+  tone({ freq: 260, duration: 0.05, type: 'square', gain: 0.2 });
+  tone({ freq: 90, duration: 0.35, type: 'sawtooth', gain: 0.15, freqEnd: 60, delay: 0.08 });
+}
+
 export function playPotionSfx(): void {
   tone({ freq: 300, duration: 0.05, type: 'sine', gain: 0.15 });
   tone({ freq: 440, duration: 0.2, type: 'sine', gain: 0.18, freqEnd: 660, delay: 0.05 });
@@ -192,6 +203,36 @@ const STATUS_APPLY_SFX: Record<StatusEffect, (() => void) | undefined> = {
 
 export function playStatusApplySfx(status: StatusEffect): void {
   STATUS_APPLY_SFX[status]?.();
+}
+
+/** DEATH: descending "failure" stinger (Section 9C). */
+export function playDeathSfx(): void {
+  tone({ freq: 300, duration: 0.5, type: 'sawtooth', gain: 0.22, freqEnd: 60 });
+}
+
+/** VICTORY: fanfare + stat-reveal chimes (Section 9C). */
+export function playVictorySfx(): void {
+  [523, 659, 784, 1047].forEach((freq, i) => tone({ freq, duration: 0.3, type: 'square', gain: 0.22, delay: i * 0.1 }));
+}
+
+/** Loop reset (Section 9D): a "rewind" whoosh — a descending sweep read as reverse-played ticks. */
+export function playLoopResetSfx(): void {
+  tone({ freq: 700, duration: 0.4, type: 'triangle', gain: 0.2, freqEnd: 120 });
+}
+
+/** New Game / New Game+ (Section 9D): distinct from a loss-reset — an ascending chime. */
+export function playNewGameSfx(): void {
+  tone({ freq: 260, duration: 0.15, type: 'triangle', gain: 0.2, freqEnd: 520 });
+}
+
+/** Upgrade Shop purchase (Section 9D / 11): confirm chime + a short rising power chord. */
+export function playPurchaseSfx(): void {
+  [220, 277, 330].forEach((freq, i) => tone({ freq, duration: 0.18, type: 'square', gain: 0.18, delay: i * 0.05 }));
+}
+
+/** Skill unlock/upgrade (Section 9D): a distinct "power up" arpeggio. */
+export function playSkillUnlockSfx(): void {
+  [330, 440, 554, 660].forEach((freq, i) => tone({ freq, duration: 0.12, type: 'triangle', gain: 0.2, delay: i * 0.06 }));
 }
 
 export function debugAudioState(): { unlocked: boolean; contextState: string | null; masterGain: number | null } {

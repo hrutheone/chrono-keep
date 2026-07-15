@@ -9,8 +9,10 @@
 import { SKILLS } from './content';
 import { enterFloor } from './mapgen';
 import { onFloorEntered } from './echoes';
-import { clearSave, saveGame } from './persistence';
-import { resetToNewGame } from './state';
+import { clearSave, hasSave, saveGame } from './persistence';
+import { continueAfterDeath } from './turnController';
+import { resetRunForNewLoop, resetToNewGame, rerollSeedKeepProgress } from './state';
+import { playNewGameSfx } from './audio';
 import {
   buySkillUpgrade,
   buyStatUpgrade,
@@ -49,9 +51,8 @@ function assignSkill(state: GameState, skillId: string, slot: 'Q' | 'E'): void {
   state.run.activeSkills[slot === 'Q' ? 0 : 1] = skillId;
 }
 
-/** Temporary New Game action (Section 7, point 9) — a real TITLE screen arrives
- * in Phase 6. Rerolls the seed and wipes `persistent`; confirmed since it's
- * destructive to any saved progress. */
+/** New Game (TITLE, Upgrade Shop, VICTORY's full reset): rerolls the seed and
+ * wipes `persistent`; confirmed since it's destructive to any saved progress. */
 function startNewGame(state: GameState): void {
   if (!window.confirm('Start a New Game? This rerolls the dungeon and wipes all permanent progress.')) return;
   clearSave();
@@ -59,6 +60,26 @@ function startNewGame(state: GameState): void {
   enterFloor(state, 1);
   onFloorEntered(state);
   state.ui.currentScreen = 'GAME';
+  playNewGameSfx();
+  saveGame(state);
+}
+
+/** TITLE's Continue: resumes the loaded save on Floor 1 of the current loop. */
+function continueSave(state: GameState): void {
+  enterFloor(state, 1);
+  onFloorEntered(state);
+  state.ui.currentScreen = 'GAME';
+  saveGame(state);
+}
+
+/** VICTORY's New Game+ (Section 7): a fresh dungeon, every permanent upgrade kept. */
+function startNewGamePlus(state: GameState): void {
+  rerollSeedKeepProgress(state);
+  resetRunForNewLoop(state);
+  enterFloor(state, 1);
+  onFloorEntered(state);
+  state.ui.currentScreen = 'UPGRADE_SHOP';
+  playNewGameSfx();
   saveGame(state);
 }
 
@@ -190,16 +211,69 @@ function renderHelp(): string {
     </div>`;
 }
 
+function renderTitle(): string {
+  const continueBtn = hasSave()
+    ? '<button class="continue-btn" data-action="title-continue">Continue</button>'
+    : '';
+  return `
+    <div class="menu title-menu">
+      <h1>Chrono-Keep</h1>
+      <div class="stat-line">The 100-Turn Dungeon</div>
+      ${continueBtn}
+      <button class="new-game-btn" data-action="new-game">New Game</button>
+      <div class="menu-hint">?/F1: Help</div>
+    </div>`;
+}
+
+function renderDeath(state: GameState): string {
+  const fell = state.run.currentHp <= 0;
+  return `
+    <div class="menu death-menu">
+      <h2>${fell ? 'You Have Fallen' : 'Time Has Run Out'}</h2>
+      <div class="stat-line">Loop ${state.persistent.loopCount + 1}</div>
+      <div class="stat-line">Reached Floor ${state.run.currentFloor}</div>
+      <div class="stat-line">Echoes banked: ${state.persistent.echoes}</div>
+      <button class="continue-btn" data-action="death-continue">Continue to Upgrade Shop</button>
+    </div>`;
+}
+
+function renderVictory(state: GameState): string {
+  return `
+    <div class="menu victory-menu">
+      <h1>Victory</h1>
+      <div class="stat-line">The Chrono-Lich unravels. The loop is broken.</div>
+      <div class="stat-line">Loops used: ${state.persistent.loopCount + 1}</div>
+      <div class="stat-line">Turns remaining: ${state.run.turnsRemaining}</div>
+      <div class="stat-line">Total wins: ${state.persistent.stats.wins}</div>
+      <button class="continue-btn" data-action="victory-newgameplus">New Game+ (keep upgrades)</button>
+      <button class="new-game-btn" data-action="new-game">Full Reset</button>
+    </div>`;
+}
+
 /** Rebuilds the overlay for the current screen; clears it outside menus. */
+const ALL_SCREENS = new Set<GameState['ui']['currentScreen']>([
+  'TITLE',
+  'GAME',
+  'INVENTORY',
+  'SKILL_MENU',
+  'UPGRADE_SHOP',
+  'HELP',
+  'DEATH',
+  'VICTORY',
+]);
+
 function render(state: GameState): void {
   const el = screenEl();
   const screen = state.ui.currentScreen;
-  const isOpen = screen === 'INVENTORY' || screen === 'SKILL_MENU' || screen === 'UPGRADE_SHOP' || screen === 'HELP';
+  const isOpen = screen !== 'GAME';
   el.classList.toggle('active', isOpen);
-  if (screen === 'INVENTORY') el.innerHTML = renderInventory(state);
+  if (screen === 'TITLE') el.innerHTML = renderTitle();
+  else if (screen === 'INVENTORY') el.innerHTML = renderInventory(state);
   else if (screen === 'SKILL_MENU') el.innerHTML = renderSkillMenu(state);
   else if (screen === 'UPGRADE_SHOP') el.innerHTML = renderUpgradeShop(state);
   else if (screen === 'HELP') el.innerHTML = renderHelp();
+  else if (screen === 'DEATH') el.innerHTML = renderDeath(state);
+  else if (screen === 'VICTORY') el.innerHTML = renderVictory(state);
   else el.innerHTML = '';
   lastScreen = screen;
 }
@@ -208,7 +282,7 @@ function render(state: GameState): void {
 export function initMenus(state: GameState): void {
   window.addEventListener('keydown', (ev) => {
     const screen = state.ui.currentScreen;
-    if (screen !== 'GAME' && screen !== 'INVENTORY' && screen !== 'SKILL_MENU' && screen !== 'UPGRADE_SHOP' && screen !== 'HELP') return;
+    if (!ALL_SCREENS.has(screen)) return;
     const key = ev.key.toLowerCase();
 
     if (key === '?' || key === 'f1') {
@@ -223,7 +297,7 @@ export function initMenus(state: GameState): void {
       ev.preventDefault();
       toggleScreen(state, 'SKILL_MENU');
       render(state);
-    } else if (key === 'escape') {
+    } else if (key === 'escape' && (screen === 'INVENTORY' || screen === 'SKILL_MENU' || screen === 'UPGRADE_SHOP' || screen === 'HELP')) {
       ev.preventDefault();
       state.ui.currentScreen = 'GAME';
       render(state);
@@ -244,6 +318,9 @@ export function initMenus(state: GameState): void {
     else if (action === 'buy-skill') buySkillUpgrade(state, skill!);
     else if (action === 'shop-continue') state.ui.currentScreen = 'GAME';
     else if (action === 'new-game') startNewGame(state);
+    else if (action === 'title-continue') continueSave(state);
+    else if (action === 'death-continue') continueAfterDeath(state);
+    else if (action === 'victory-newgameplus') startNewGamePlus(state);
 
     render(state);
   });

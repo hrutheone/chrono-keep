@@ -13,7 +13,7 @@ import {
   COLOR_FLASH,
 } from './palette';
 import { TILE } from './mapgen';
-import { PLAYER_ID, updateAnimations, getEntityVisual, getDeathGhosts } from './animation';
+import { PLAYER_ID, updateAnimations, getEntityVisual, getDeathGhosts, getParticles } from './animation';
 import type { GhostVisual } from './animation';
 import type { GameState, Enemy } from './types';
 import type { Sprite } from './sprites';
@@ -171,6 +171,21 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     }
   }
 
+  // Chrono-Lich Time-Blast telegraph (Section 11): a pulsing warning tile,
+  // reusing the enemy-alarm red rather than adding a new accent color.
+  if (state.dungeon.telegraphTiles.length > 0) {
+    const pulse = 0.35 + 0.25 * Math.sin(performance.now() / 120);
+    ctx.fillStyle = COLOR_ENEMY_LIGHT;
+    ctx.globalAlpha = pulse;
+    for (const t of state.dungeon.telegraphTiles) {
+      const sx = t.x - cam.x;
+      const sy = t.y - cam.y;
+      if (sx < 0 || sx >= VIEWPORT_TILES_W || sy < 0 || sy >= VIEWPORT_TILES_H) continue;
+      ctx.fillRect(sx * TILE_SIZE, sy * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+    }
+    ctx.globalAlpha = 1;
+  }
+
   for (const wi of state.dungeon.items) {
     const sx = wi.x - cam.x;
     const sy = wi.y - cam.y;
@@ -201,4 +216,15 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
   const playerPx = Math.round((playerVisual.tileX - cam.x) * TILE_SIZE);
   const playerPy = Math.round((playerVisual.tileY - cam.y) * TILE_SIZE);
   drawPlayer(ctx, state.run.facing, playerPx, playerPy, playerVisual.flashing ? FLASH_COLORS : PLAYER_COLORS);
+
+  // 1-Bit Pixel Particles (Section 11): drawn last, on top of everything.
+  ctx.fillStyle = COLOR_ENEMY_LIGHT;
+  for (const p of getParticles()) {
+    const sx = (p.x - cam.x) * TILE_SIZE;
+    const sy = (p.y - cam.y) * TILE_SIZE;
+    if (sx < -2 || sx >= viewW + 2 || sy < -2 || sy >= viewH + 2) continue;
+    ctx.globalAlpha = p.alpha;
+    ctx.fillRect(Math.round(sx), Math.round(sy), 1, 1);
+  }
+  ctx.globalAlpha = 1;
 }
