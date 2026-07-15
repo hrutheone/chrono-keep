@@ -15,6 +15,7 @@ import {
 import { TILE } from './mapgen';
 import { PLAYER_ID, updateAnimations, getEntityVisual, getDeathGhosts, getParticles } from './animation';
 import type { GhostVisual } from './animation';
+import { drawGlyphText, getFloatingTexts, measureGlyphText, type FloatKind } from './floatingText';
 import type { GameState, Enemy } from './types';
 import type { Sprite } from './sprites';
 import {
@@ -50,6 +51,13 @@ const TERRAIN_COLORS: SpriteColors = { light: COLOR_LIGHT, mid: COLOR_MID };
 const PLAYER_COLORS: SpriteColors = { light: COLOR_PLAYER_LIGHT, mid: COLOR_PLAYER_MID };
 const ENEMY_COLORS: SpriteColors = { light: COLOR_ENEMY_LIGHT, mid: COLOR_ENEMY_MID };
 const FLASH_COLORS: SpriteColors = { light: COLOR_FLASH, mid: COLOR_FLASH };
+
+const FLOAT_COLOR: Record<FloatKind, string> = {
+  damage: COLOR_LIGHT,
+  crit: COLOR_FLASH,
+  immune: COLOR_MID,
+  turns: COLOR_PLAYER_LIGHT,
+};
 
 /** Draws an 8x8 sprite matrix at pixel (px, py); 0 = transparent, 1 = light, 2 = midtone. */
 export function drawSprite(
@@ -217,7 +225,7 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
   const playerPy = Math.round((playerVisual.tileY - cam.y) * TILE_SIZE);
   drawPlayer(ctx, state.run.facing, playerPx, playerPy, playerVisual.flashing ? FLASH_COLORS : PLAYER_COLORS);
 
-  // 1-Bit Pixel Particles (Section 11): drawn last, on top of everything.
+  // 1-Bit Pixel Particles (Section 11): drawn on top of sprites.
   ctx.fillStyle = COLOR_ENEMY_LIGHT;
   for (const p of getParticles()) {
     const sx = (p.x - cam.x) * TILE_SIZE;
@@ -225,6 +233,17 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     if (sx < -2 || sx >= viewW + 2 || sy < -2 || sy >= viewH + 2) continue;
     ctx.globalAlpha = p.alpha;
     ctx.fillRect(Math.round(sx), Math.round(sy), 1, 1);
+  }
+  ctx.globalAlpha = 1;
+
+  // Floating Combat Text (Section 11 #2): drawn last, always on top.
+  for (const f of getFloatingTexts()) {
+    const width = measureGlyphText(f.text);
+    const px = (f.x - cam.x) * TILE_SIZE + (TILE_SIZE - width) / 2;
+    const py = (f.y - cam.y) * TILE_SIZE - 6;
+    if (px < -width || px >= viewW || py < -6 || py >= viewH) continue;
+    ctx.globalAlpha = f.alpha;
+    drawGlyphText(ctx, f.text, Math.round(px), Math.round(py), FLOAT_COLOR[f.kind]);
   }
   ctx.globalAlpha = 1;
 }

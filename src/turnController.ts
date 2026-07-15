@@ -4,7 +4,7 @@
 // Inventory actions follow Phase 3's separate context-sensitive rule and
 // never go through here.
 
-import { applyEnemyStatus, applyPlayerStatus } from './combat';
+import { applyEnemyStatus, applyPlayerStatus, consumeHitStopFlag } from './combat';
 import { runEnemyPhase } from './enemyAI';
 import { enterFloor, TILE } from './mapgen';
 import { resetRunForNewLoop } from './state';
@@ -157,9 +157,38 @@ export function continueAfterDeath(state: GameState): void {
   saveGame(state);
 }
 
+// Hit-Stop & Screen Shake (Section 11 #1): the engine's first genuinely async
+// turn-resolution step. `busy` is checked by movement.ts/skills.ts's keydown
+// handlers so a key mashed during the freeze is cleanly ignored, not queued
+// or dropped mid-turn (which could otherwise overlap two Enemy Phases).
+const HIT_STOP_MS = 100;
+let busy = false;
+export function isTurnBusy(): boolean {
+  return busy;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Screen Shake: pure CSS on #game only (never the HUD, so numbers stay readable). */
+function triggerScreenShake(): void {
+  const el = document.querySelector('#game');
+  if (!el) return;
+  el.classList.remove('screen-shake');
+  void (el as HTMLElement).offsetWidth; // restart the CSS animation
+  el.classList.add('screen-shake');
+}
+
 /** Call once per turn-costing player action, after the Player Move Phase has already applied. */
-export function resolvePlayerTurn(state: GameState, actionKind: PlayerActionKind): void {
+export async function resolvePlayerTurn(state: GameState, actionKind: PlayerActionKind): Promise<void> {
+  busy = true;
+  if (consumeHitStopFlag()) {
+    triggerScreenShake();
+    await delay(HIT_STOP_MS);
+  }
   runEnemyPhase(state);
   runTickPhase(state, actionKind);
   runCheckPhase(state);
+  busy = false;
 }

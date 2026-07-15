@@ -69,6 +69,33 @@ body {
   opacity: 0;
 }
 
+/* Screen Shake (Section 11 #1): a short random-jitter transform on the
+ * canvas only, so HUD numbers stay readable mid-shake. */
+#game.screen-shake {
+  animation: screen-shake 0.2s ease-out;
+}
+
+@keyframes screen-shake {
+  0% {
+    transform: translate(0, 0);
+  }
+  20% {
+    transform: translate(-2px, 1px);
+  }
+  40% {
+    transform: translate(2px, -1px);
+  }
+  60% {
+    transform: translate(-1px, -2px);
+  }
+  80% {
+    transform: translate(1px, 2px);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
+
 .overlay {
   position: absolute;
   left: 0;

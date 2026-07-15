@@ -8,7 +8,7 @@ import { onFloorCleared, onFloorEntered } from './echoes';
 import { enterFloor, isWalkable, TILE } from './mapgen';
 import { enterBossFloor } from './bossArena';
 import { saveGame } from './persistence';
-import { resolvePlayerTurn } from './turnController';
+import { isTurnBusy, resolvePlayerTurn } from './turnController';
 import { isRunOver, logLine } from './turns';
 import { playBlockedSfx, playMoveSfx, playUnlockSfx } from './audio';
 import type { GameState } from './types';
@@ -154,7 +154,7 @@ export function passTurn(state: GameState): void {
 /** Wires WASD/Arrows (move) and Space (pass) to the game state. */
 export function installInput(state: GameState): void {
   window.addEventListener('keydown', (ev) => {
-    if (state.ui.currentScreen !== 'GAME' || isRunOver(state)) return;
+    if (state.ui.currentScreen !== 'GAME' || isRunOver(state) || isTurnBusy()) return;
     const key = ev.key.toLowerCase();
 
     if (key === ' ' || key === 'spacebar') {

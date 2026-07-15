@@ -10,7 +10,21 @@ import { awardEchoes, markFloorDamageTaken } from './echoes';
 import { triggerVictory } from './victory';
 import { playAttackSfx, playEnemyHitPlayerSfx, playStatusApplySfx } from './audio';
 import { PLAYER_ID, notifyAttack, notifyDeath, spawnDeathParticles } from './animation';
+import { notifyFloatingText } from './floatingText';
 import type { Element, Enemy, GameState, StatusEffect } from './types';
+
+// Hit-Stop (Section 11 #1): set whenever a Weakness hit or a killing blow
+// lands; turnController.ts's resolvePlayerTurn consumes it to freeze for
+// 100ms + Screen Shake before running the Enemy Phase.
+let hitStopPending = false;
+export function consumeHitStopFlag(): boolean {
+  const v = hitStopPending;
+  hitStopPending = false;
+  return v;
+}
+function markHitStop(): void {
+  hitStopPending = true;
+}
 
 const NORMAL_ENEMY_KINDS = new Set<Enemy['kind']>(['BONE_GRUNT', 'EMBER_BAT', 'VOLT_TURRET', 'FROST_WRAITH']);
 
@@ -48,7 +62,10 @@ const STATUS_IMMUNITY: Partial<Record<StatusEffect, string>> = {
 };
 
 export function applyPlayerStatus(state: GameState, status: StatusEffect, turns: number): void {
-  if (state.run.equippedAccessory?.passive === STATUS_IMMUNITY[status]) return;
+  if (state.run.equippedAccessory?.passive === STATUS_IMMUNITY[status]) {
+    notifyFloatingText(state.run.playerX, state.run.playerY, 'IMMUNE', 'immune');
+    return;
+  }
   state.run.status = status;
   state.run.statusTurns = turns;
   playStatusApplySfx(status);
@@ -74,6 +91,7 @@ const ELITE_ENEMY_KINDS = new Set<Enemy['kind']>(['TIME_WEAVER']);
 
 /** Killing blow source: Execution Stamina Refund (Section 7) only fires for `'skill'`. */
 export function killEnemy(state: GameState, enemy: Enemy, source: 'bump' | 'skill' = 'bump'): void {
+  markHitStop();
   state.dungeon.enemies = state.dungeon.enemies.filter((e) => e.id !== enemy.id);
   notifyDeath(enemy.id, enemy.kind, enemy.x, enemy.y);
   spawnDeathParticles(enemy.x, enemy.y);
@@ -115,6 +133,8 @@ export function skillDamageEnemy(state: GameState, enemy: Enemy, rawAtk: number,
   enemy.hp -= dmg;
   logLine(state, `${label} hits ${ENEMY_NAME[enemy.kind]} for ${dmg}.`);
   playAttackSfx(element, mult);
+  if (mult > 1) markHitStop();
+  notifyFloatingText(enemy.x, enemy.y, mult > 1 ? `${dmg} CRIT!` : `${dmg}`, mult > 1 ? 'crit' : 'damage');
   if (enemy.hp <= 0) {
     killEnemy(state, enemy, 'skill');
     return true;
@@ -128,10 +148,13 @@ export function playerAttackEnemy(state: GameState, enemy: Enemy): void {
 
   const weapon = state.run.equippedWeapon;
   const element = playerElement(state);
+  const mult = elementalMultiplier(element, enemy.element);
   const dmg = computeDamage(totalAtk(state), enemy.defense, element, enemy.element);
   enemy.hp -= dmg;
   logLine(state, `You hit the ${ENEMY_NAME[enemy.kind]} for ${dmg}.`);
-  playAttackSfx(element, elementalMultiplier(element, enemy.element));
+  playAttackSfx(element, mult);
+  if (mult > 1) markHitStop();
+  notifyFloatingText(enemy.x, enemy.y, mult > 1 ? `${dmg} CRIT!` : `${dmg}`, mult > 1 ? 'crit' : 'damage');
 
   if (weapon?.passive === 'burn_25' && Math.random() < 0.25) {
     applyEnemyStatus(enemy, 'BURN', 3);
@@ -171,6 +194,7 @@ export function enemyAttackPlayer(state: GameState, enemy: Enemy): void {
   markFloorDamageTaken(state);
   logLine(state, `${ENEMY_NAME[enemy.kind]} hits you for ${dmg}.`);
   playEnemyHitPlayerSfx();
+  notifyFloatingText(state.run.playerX, state.run.playerY, `${dmg}`, 'damage');
 
   if (enemy.kind === 'FROST_WRAITH' && Math.random() < 0.25) {
     applyPlayerStatus(state, 'CHILLED', 3);

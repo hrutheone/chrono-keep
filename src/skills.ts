@@ -7,7 +7,7 @@ import { pickupItemsAt, totalAtk } from './inventory';
 import { applyEnemyStatus, skillDamageEnemy } from './combat';
 import { isWalkable } from './mapgen';
 import { consumeStunnedAction, tryDescendIfOnStairs } from './movement';
-import { resolvePlayerTurn } from './turnController';
+import { isTurnBusy, resolvePlayerTurn } from './turnController';
 import { isRunOver, logLine } from './turns';
 import { playSkillSfx } from './audio';
 import type { Enemy, GameState } from './types';
@@ -203,7 +203,7 @@ export function useSkill(state: GameState, slotIndex: 0 | 1): void {
 /** Wires Q (slot 0) and E (slot 1) to the game state. */
 export function installSkillInput(state: GameState): void {
   window.addEventListener('keydown', (ev) => {
-    if (state.ui.currentScreen !== 'GAME' || isRunOver(state)) return;
+    if (state.ui.currentScreen !== 'GAME' || isRunOver(state) || isTurnBusy()) return;
     const key = ev.key.toLowerCase();
     if (key === 'q') {
       ev.preventDefault();

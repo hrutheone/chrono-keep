@@ -7,6 +7,7 @@ import { spendTurn, logLine } from './turns';
 import { rollChestItem } from './content';
 import { awardEchoes } from './echoes';
 import { playAnchorSfx, playEquipSfx, playPickupSfx, playPotionSfx, playTimeShardSfx, playUnequipSfx } from './audio';
+import { notifyFloatingText } from './floatingText';
 
 export const INVENTORY_CAP = 10;
 
@@ -76,6 +77,7 @@ export function pickupItemsAt(state: GameState, x: number, y: number): void {
       state.run.turnsRemaining += item.value;
       logLine(state, `Time Shard! +${item.value} Turns.`);
       playTimeShardSfx();
+      notifyFloatingText(x, y, `+${item.value} TURNS`, 'turns');
       continue;
     }
 

@@ -5,7 +5,7 @@ import { loadPersistent } from './persistence';
 import { renderWorld } from './render';
 import { installInput } from './movement';
 import { installSkillInput } from './skills';
-import { initAudio } from './audio';
+import { initAudio, updateMusicForState } from './audio';
 import { initHud, updateHud } from './hud';
 import { initMenus, updateMenus } from './menus';
 import type { GameState } from './types';
@@ -45,6 +45,7 @@ function frame(): void {
   renderWorld(ctx, state, VIEW_W, VIEW_H);
   updateHud(state);
   updateMenus(state);
+  updateMusicForState(state);
   requestAnimationFrame(frame);
 }
 

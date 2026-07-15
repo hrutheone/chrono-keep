@@ -3,10 +3,12 @@
 // audio files. Phase 5 wires the first Action/Status SFX pass; Phase 6 adds
 // Screens & Music and Progression SFX on top of this same engine.
 
-import type { Element, StatusEffect } from './types';
+import type { Element, GameState, StatusEffect } from './types';
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
+let musicGain: GainNode | null = null;
+let musicFilter: BiquadFilterNode | null = null;
 
 function ensureContext(): AudioContext {
   if (!ctx) {
@@ -15,8 +17,21 @@ function ensureContext(): AudioContext {
     master = ctx.createGain();
     master.gain.value = 0.5;
     master.connect(ctx.destination);
+
+    // Music bus (Section 11 Tactical Muffling): source -> lowpassFilter -> masterGain,
+    // so music (and only music) can be muffled independently of one-shot SFX,
+    // and both still respect master volume/mute (Phase 7).
+    musicGain = ctx.createGain();
+    musicGain.gain.value = 0.5;
+    musicFilter = ctx.createBiquadFilter();
+    musicFilter.type = 'lowpass';
+    musicFilter.frequency.value = 20000; // effectively transparent
+    musicGain.connect(musicFilter);
+    musicFilter.connect(master);
+
     // Exposed for verification (Chrome DevTools MCP evaluate_script) and debugging.
-    (window as unknown as { __chronoAudio: { ctx: AudioContext; master: GainNode } }).__chronoAudio = { ctx, master };
+    (window as unknown as { __chronoAudio: { ctx: AudioContext; master: GainNode; musicGain: GainNode; musicFilter: BiquadFilterNode } }).__chronoAudio =
+      { ctx, master, musicGain, musicFilter };
   }
   if (ctx.state === 'suspended') void ctx.resume();
   return ctx;
@@ -235,10 +250,172 @@ export function playSkillUnlockSfx(): void {
   [330, 440, 554, 660].forEach((freq, i) => tone({ freq, duration: 0.12, type: 'triangle', gain: 0.2, delay: i * 0.06 }));
 }
 
-export function debugAudioState(): { unlocked: boolean; contextState: string | null; masterGain: number | null } {
+// --- Screens & Music (Section 9C): a Web Audio "lookahead scheduler" ---
+// A short, data-defined note sequence loops seamlessly by scheduling notes
+// slightly ahead of AudioContext.currentTime on a ~25ms poll, rather than
+// triggering oscillators directly off the JS timer (which drifts).
+
+interface MusicNote {
+  freq: number;
+  duration: number; // seconds
+  time: number; // seconds from the loop's start
+  type: OscillatorType;
+  gain: number;
+}
+interface MusicTrack {
+  notes: MusicNote[];
+  loopLength: number; // seconds
+}
+
+const SCHEDULE_AHEAD_S = 0.15;
+const SCHEDULER_INTERVAL_MS = 25;
+
+const TITLE_THEME: MusicTrack = {
+  loopLength: 6,
+  notes: [
+    { freq: 220, duration: 1.8, time: 0, type: 'sine', gain: 0.1 },
+    { freq: 277.18, duration: 1.8, time: 1.5, type: 'sine', gain: 0.08 },
+    { freq: 164.81, duration: 2.2, time: 3, type: 'triangle', gain: 0.07 },
+    { freq: 196, duration: 1.8, time: 4.5, type: 'sine', gain: 0.08 },
+  ],
+};
+
+const GAME_THEME: MusicTrack = {
+  loopLength: 5,
+  notes: [
+    { freq: 130.81, duration: 2, time: 0, type: 'sine', gain: 0.08 },
+    { freq: 164.81, duration: 1.5, time: 2, type: 'sine', gain: 0.06 },
+    { freq: 146.83, duration: 2, time: 3, type: 'triangle', gain: 0.06 },
+  ],
+};
+
+const GAME_THEME_TENSE: MusicTrack = {
+  loopLength: 2.4,
+  notes: [
+    { freq: 174.61, duration: 0.4, time: 0, type: 'square', gain: 0.07 },
+    { freq: 207.65, duration: 0.4, time: 0.6, type: 'square', gain: 0.07 },
+    { freq: 174.61, duration: 0.4, time: 1.2, type: 'square', gain: 0.07 },
+    { freq: 155.56, duration: 0.5, time: 1.8, type: 'sawtooth', gain: 0.08 },
+  ],
+};
+
+const BOSS_THEME: MusicTrack = {
+  loopLength: 3,
+  notes: [
+    { freq: 110, duration: 0.5, time: 0, type: 'sawtooth', gain: 0.12 },
+    { freq: 116.54, duration: 0.5, time: 0.5, type: 'sawtooth', gain: 0.1 },
+    { freq: 130.81, duration: 0.5, time: 1, type: 'sawtooth', gain: 0.12 },
+    { freq: 98, duration: 0.7, time: 1.5, type: 'square', gain: 0.1 },
+    { freq: 220, duration: 0.3, time: 2.2, type: 'square', gain: 0.08 },
+    { freq: 233.08, duration: 0.3, time: 2.6, type: 'square', gain: 0.08 },
+  ],
+};
+
+type TrackKey = 'title' | 'game' | 'game_tense' | 'boss';
+const TRACKS: Record<TrackKey, MusicTrack> = {
+  title: TITLE_THEME,
+  game: GAME_THEME,
+  game_tense: GAME_THEME_TENSE,
+  boss: BOSS_THEME,
+};
+
+let schedulerTimer: number | null = null;
+let currentTrack: MusicTrack | null = null;
+let currentTrackKey: TrackKey | null = null;
+let trackStartTime = 0;
+let nextNoteIdx = 0;
+
+function scheduleNote(note: MusicNote, when: number): void {
+  if (!ctx || !musicGain) return;
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  osc.type = note.type;
+  osc.frequency.setValueAtTime(note.freq, when);
+  g.gain.setValueAtTime(0.0001, when);
+  g.gain.linearRampToValueAtTime(note.gain, when + 0.03);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + note.duration);
+  osc.connect(g);
+  g.connect(musicGain);
+  osc.start(when);
+  osc.stop(when + note.duration + 0.05);
+}
+
+function schedulerTick(): void {
+  if (!ctx || !currentTrack) return;
+  while (trackStartTime + currentTrack.notes[nextNoteIdx].time < ctx.currentTime + SCHEDULE_AHEAD_S) {
+    const note = currentTrack.notes[nextNoteIdx];
+    scheduleNote(note, trackStartTime + note.time);
+    nextNoteIdx += 1;
+    if (nextNoteIdx >= currentTrack.notes.length) {
+      nextNoteIdx = 0;
+      trackStartTime += currentTrack.loopLength;
+    }
+  }
+}
+
+function playTrack(key: TrackKey): void {
+  if (!ctx) return;
+  currentTrack = TRACKS[key];
+  currentTrackKey = key;
+  nextNoteIdx = 0;
+  trackStartTime = ctx.currentTime + 0.05;
+  if (schedulerTimer === null) schedulerTimer = window.setInterval(schedulerTick, SCHEDULER_INTERVAL_MS);
+}
+
+function stopTrack(): void {
+  currentTrack = null;
+  currentTrackKey = null;
+  if (schedulerTimer !== null) {
+    clearInterval(schedulerTimer);
+    schedulerTimer = null;
+  }
+}
+
+let lastMuffled = false;
+
+/** Section 11 Tactical Muffling: ramps the music-bus low-pass filter between a
+ * transparent cutoff and a muffled one over ~200ms whenever the Inventory or
+ * Skill Menu opens/closes — a ramp, not a hard switch, so it doesn't click. */
+function setMusicMuffled(muffled: boolean): void {
+  if (!ctx || !musicFilter || muffled === lastMuffled) return;
+  lastMuffled = muffled;
+  const target = muffled ? 700 : 20000;
+  musicFilter.frequency.cancelScheduledValues(ctx.currentTime);
+  musicFilter.frequency.linearRampToValueAtTime(target, ctx.currentTime + 0.2);
+}
+
+/** Call once per frame: picks TITLE/GAME/tense-GAME/boss music off the current
+ * screen/floor/turns-remaining, switching tracks only when it actually
+ * changes, and applies Tactical Muffling while a menu is open. */
+export function updateMusicForState(state: GameState): void {
+  if (!ctx) return; // Not unlocked yet.
+
+  const screen = state.ui.currentScreen;
+  const musicScreens = screen === 'GAME' || screen === 'INVENTORY' || screen === 'SKILL_MENU' || screen === 'HELP';
+  let desired: TrackKey | null = null;
+  if (screen === 'TITLE') desired = 'title';
+  else if (musicScreens) desired = state.run.currentFloor >= 4 ? 'boss' : state.run.turnsRemaining < 20 ? 'game_tense' : 'game';
+
+  if (desired !== currentTrackKey) {
+    if (desired === null) stopTrack();
+    else playTrack(desired);
+  }
+
+  setMusicMuffled(screen === 'INVENTORY' || screen === 'SKILL_MENU');
+}
+
+export function debugAudioState(): {
+  unlocked: boolean;
+  contextState: string | null;
+  masterGain: number | null;
+  musicTrack: TrackKey | null;
+  musicFilterFreq: number | null;
+} {
   return {
     unlocked: ctx !== null,
     contextState: ctx?.state ?? null,
     masterGain: master?.gain.value ?? null,
+    musicTrack: currentTrackKey,
+    musicFilterFreq: musicFilter?.frequency.value ?? null,
   };
 }
