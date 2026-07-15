@@ -98,4 +98,7 @@ export function updateHud(state: GameState): void {
     .join('');
 
   el('hint-strip').textContent = HINT_STRIP[state.ui.currentScreen] ?? '';
+
+  const lowHp = state.ui.currentScreen === 'GAME' && run.currentHp / run.maxHp < 0.25;
+  el('vignette').classList.toggle('low-hp', lowHp);
 }

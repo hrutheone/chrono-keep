@@ -12,7 +12,7 @@ import { onFloorEntered } from './echoes';
 import { clearSave, hasSave, saveGame } from './persistence';
 import { continueAfterDeath } from './turnController';
 import { resetRunForNewLoop, resetToNewGame, rerollSeedKeepProgress } from './state';
-import { playNewGameSfx } from './audio';
+import { getMasterVolume, isMuted, playNewGameSfx } from './audio';
 import {
   buySkillUpgrade,
   buyStatUpgrade,
@@ -194,6 +194,8 @@ const HELP_ROWS: readonly [string, string, string][] = [
   ['I / Tab', 'Open/close Inventory & Equipment', 'GAME, INVENTORY'],
   ['K', 'Open/close Skill Setting', 'GAME, SKILL_MENU'],
   ['? / F1', 'Open/close this Help overlay', 'any screen'],
+  ['M', 'Toggle mute', 'any screen'],
+  ['[ / ]', 'Master volume down/up', 'any screen'],
   ['Esc', 'Close the current overlay', 'INVENTORY, SKILL_MENU, HELP, UPGRADE_SHOP'],
   ['Click', 'Equip/unequip/use an item, assign a skill, buy an upgrade', 'INVENTORY, SKILL_MENU, UPGRADE_SHOP'],
 ];
@@ -203,9 +205,11 @@ function renderHelp(): string {
     ([key, action, screen]) =>
       `<div class="help-row"><span class="help-key">${key}</span><span class="help-action">${action}</span><span class="help-screen">${screen}</span></div>`,
   ).join('');
+  const volumePct = Math.round(getMasterVolume() * 100);
   return `
     <div class="menu help-menu">
       <h2>Controls</h2>
+      <div class="stat-line">Volume: ${isMuted() ? 'Muted' : `${volumePct}%`}</div>
       <div class="help-list">${rows}</div>
       <div class="menu-hint">? / F1 / Esc: close</div>
     </div>`;

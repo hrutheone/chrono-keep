@@ -106,31 +106,33 @@ export function consumeStunnedAction(state: GameState): boolean {
   return true;
 }
 
-/** Attempts one tile of movement, or a bump-attack if an enemy occupies the target tile. */
-export function tryMove(state: GameState, dx: number, dy: number, facing: Facing): void {
+/** Attempts one tile of movement, or a bump-attack if an enemy occupies the target tile.
+ * Returns the resolvePlayerTurn() promise (or a resolved no-op) so programmatic
+ * callers — the Phase 7 simulation harness — can await a turn's full resolution;
+ * keyboard input simply doesn't await it. */
+export function tryMove(state: GameState, dx: number, dy: number, facing: Facing): Promise<void> {
   state.run.facing = facing;
-  if (consumeStunnedAction(state)) return;
+  if (consumeStunnedAction(state)) return Promise.resolve();
   state.run.braced = false; // Brace only covers the Enemy Phase right after a Wait.
 
   const nx = state.run.playerX + dx;
   const ny = state.run.playerY + dy;
-  if (nx < 0 || nx >= state.dungeon.width || ny < 0 || ny >= state.dungeon.height) return;
+  if (nx < 0 || nx >= state.dungeon.width || ny < 0 || ny >= state.dungeon.height) return Promise.resolve();
 
   const enemy = state.dungeon.enemies.find((e) => e.x === nx && e.y === ny);
   if (enemy) {
     playerAttackEnemy(state, enemy);
-    resolvePlayerTurn(state, 'attack');
-    return;
+    return resolvePlayerTurn(state, 'attack');
   }
 
   const tile = state.dungeon.tiles[ny][nx];
   if (tile === TILE.SHORTCUT_GATE) {
     tryOpenShortcutGate(state, nx, ny);
-    return;
+    return Promise.resolve();
   }
   if (!isWalkable(tile)) {
     playBlockedSfx();
-    return;
+    return Promise.resolve();
   }
 
   state.run.playerX = nx;
@@ -140,15 +142,15 @@ export function tryMove(state: GameState, dx: number, dy: number, facing: Facing
   pickupItemsAt(state, nx, ny);
   tryDescendIfOnStairs(state);
 
-  resolvePlayerTurn(state, 'move');
+  return resolvePlayerTurn(state, 'move');
 }
 
 /** Space: Brace (GDD Section 7/8) — +1 DEF until the start of the player's next turn. */
-export function passTurn(state: GameState): void {
-  if (consumeStunnedAction(state)) return;
+export function passTurn(state: GameState): Promise<void> {
+  if (consumeStunnedAction(state)) return Promise.resolve();
   state.run.braced = true;
   logLine(state, 'You brace, +1 DEF until your next turn.');
-  resolvePlayerTurn(state, 'wait');
+  return resolvePlayerTurn(state, 'wait');
 }
 
 /** Wires WASD/Arrows (move) and Space (pass) to the game state. */

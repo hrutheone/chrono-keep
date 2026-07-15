@@ -1,11 +1,11 @@
 import './style.css';
 import { createNewGameState } from './state';
 import { enterFloor } from './mapgen';
-import { loadPersistent } from './persistence';
+import { loadAudioSettings, loadPersistent } from './persistence';
 import { renderWorld } from './render';
 import { installInput } from './movement';
 import { installSkillInput } from './skills';
-import { initAudio, updateMusicForState } from './audio';
+import { initAudio, installAudioControls, setMasterVolume, setMuted, updateAnxietyClock, updateLowHealthHeartbeat, updateMusicForState } from './audio';
 import { initHud, updateHud } from './hud';
 import { initMenus, updateMenus } from './menus';
 import type { GameState } from './types';
@@ -46,11 +46,20 @@ function frame(): void {
   updateHud(state);
   updateMenus(state);
   updateMusicForState(state);
+  updateAnxietyClock(state);
+  updateLowHealthHeartbeat(state);
   requestAnimationFrame(frame);
+}
+
+const savedAudio = loadAudioSettings();
+if (savedAudio) {
+  setMasterVolume(savedAudio.volume);
+  setMuted(savedAudio.muted);
 }
 
 initHud();
 initAudio();
+installAudioControls();
 installInput(state);
 installSkillInput(state);
 initMenus(state);

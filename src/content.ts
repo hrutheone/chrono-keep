@@ -32,10 +32,26 @@ interface EnemyTemplate {
 export const BESTIARY: Record<EnemyKind, EnemyTemplate> = {
   BONE_GRUNT: { hp: 12, attack: 4, defense: 1, speed: 1, element: 'PHYSICAL' },
   EMBER_BAT: { hp: 8, attack: 5, defense: 0, speed: 2, element: 'FIRE' },
-  VOLT_TURRET: { hp: 25, attack: 6, defense: 3, speed: 0, element: 'VOLT' },
+  // DEF 1, not the original 3: Physical (the Rusty Sword starter weapon, by
+  // far the most common early pickup) is resisted 0.5x against Volt per the
+  // Elemental Wheel, so the original DEF 3 meant a Rusty-Sword-only player
+  // dealt max(1, floor((5-3)*0.5))=1 dmg/hit — 25 hits to clear one turret.
+  // Phase 7 simulation data flagged this as a common early-loop stall point.
+  VOLT_TURRET: { hp: 25, attack: 6, defense: 1, speed: 0, element: 'VOLT' },
   FROST_WRAITH: { hp: 18, attack: 5, defense: 2, speed: 1, element: 'FROST' },
   TIME_WEAVER: { hp: 40, attack: 8, defense: 4, speed: 1, element: 'CHRONO' },
-  CHRONO_LICH: { hp: 150, attack: 12, defense: 5, speed: 1, element: 'CHRONO' },
+  // Section 7 Turn Budget promises the boss is "winnable in 15-20 turns" for
+  // a well-armed Phase 0-6 loadout (Phase 8's item roster doesn't exist yet
+  // at Phase 7's tuning point). At the original DEF 5 / HP 150, even a
+  // Chrono-Blade (the best available weapon, total ATK 9) only deals
+  // max(1, 9-5)=4 dmg/hit — 38 hits. The Phase 7 simulation harness
+  // (scripts/simulate.ts) found 0/20 seeds won at any loop count up to 15,
+  // confirming this was mathematically outside budget for most loadouts.
+  // DEF 0 / HP 100 puts an Ember Blade (total ATK 7, the common mid-run
+  // pickup) at ~15 hits and a Rusty Sword (total 5) at ~20 — both inside the
+  // documented window; ATK trimmed 12->10 so the fight's own damage race
+  // doesn't kill the player faster than they can clear that HP pool.
+  CHRONO_LICH: { hp: 100, attack: 10, defense: 0, speed: 1, element: 'CHRONO' },
 };
 
 export const ENEMY_NAME: Record<EnemyKind, string> = {

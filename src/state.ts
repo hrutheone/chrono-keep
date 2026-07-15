@@ -1,14 +1,25 @@
+import { createWeapon } from './content';
 import type { GameState } from './types';
 
 // Base run stats. The GDD defines the per-level upgrade increments
-// (+5 HP, +2 Stamina, +5 turns) but leaves the baselines as Phase 7
-// tuning knobs.
-export const BASE_MAX_HP = 20;
+// (+5 HP, +2 Stamina, +5 turns) but leaves the baselines as Phase 7 tuning
+// knobs. Phase 7's simulation harness (scripts/simulate.ts) found floors 1-3
+// survival was the dominant bottleneck (only ~50% of loops reached Floor 3)
+// even after several per-enemy fixes; 20 -> 25 raises the whole run's
+// survival margin uniformly rather than chasing individual matchups further.
+export const BASE_MAX_HP = 25;
 export const BASE_MAX_STAMINA = 10;
 export const BASE_TURNS = 100;
 
 /** Dungeon grid size (GDD Section 7: 32x32 Room & Corridor generator). */
 export const DUNGEON_SIZE = 32;
+
+/** Section 6A labels the Rusty Sword "Starter weapon" — every run/loop begins
+ * with one equipped, not unarmed (an unarmed player only deals 1 damage to a
+ * Bone-Grunt, which is a guaranteed chokepoint fight on Floor 1). */
+function startingWeapon() {
+  return createWeapon('RUSTY_SWORD', 'starter-weapon');
+}
 
 /** Fresh save: new seed, Dash unlocked at Level 1, everything else zeroed. */
 export function createNewGameState(): GameState {
@@ -41,7 +52,7 @@ export function createNewGameState(): GameState {
       playerY: 0,
       facing: 'DOWN',
       inventory: [],
-      equippedWeapon: null,
+      equippedWeapon: startingWeapon(),
       equippedAccessory: null,
       activeSkills: ['dash'],
       status: 'NONE',
@@ -99,7 +110,7 @@ export function resetRunForNewLoop(state: GameState): void {
   state.run.turnsRemaining = BASE_TURNS + state.persistent.turnBonusUpgrade * 5;
   state.run.anchorsCollected = 0;
   state.run.inventory = [];
-  state.run.equippedWeapon = null;
+  state.run.equippedWeapon = startingWeapon();
   state.run.equippedAccessory = null;
   state.run.activeSkills = state.persistent.skills.dash ? ['dash'] : [];
   state.run.status = 'NONE';

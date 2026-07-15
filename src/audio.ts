@@ -3,6 +3,7 @@
 // audio files. Phase 5 wires the first Action/Status SFX pass; Phase 6 adds
 // Screens & Music and Progression SFX on top of this same engine.
 
+import { saveAudioSettings } from './persistence';
 import type { Element, GameState, StatusEffect } from './types';
 
 let ctx: AudioContext | null = null;
@@ -10,12 +11,62 @@ let master: GainNode | null = null;
 let musicGain: GainNode | null = null;
 let musicFilter: BiquadFilterNode | null = null;
 
+// Master volume/mute (Phase 7): settable/persistable before the AudioContext
+// even exists (autoplay policy) — applied to `master.gain` immediately if
+// unlocked, and re-applied the moment ensureContext() creates it.
+let masterVolume = 0.5;
+let muted = false;
+
+function applyMasterGain(): void {
+  if (master) master.gain.value = muted ? 0 : masterVolume;
+}
+
+export function setMasterVolume(v: number): void {
+  masterVolume = Math.min(1, Math.max(0, v));
+  applyMasterGain();
+}
+
+export function setMuted(m: boolean): void {
+  muted = m;
+  applyMasterGain();
+}
+
+export function toggleMuted(): boolean {
+  setMuted(!muted);
+  return muted;
+}
+
+export function getMasterVolume(): number {
+  return masterVolume;
+}
+
+export function isMuted(): boolean {
+  return muted;
+}
+
+/** M: toggle mute. [ / ]: volume down/up by 10%. Persisted on every change. */
+export function installAudioControls(): void {
+  window.addEventListener('keydown', (ev) => {
+    const key = ev.key.toLowerCase();
+    if (key === 'm') {
+      toggleMuted();
+    } else if (key === '[') {
+      setMasterVolume(getMasterVolume() - 0.1);
+    } else if (key === ']') {
+      setMasterVolume(getMasterVolume() + 0.1);
+    } else {
+      return;
+    }
+    saveAudioSettings({ volume: getMasterVolume(), muted: isMuted() });
+  });
+}
+
 function ensureContext(): AudioContext {
   if (!ctx) {
     const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     ctx = new Ctor();
     master = ctx.createGain();
-    master.gain.value = 0.5;
+    applyMasterGain();
     master.connect(ctx.destination);
 
     // Music bus (Section 11 Tactical Muffling): source -> lowpassFilter -> masterGain,
@@ -404,18 +455,118 @@ export function updateMusicForState(state: GameState): void {
   setMusicMuffled(screen === 'INVENTORY' || screen === 'SKILL_MENU');
 }
 
+// --- The Anxiety Clock (Section 11 Audio #1) ---
+// A continuous background tick, quiet/slow above 20 turns, faster and louder
+// at 20/10/5. Simplified from the GDD's full AudioContext-time lookahead
+// scheduler (that pattern exists to keep a multi-note *melody* from drifting
+// out of sync — see updateMusicForState above) to a self-rescheduling
+// setTimeout: each tick re-reads the live turnsRemaining and re-picks its
+// own next interval, which is enough precision for a single periodic tick.
+interface AnxietyThreshold {
+  intervalMs: number;
+  freq: number;
+  gain: number;
+}
+
+function anxietyThreshold(turnsRemaining: number): AnxietyThreshold {
+  if (turnsRemaining <= 5) return { intervalMs: 350, freq: 900, gain: 0.2 };
+  if (turnsRemaining <= 10) return { intervalMs: 600, freq: 700, gain: 0.16 };
+  if (turnsRemaining <= 20) return { intervalMs: 900, freq: 500, gain: 0.12 };
+  return { intervalMs: 1500, freq: 320, gain: 0.06 };
+}
+
+let anxietyTimer: ReturnType<typeof setTimeout> | null = null;
+let anxietyStateRef: GameState | null = null;
+let lastAnxietyThreshold: AnxietyThreshold | null = null;
+
+function scheduleAnxietyTick(): void {
+  if (!anxietyStateRef) return;
+  const t = anxietyThreshold(anxietyStateRef.run.turnsRemaining);
+  lastAnxietyThreshold = t;
+  anxietyTimer = setTimeout(() => {
+    if (!anxietyStateRef) return;
+    tone({ freq: t.freq, duration: 0.06, type: 'square', gain: t.gain });
+    scheduleAnxietyTick();
+  }, t.intervalMs);
+}
+
+function stopAnxietyClock(): void {
+  anxietyStateRef = null;
+  lastAnxietyThreshold = null;
+  if (anxietyTimer !== null) {
+    clearTimeout(anxietyTimer);
+    anxietyTimer = null;
+  }
+}
+
+/** Call once per frame: runs the Anxiety Clock only during GAME (not menus/
+ * screens) and while unmuted; stops cleanly otherwise. */
+export function updateAnxietyClock(state: GameState): void {
+  if (!ctx) return;
+  const shouldRun = state.ui.currentScreen === 'GAME' && !muted;
+  if (shouldRun) {
+    const wasRunning = anxietyStateRef !== null;
+    anxietyStateRef = state;
+    if (!wasRunning) scheduleAnxietyTick();
+  } else if (anxietyStateRef) {
+    stopAnxietyClock();
+  }
+}
+
+// --- Low-Health Bass Heartbeat (Section 11 Audio #4) ---
+// A slow "thump-thump" bass pulse, looping only while HP < 25% max. The
+// vignette (index.html's #vignette, pure CSS) is toggled by hud.ts off the
+// same threshold — this module only owns the sound half.
+const HEARTBEAT_INTERVAL_MS = 900;
+let heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
+let heartbeatActive = false;
+
+function scheduleHeartbeat(): void {
+  heartbeatTimer = setTimeout(() => {
+    tone({ freq: 65, duration: 0.14, type: 'sine', gain: 0.18 });
+    tone({ freq: 58, duration: 0.14, type: 'sine', gain: 0.14, delay: 0.18 });
+    if (heartbeatActive) scheduleHeartbeat();
+  }, HEARTBEAT_INTERVAL_MS);
+}
+
+/** Call once per frame: starts/stops the heartbeat off run.currentHp/maxHp. */
+export function updateLowHealthHeartbeat(state: GameState): void {
+  if (!ctx) return;
+  const lowHp = state.ui.currentScreen === 'GAME' && state.run.currentHp / state.run.maxHp < 0.25 && !muted;
+  if (lowHp && !heartbeatActive) {
+    heartbeatActive = true;
+    scheduleHeartbeat();
+  } else if (!lowHp && heartbeatActive) {
+    heartbeatActive = false;
+    if (heartbeatTimer !== null) {
+      clearTimeout(heartbeatTimer);
+      heartbeatTimer = null;
+    }
+  }
+}
+
 export function debugAudioState(): {
   unlocked: boolean;
   contextState: string | null;
   masterGain: number | null;
+  masterVolume: number;
+  muted: boolean;
   musicTrack: TrackKey | null;
   musicFilterFreq: number | null;
+  anxietyClockActive: boolean;
+  anxietyThreshold: AnxietyThreshold | null;
+  heartbeatActive: boolean;
 } {
   return {
     unlocked: ctx !== null,
     contextState: ctx?.state ?? null,
     masterGain: master?.gain.value ?? null,
+    masterVolume,
+    muted,
     musicTrack: currentTrackKey,
     musicFilterFreq: musicFilter?.frequency.value ?? null,
+    anxietyClockActive: anxietyStateRef !== null,
+    anxietyThreshold: lastAnxietyThreshold,
+    heartbeatActive,
   };
 }

@@ -167,29 +167,30 @@ const CASTERS: Record<string, (state: GameState, level: number) => void> = {
   ice_aegis: castIceAegis,
 };
 
-/** Fires the skill mapped to hotkey Q (0) or E (1). */
-export function useSkill(state: GameState, slotIndex: 0 | 1): void {
-  if (consumeStunnedAction(state)) return;
+/** Fires the skill mapped to hotkey Q (0) or E (1). Returns the resolvePlayerTurn()
+ * promise (or a resolved no-op) so programmatic callers can await full resolution. */
+export function useSkill(state: GameState, slotIndex: 0 | 1): Promise<void> {
+  if (consumeStunnedAction(state)) return Promise.resolve();
 
   const skillId = state.run.activeSkills[slotIndex];
   if (!skillId) {
     logLine(state, 'No skill assigned to that slot.');
-    return;
+    return Promise.resolve();
   }
   const level = state.persistent.skills[skillId] ?? 0;
   if (level <= 0) {
     logLine(state, `${SKILLS[skillId]?.name ?? skillId} is locked.`);
-    return;
+    return Promise.resolve();
   }
   const cost = skillStaminaCost(state, skillId, level);
   if (state.run.currentStamina < cost) {
     logLine(state, 'Not enough Stamina.');
-    return;
+    return Promise.resolve();
   }
   const caster = CASTERS[skillId];
   if (!caster) {
     logLine(state, `Unknown skill ${skillId}.`);
-    return;
+    return Promise.resolve();
   }
 
   state.run.braced = false;
@@ -197,7 +198,7 @@ export function useSkill(state: GameState, slotIndex: 0 | 1): void {
 
   caster(state, level);
 
-  resolvePlayerTurn(state, 'skill');
+  return resolvePlayerTurn(state, 'skill');
 }
 
 /** Wires Q (slot 0) and E (slot 1) to the game state. */
