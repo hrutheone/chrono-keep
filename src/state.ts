@@ -62,6 +62,8 @@ export function createNewGameState(): GameState {
       iceAegisChillsAttacker: false,
       floorDamageTaken: false,
       floorsVisitedThisLoop: [],
+      quicksilverCharges: 0,
+      whetstoneCharge: false,
     },
 
     dungeon: {
@@ -70,6 +72,8 @@ export function createNewGameState(): GameState {
       tiles: [], // Generated deterministically on floor entry (Phase 1)
       enemies: [],
       items: [],
+      spawnX: 0,
+      spawnY: 0,
       expiringTiles: [],
       telegraphTiles: [],
       shortcutGate: null,
@@ -120,4 +124,6 @@ export function resetRunForNewLoop(state: GameState): void {
   state.run.iceAegisCharges = 0;
   state.run.iceAegisChillsAttacker = false;
   state.run.floorsVisitedThisLoop = [];
+  state.run.quicksilverCharges = 0;
+  state.run.whetstoneCharge = false;
 }

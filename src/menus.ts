@@ -33,6 +33,7 @@ import {
   unequipWeapon,
   usePotion,
 } from './inventory';
+import { useConsumable } from './consumables';
 import type { GameState } from './types';
 
 type MenuScreen = 'INVENTORY' | 'SKILL_MENU';
@@ -91,7 +92,14 @@ function renderInventory(state: GameState): string {
   const gridHtml = slots
     .map((item, i) => {
       if (!item) return '<div class="inv-slot empty"></div>';
-      const actionable = item.kind === 'WEAPON' || item.kind === 'ACCESSORY' ? 'equip' : item.kind === 'POTION' ? 'use-potion' : null;
+      const actionable =
+        item.kind === 'WEAPON' || item.kind === 'ACCESSORY'
+          ? 'equip'
+          : item.kind === 'POTION'
+            ? 'use-potion'
+            : item.kind === 'CONSUMABLE'
+              ? 'use-consumable'
+              : null;
       const attrs = actionable ? `data-action="${actionable}" data-index="${i}"` : 'disabled';
       return `<button class="inv-slot" ${attrs}>${item.name}</button>`;
     })
@@ -315,6 +323,7 @@ export function initMenus(state: GameState): void {
 
     if (action === 'equip') equipItem(state, Number(index));
     else if (action === 'use-potion') usePotion(state, Number(index));
+    else if (action === 'use-consumable') useConsumable(state, Number(index));
     else if (action === 'unequip-weapon') unequipWeapon(state);
     else if (action === 'unequip-accessory') unequipAccessory(state);
     else if (action === 'assign-skill') assignSkill(state, skill!, slot as 'Q' | 'E');

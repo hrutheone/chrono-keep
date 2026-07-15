@@ -2,10 +2,10 @@
 // A move/attack/wait here is the Player Move Phase; resolvePlayerTurn runs
 // the rest (Enemy -> Tick -> Check) for every turn-costing action.
 
-import { playerAttackEnemy } from './combat';
+import { findRangedTarget, playerAttackEnemy, weaponBlockedAtRange } from './combat';
 import { pickupItemsAt } from './inventory';
 import { onFloorCleared, onFloorEntered } from './echoes';
-import { enterFloor, isWalkable, TILE } from './mapgen';
+import { enterFloor, isWalkableAt, TILE } from './mapgen';
 import { enterBossFloor } from './bossArena';
 import { saveGame } from './persistence';
 import { isTurnBusy, resolvePlayerTurn } from './turnController';
@@ -121,7 +121,24 @@ export function tryMove(state: GameState, dx: number, dy: number, facing: Facing
 
   const enemy = state.dungeon.enemies.find((e) => e.x === nx && e.y === ny);
   if (enemy) {
+    // Min-range weapons (Ashwood Bow, Static Whip — Section 6A/8) can't
+    // connect at adjacency; the attempt still resolves a turn (a "whiff"),
+    // matching a real combat risk for standing too close with one equipped.
+    if (weaponBlockedAtRange(state, 1)) {
+      logLine(state, `${state.run.equippedWeapon!.name} can't hit at this range!`);
+      playBlockedSfx();
+      return resolvePlayerTurn(state, 'attack');
+    }
     playerAttackEnemy(state, enemy);
+    return resolvePlayerTurn(state, 'attack');
+  }
+
+  // No adjacent enemy — a ranged weapon (Frost Wand/Volt Spear's line reach,
+  // Ashwood Bow/Static Whip's min-range) may still find a target further
+  // along this direction, attacking without moving.
+  const rangedTarget = findRangedTarget(state, dx, dy);
+  if (rangedTarget) {
+    playerAttackEnemy(state, rangedTarget);
     return resolvePlayerTurn(state, 'attack');
   }
 
@@ -130,7 +147,7 @@ export function tryMove(state: GameState, dx: number, dy: number, facing: Facing
     tryOpenShortcutGate(state, nx, ny);
     return Promise.resolve();
   }
-  if (!isWalkable(tile)) {
+  if (!isWalkableAt(state, nx, ny)) {
     playBlockedSfx();
     return Promise.resolve();
   }

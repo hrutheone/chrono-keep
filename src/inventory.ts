@@ -3,8 +3,8 @@
 
 import { PLAYER_BASE_ATK, PLAYER_BASE_DEF } from './types';
 import type { Accessory, GameState, Weapon } from './types';
+import { FREE_SWAP_PASSIVES, rollChestItem } from './content';
 import { spendTurn, logLine } from './turns';
-import { rollChestItem } from './content';
 import { awardEchoes } from './echoes';
 import { playAnchorSfx, playEquipSfx, playPickupSfx, playPotionSfx, playTimeShardSfx, playUnequipSfx } from './audio';
 import { notifyFloatingText } from './floatingText';
@@ -14,16 +14,61 @@ export const INVENTORY_CAP = 10;
 /** 7-tile taxicab wake radius (GDD Section 7): only *awake* enemies count. */
 const THREAT_RADIUS = 7;
 
+// Section 6D: +/- DEF accessory passives (Iron Ring, and Phase 8's
+// Berserker's Cuff/Paladin's Mantle trade-off pair).
+const DEF_BONUS: Partial<Record<string, number>> = {
+  def_plus_2: 2,
+  berserker: -2,
+  paladin: 3,
+};
+const HP_BONUS: Partial<Record<string, number>> = {
+  max_hp_plus_10: 10,
+  paladin: -10,
+};
+const ATK_BONUS: Partial<Record<string, number>> = {
+  berserker: 4,
+};
+const STAM_BONUS: Partial<Record<string, number>> = {
+  max_stam_plus_3: 3,
+};
+
 function accessoryDefBonus(acc: Accessory | null): number {
-  return acc?.passive === 'def_plus_2' ? 2 : 0;
+  return DEF_BONUS[acc?.passive ?? ''] ?? 0;
 }
 
 function accessoryHpBonus(acc: Accessory | null): number {
-  return acc?.passive === 'max_hp_plus_10' ? 10 : 0;
+  return HP_BONUS[acc?.passive ?? ''] ?? 0;
+}
+
+function accessoryAtkBonus(acc: Accessory | null): number {
+  return ATK_BONUS[acc?.passive ?? ''] ?? 0;
+}
+
+function accessoryStamBonus(acc: Accessory | null): number {
+  return STAM_BONUS[acc?.passive ?? ''] ?? 0;
+}
+
+/** Kindling Pouch/Capacitor Ring/Permafrost Vial (Section 6D): +2 damage for
+ * weapons/skills of the matching element. Read by combat.ts/skills.ts. */
+const ELEMENT_SYNERGY_BONUS: Partial<Record<string, number>> = {
+  fire_synergy: 2,
+  volt_synergy: 2,
+  frost_synergy: 2,
+};
+const ELEMENT_SYNERGY_PASSIVE: Record<string, string | undefined> = {
+  FIRE: 'fire_synergy',
+  VOLT: 'volt_synergy',
+  FROST: 'frost_synergy',
+};
+
+export function elementSynergyBonus(state: GameState, element: string): number {
+  const passive = state.run.equippedAccessory?.passive;
+  if (!passive || ELEMENT_SYNERGY_PASSIVE[element] !== passive) return 0;
+  return ELEMENT_SYNERGY_BONUS[passive] ?? 0;
 }
 
 export function totalAtk(state: GameState): number {
-  return PLAYER_BASE_ATK + (state.run.equippedWeapon?.atk ?? 0);
+  return PLAYER_BASE_ATK + (state.run.equippedWeapon?.atk ?? 0) + accessoryAtkBonus(state.run.equippedAccessory);
 }
 
 export function totalDef(state: GameState): number {
@@ -49,6 +94,18 @@ function chargeInventoryAction(state: GameState, freeAlways: boolean): void {
 function applyMaxHpDelta(state: GameState, delta: number): void {
   state.run.maxHp += delta;
   state.run.currentHp = Math.min(state.run.currentHp, state.run.maxHp);
+}
+
+function applyMaxStamDelta(state: GameState, delta: number): void {
+  state.run.maxStamina += delta;
+  state.run.currentStamina = Math.min(state.run.currentStamina, state.run.maxStamina);
+}
+
+/** Alchemist's Belt (Section 6D, Phase 8): using a Potion or Tactical
+ * Consumable costs 0 Turns, even mid-combat — overrides both turn-cost rules
+ * from Section 6E/7 at once. */
+export function hasAlchemistsBelt(state: GameState): boolean {
+  return state.run.equippedAccessory?.passive === 'alchemist_belt';
 }
 
 /** Adds every WorldItem standing at (x, y) to the inventory, removing each from the floor.
@@ -94,7 +151,8 @@ export function pickupItemsAt(state: GameState, x: number, y: number): void {
 }
 
 function equipWeapon(state: GameState, invIndex: number, weapon: Weapon): void {
-  const freeAlways = weapon.passive === 'free_swap' || state.run.equippedWeapon?.passive === 'free_swap';
+  const freeAlways =
+    FREE_SWAP_PASSIVES.has(weapon.passive) || FREE_SWAP_PASSIVES.has(state.run.equippedWeapon?.passive ?? '');
   state.run.inventory.splice(invIndex, 1);
   const prior = state.run.equippedWeapon;
   state.run.equippedWeapon = weapon;
@@ -108,8 +166,10 @@ function equipAccessory(state: GameState, invIndex: number, accessory: Accessory
   state.run.inventory.splice(invIndex, 1);
   const prior = state.run.equippedAccessory;
   applyMaxHpDelta(state, -accessoryHpBonus(prior));
+  applyMaxStamDelta(state, -accessoryStamBonus(prior));
   state.run.equippedAccessory = accessory;
   applyMaxHpDelta(state, accessoryHpBonus(accessory));
+  applyMaxStamDelta(state, accessoryStamBonus(accessory));
   if (prior) state.run.inventory.push(prior);
   chargeInventoryAction(state, false);
   logLine(state, `Equipped ${accessory.name}.`);
@@ -133,7 +193,7 @@ export function unequipWeapon(state: GameState): void {
   }
   state.run.equippedWeapon = null;
   state.run.inventory.push(weapon);
-  chargeInventoryAction(state, weapon.passive === 'free_swap');
+  chargeInventoryAction(state, FREE_SWAP_PASSIVES.has(weapon.passive));
   logLine(state, `Unequipped ${weapon.name}.`);
   playUnequipSfx();
 }
@@ -146,6 +206,7 @@ export function unequipAccessory(state: GameState): void {
     return;
   }
   applyMaxHpDelta(state, -accessoryHpBonus(accessory));
+  applyMaxStamDelta(state, -accessoryStamBonus(accessory));
   state.run.equippedAccessory = null;
   state.run.inventory.push(accessory);
   chargeInventoryAction(state, false);
@@ -159,7 +220,7 @@ export function usePotion(state: GameState, invIndex: number): void {
   if (!item || item.kind !== 'POTION') return;
   state.run.inventory.splice(invIndex, 1);
   state.run.currentHp = Math.min(state.run.maxHp, state.run.currentHp + item.value);
-  chargeInventoryAction(state, false);
+  chargeInventoryAction(state, hasAlchemistsBelt(state));
   logLine(state, `Used ${item.name}, healed ${item.value} HP.`);
   playPotionSfx();
 }

@@ -3,7 +3,7 @@
 
 import { createEnemy, ENEMY_NAME } from './content';
 import { enemyAttackPlayer, killEnemy } from './combat';
-import { isWalkable } from './mapgen';
+import { isWalkableAt } from './mapgen';
 import { logLine } from './turns';
 import { playBossTelegraphSfx } from './audio';
 import type { Enemy, GameState } from './types';
@@ -69,7 +69,7 @@ function chaseStep(state: GameState, enemy: Enemy, steps: number, respectWalls: 
         return;
       }
       if (!inBounds(state, nx, ny)) continue;
-      if (respectWalls && !isWalkable(state.dungeon.tiles[ny][nx])) continue;
+      if (respectWalls && !isWalkableAt(state, nx, ny)) continue;
       if (occupiedByOtherEnemy(state, enemy, nx, ny)) continue;
       enemy.x = nx;
       enemy.y = ny;
@@ -91,7 +91,7 @@ function erraticStep(state: GameState, enemy: Enemy, steps: number): void {
         return;
       }
       if (!inBounds(state, nx, ny)) continue;
-      if (!isWalkable(state.dungeon.tiles[ny][nx])) continue;
+      if (!isWalkableAt(state, nx, ny)) continue;
       if (occupiedByOtherEnemy(state, enemy, nx, ny)) continue;
       enemy.x = nx;
       enemy.y = ny;
@@ -119,7 +119,7 @@ function turretAct(state: GameState, enemy: Enemy): void {
       enemyAttackPlayer(state, enemy);
       return;
     }
-    if (!inBounds(state, tx, ty) || !isWalkable(state.dungeon.tiles[ty][tx])) return;
+    if (!inBounds(state, tx, ty) || !isWalkableAt(state, tx, ty)) return;
   }
 }
 
@@ -141,7 +141,7 @@ function castTimeBlast(state: GameState, enemy: Enemy): void {
     ...ORTHO.map(([dx, dy]) => ({ x: state.run.playerX + dx, y: state.run.playerY + dy })),
   ];
   for (const t of targets) {
-    if (!inBounds(state, t.x, t.y) || !isWalkable(state.dungeon.tiles[t.y][t.x])) continue;
+    if (!inBounds(state, t.x, t.y) || !isWalkableAt(state, t.x, t.y)) continue;
     state.dungeon.telegraphTiles.push({ x: t.x, y: t.y, turnsUntil: TIME_BLAST_WARNING_TURNS });
   }
   logLine(state, `${ENEMY_NAME[enemy.kind]} channels a Time-Blast!`);
@@ -152,7 +152,7 @@ function summonGrunt(state: GameState, enemy: Enemy): void {
   for (const [dx, dy] of shuffled(ORTHO)) {
     const nx = enemy.x + dx;
     const ny = enemy.y + dy;
-    if (!inBounds(state, nx, ny) || !isWalkable(state.dungeon.tiles[ny][nx])) continue;
+    if (!inBounds(state, nx, ny) || !isWalkableAt(state, nx, ny)) continue;
     if (occupiedByOtherEnemy(state, enemy, nx, ny) || (nx === state.run.playerX && ny === state.run.playerY)) continue;
     const grunt = createEnemy('BONE_GRUNT', `${enemy.id}-summon-${state.dungeon.enemies.length}-${Date.now()}`, nx, ny);
     grunt.awake = true;

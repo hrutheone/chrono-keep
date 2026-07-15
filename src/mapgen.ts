@@ -36,6 +36,23 @@ const WALKABLE = new Set<number>([TILE.FLOOR, TILE.DOOR, TILE.STAIRS, TILE.FIRE_
 export function isWalkable(tile: number): boolean {
   return WALKABLE.has(tile);
 }
+
+/** The tile at (x, y) as it should render/behave *right now* — an active
+ * `dungeon.expiringTiles` overlay (Flame Arc's Fire Hazard, Phase 8's
+ * Ice-Barricade Scroll) wins over the deterministic `dungeon.tiles` grid
+ * underneath it, without ever mutating that grid. */
+export function effectiveTileAt(state: GameState, x: number, y: number): number {
+  const overlay = state.dungeon.expiringTiles.find((t) => t.x === x && t.y === y);
+  if (overlay) return overlay.tileType;
+  return state.dungeon.tiles[y][x];
+}
+
+/** isWalkable, but respecting expiringTiles overlays (e.g. an Ice-Barricade
+ * blocks even though the floor tile underneath it is open). */
+export function isWalkableAt(state: GameState, x: number, y: number): boolean {
+  if (x < 0 || x >= state.dungeon.width || y < 0 || y >= state.dungeon.height) return false;
+  return isWalkable(effectiveTileAt(state, x, y));
+}
 const ORTHO = [
   [1, 0],
   [-1, 0],
@@ -395,6 +412,8 @@ export function enterFloor(state: GameState, floorNumber: number): GeneratedFloo
   state.dungeon.tiles = floor.tiles;
   state.dungeon.enemies = floor.enemies;
   state.dungeon.items = floor.items;
+  state.dungeon.spawnX = floor.spawnX;
+  state.dungeon.spawnY = floor.spawnY;
   state.dungeon.expiringTiles = [];
   state.dungeon.telegraphTiles = [];
   state.dungeon.shortcutGate = {

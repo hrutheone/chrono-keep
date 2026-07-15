@@ -2,9 +2,9 @@
 // (GDD Sections 5 & 7). Turn-phase orchestration lives in turnController.ts;
 // per-enemy movement/targeting lives in enemyAI.ts.
 
-import { ENEMY_NAME, TIME_SHARD_DROP_CHANCE, createTimeShard, rollEnemyDrop, weaknessOf } from './content';
-import { totalAtk, totalDef } from './inventory';
-import { TILE } from './mapgen';
+import { ENEMY_NAME, TIME_SHARD_DROP_CHANCE, WEAPON_RANGE, createTimeShard, rollEnemyDrop, weaknessOf } from './content';
+import { elementSynergyBonus, totalAtk, totalDef } from './inventory';
+import { TILE, isWalkableAt } from './mapgen';
 import { logLine } from './turns';
 import { awardEchoes, markFloorDamageTaken } from './echoes';
 import { triggerVictory } from './victory';
@@ -47,6 +47,67 @@ export function computeDamage(atk: number, def: number, attackerEl: Element, def
  * stands in for it on both offense and defense, per Section 5's "both directions" rule. */
 function playerElement(state: GameState): Element {
   return state.run.equippedWeapon?.element ?? 'PHYSICAL';
+}
+
+const ALL_ELEMENTS: Element[] = ['PHYSICAL', 'FIRE', 'VOLT', 'FROST', 'CHRONO'];
+function randomElement(): Element {
+  return ALL_ELEMENTS[Math.floor(Math.random() * ALL_ELEMENTS.length)];
+}
+
+/** Knockback (Glacial Mace, Paradox Staff): pushes the *defender* away from the
+ * player, up to `tiles`, stopping at the first wall/enemy/player. */
+function applyKnockback(state: GameState, enemy: Enemy, dx: number, dy: number, tiles: number): void {
+  for (let i = 0; i < tiles; i++) {
+    const nx = enemy.x + dx;
+    const ny = enemy.y + dy;
+    if (!isWalkableAt(state, nx, ny)) break;
+    if (state.dungeon.enemies.some((e) => e !== enemy && e.x === nx && e.y === ny)) break;
+    if (nx === state.run.playerX && ny === state.run.playerY) break;
+    enemy.x = nx;
+    enemy.y = ny;
+  }
+}
+
+/** Pull (Tesla Gauntlets): yanks the defender past the player, to the tile on
+ * the far side — repositioning them, since they're already adjacent. */
+function applyPull(state: GameState, enemy: Enemy, dx: number, dy: number): void {
+  const nx = state.run.playerX - dx;
+  const ny = state.run.playerY - dy;
+  if (!isWalkableAt(state, nx, ny)) return;
+  if (state.dungeon.enemies.some((e) => e !== enemy && e.x === nx && e.y === ny)) return;
+  enemy.x = nx;
+  enemy.y = ny;
+  logLine(state, `${ENEMY_NAME[enemy.kind]} is yanked past you!`);
+}
+
+/** Gambler's Dice doubles the Time Shard drop chance (Section 6C/6D). */
+function timeShardChance(state: GameState): number {
+  return state.run.equippedAccessory?.passive === 'gamblers_dice' ? TIME_SHARD_DROP_CHANCE * 2 : TIME_SHARD_DROP_CHANCE;
+}
+
+/** Frost Wand/Volt Spear (existing) and Ashwood Bow/Static Whip (Phase 8) all
+ * grant an attack range beyond/instead-of adjacency. Scans (dx, dy) from the
+ * player, stopping at the first wall; returns the first enemy found within
+ * [min, max] range, or null (including when the equipped weapon has no
+ * range profile, i.e. adjacent-only). */
+export function findRangedTarget(state: GameState, dx: number, dy: number): Enemy | null {
+  const profile = WEAPON_RANGE[state.run.equippedWeapon?.passive ?? ''];
+  if (!profile || profile.max <= 1) return null;
+  for (let dist = 1; dist <= profile.max; dist++) {
+    const tx = state.run.playerX + dx * dist;
+    const ty = state.run.playerY + dy * dist;
+    if (!isWalkableAt(state, tx, ty)) break;
+    if (dist < profile.min) continue;
+    const enemy = state.dungeon.enemies.find((e) => e.x === tx && e.y === ty);
+    if (enemy) return enemy;
+  }
+  return null;
+}
+
+/** True if the equipped weapon's minimum range excludes the given (adjacent) distance. */
+export function weaponBlockedAtRange(state: GameState, distance: number): boolean {
+  const profile = WEAPON_RANGE[state.run.equippedWeapon?.passive ?? ''];
+  return profile !== undefined && distance < profile.min;
 }
 
 export function applyEnemyStatus(enemy: Enemy, status: StatusEffect, turns: number): void {
@@ -99,7 +160,7 @@ export function killEnemy(state: GameState, enemy: Enemy, source: 'bump' | 'skil
   const drop = rollEnemyDrop(Math.random, enemy.kind, `${enemy.id}-drop`);
   if (drop) state.dungeon.items.push({ item: drop, x: enemy.x, y: enemy.y });
 
-  if (NORMAL_ENEMY_KINDS.has(enemy.kind) && Math.random() < TIME_SHARD_DROP_CHANCE) {
+  if (NORMAL_ENEMY_KINDS.has(enemy.kind) && Math.random() < timeShardChance(state)) {
     state.dungeon.items.push({ item: createTimeShard(`${enemy.id}-shard`), x: enemy.x, y: enemy.y });
   }
 
@@ -116,6 +177,11 @@ export function killEnemy(state: GameState, enemy: Enemy, source: 'bump' | 'skil
     logLine(state, 'Execution refund: +1 Stamina.');
   }
 
+  if (state.run.equippedAccessory?.passive === 'lifesteal_1') {
+    state.run.currentHp = Math.min(state.run.maxHp, state.run.currentHp + 1);
+    logLine(state, 'Vampire Tooth pulses — +1 HP.');
+  }
+
   if (enemy.kind === 'CHRONO_LICH') {
     logLine(state, 'The Chrono-Lich unravels...');
     triggerVictory(state);
@@ -125,9 +191,17 @@ export function killEnemy(state: GameState, enemy: Enemy, source: 'bump' | 'skil
   logLine(state, `${ENEMY_NAME[enemy.kind]} defeated!`);
 }
 
-/** Skill damage to an enemy (Cleave/Flame Arc): the skill's own element, not the
- * equipped weapon's. Returns true if the hit killed the enemy. */
-export function skillDamageEnemy(state: GameState, enemy: Enemy, rawAtk: number, element: Element, label: string): boolean {
+/** Shared damage-instance resolver: computes/applies damage, plays SFX/floating
+ * text/Hit-Stop, and kills on lethal. `source` decides whether a kill grants
+ * the Execution Stamina Refund ('skill') or not ('bump', incl. weapon pierce). */
+function applyDamageInstance(
+  state: GameState,
+  enemy: Enemy,
+  rawAtk: number,
+  element: Element,
+  label: string,
+  source: 'bump' | 'skill',
+): boolean {
   const dmg = computeDamage(rawAtk, enemy.defense, element, enemy.element);
   const mult = elementalMultiplier(element, enemy.element);
   enemy.hp -= dmg;
@@ -136,20 +210,39 @@ export function skillDamageEnemy(state: GameState, enemy: Enemy, rawAtk: number,
   if (mult > 1) markHitStop();
   notifyFloatingText(enemy.x, enemy.y, mult > 1 ? `${dmg} CRIT!` : `${dmg}`, mult > 1 ? 'crit' : 'damage');
   if (enemy.hp <= 0) {
-    killEnemy(state, enemy, 'skill');
+    killEnemy(state, enemy, source);
     return true;
   }
   return false;
 }
 
-/** Player bump-attacks an enemy: weapon element/procs, elemental wheel, death & drops. */
+/** Skill damage to an enemy (Cleave/Flame Arc): the skill's own element, not the
+ * equipped weapon's. Returns true if the hit killed the enemy. */
+export function skillDamageEnemy(state: GameState, enemy: Enemy, rawAtk: number, element: Element, label: string): boolean {
+  return applyDamageInstance(state, enemy, rawAtk, element, label, 'skill');
+}
+
+/** Player bump- or ranged-attacks an enemy: weapon element/procs, elemental
+ * wheel, death & drops, plus Phase 8's synergy/pierce/knockback/pull/
+ * self-damage/status-on-hit weapon passives. */
 export function playerAttackEnemy(state: GameState, enemy: Enemy): void {
-  notifyAttack(PLAYER_ID, Math.sign(enemy.x - state.run.playerX), Math.sign(enemy.y - state.run.playerY));
+  const dx = Math.sign(enemy.x - state.run.playerX);
+  const dy = Math.sign(enemy.y - state.run.playerY);
+  notifyAttack(PLAYER_ID, dx, dy);
 
   const weapon = state.run.equippedWeapon;
   const element = playerElement(state);
   const mult = elementalMultiplier(element, enemy.element);
-  const dmg = computeDamage(totalAtk(state), enemy.defense, element, enemy.element);
+  const atk = totalAtk(state) + elementSynergyBonus(state, element);
+  let dmg = computeDamage(atk, enemy.defense, element, enemy.element);
+
+  if (weapon?.passive === 'stun_synergy_2x' && enemy.status === 'STUN') dmg *= 2;
+  if (state.run.whetstoneCharge) {
+    dmg *= 2;
+    state.run.whetstoneCharge = false;
+    logLine(state, 'Whetstone doubles the blow!');
+  }
+
   enemy.hp -= dmg;
   logLine(state, `You hit the ${ENEMY_NAME[enemy.kind]} for ${dmg}.`);
   playAttackSfx(element, mult);
@@ -160,10 +253,46 @@ export function playerAttackEnemy(state: GameState, enemy: Enemy): void {
     applyEnemyStatus(enemy, 'BURN', 3);
     logLine(state, `${ENEMY_NAME[enemy.kind]} catches fire!`);
   }
+  if (weapon?.passive === 'chill_50_free_swap' && Math.random() < 0.5) {
+    applyEnemyStatus(enemy, 'CHILLED', 3);
+    logLine(state, `${ENEMY_NAME[enemy.kind]} is Chilled!`);
+  }
+  if (weapon?.passive === 'heavy_stamina') {
+    state.run.currentStamina = Math.max(0, state.run.currentStamina - 1);
+  }
+  if (weapon?.passive === 'blood_magic') {
+    state.run.currentHp = Math.max(0, state.run.currentHp - 1);
+    markFloorDamageTaken(state);
+    logLine(state, 'The Obsidian Greatsword drinks your blood.');
+  }
+  if (weapon?.passive === 'cure_chill_on_attack' && state.run.status === 'CHILLED') {
+    state.run.status = 'NONE';
+    state.run.statusTurns = 0;
+    logLine(state, 'The Torch burns away the Chill.');
+  }
+
+  // Pierce (Volt Spear): also damages whatever's directly behind the target,
+  // as its own damage instance (never grants an Execution Refund).
+  if (weapon?.passive === 'pierce_1') {
+    const behind = state.dungeon.enemies.find((e) => e.x === enemy.x + dx && e.y === enemy.y + dy);
+    if (behind) applyDamageInstance(state, behind, atk, element, 'The pierce', 'bump');
+  }
 
   if (enemy.hp <= 0) {
     killEnemy(state, enemy, 'bump');
     return;
+  }
+
+  // Knockback / Pull (Section 6A/8): repositions the defender, not the attacker.
+  if (weapon?.passive === 'knockback_1') {
+    applyKnockback(state, enemy, dx, dy, 1);
+  } else if (weapon?.passive === 'knockback_2_randomize_element') {
+    applyKnockback(state, enemy, dx, dy, 2);
+    enemy.element = randomElement();
+    enemy.weakness = weaknessOf(enemy.element);
+    logLine(state, `${ENEMY_NAME[enemy.kind]}'s element shifts unpredictably!`);
+  } else if (weapon?.passive === 'pull_1') {
+    applyPull(state, enemy, dx, dy);
   }
 
   if (enemy.kind === 'TIME_WEAVER') {
@@ -199,5 +328,13 @@ export function enemyAttackPlayer(state: GameState, enemy: Enemy): void {
   if (enemy.kind === 'FROST_WRAITH' && Math.random() < 0.25) {
     applyPlayerStatus(state, 'CHILLED', 3);
     logLine(state, 'You are Chilled!');
+  }
+
+  if (state.run.equippedAccessory?.passive === 'retaliation_2') {
+    const retaliateDmg = computeDamage(2, enemy.defense, 'PHYSICAL', enemy.element);
+    enemy.hp -= retaliateDmg;
+    logLine(state, `Spiked Pauldrons retaliate for ${retaliateDmg}.`);
+    notifyFloatingText(enemy.x, enemy.y, `${retaliateDmg}`, 'damage');
+    if (enemy.hp <= 0) killEnemy(state, enemy, 'bump');
   }
 }

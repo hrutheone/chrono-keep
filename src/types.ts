@@ -61,6 +61,11 @@ export interface GameState {
     // Section 7 Echo Economy bookkeeping for the current loop.
     floorDamageTaken: boolean;      // Cleared on floor entry; set on any HP loss (Flawless Floor bonus).
     floorsVisitedThisLoop: number[]; // Floor numbers already awarded the "first reached" bonus this loop.
+
+    // Phase 8 usage-count buffs (Section 8: distinct from the turn-duration
+    // StatusEffect above — these count down by *actions*, not turns).
+    quicksilverCharges: number; // Quicksilver Flask: next N moves/attacks cost 0 turns.
+    whetstoneCharge: boolean;   // Whetstone: next weapon attack deals 2x damage.
   };
 
   // Map and Entities (regenerated deterministically on floor entry)
@@ -72,9 +77,16 @@ export interface GameState {
                              // 7 = Fire Hazard (from Flame Arc Lvl 3 / boss)
     enemies: Enemy[];
     items: WorldItem[];
-    // Player-created tile mutations (Flame Arc Lvl 3's Fire Hazard). Kept off
-    // the deterministic `tiles` grid entirely; restored to FLOOR on expiry.
-    expiringTiles: { x: number; y: number; turnsLeft: number }[];
+    // This floor's spawn point (Section 8 Phase 8: Recall Rune teleports back
+    // here). Set once on floor entry; the player moves away from it, so it
+    // has to be persisted somewhere reachable rather than re-derived.
+    spawnX: number;
+    spawnY: number;
+    // Player-created tile mutations (Flame Arc Lvl 3's Fire Hazard, Phase 8's
+    // Ice-Barricade Scroll). Kept off the deterministic `tiles` grid entirely
+    // — `tileType` is what render.ts/isWalkable treat the tile as while it's
+    // active; restored to the original tile on expiry.
+    expiringTiles: { x: number; y: number; turnsLeft: number; tileType: number }[];
     // Chrono-Lich Time-Blast warning tiles (Phase 6): marked 2 turns before
     // they detonate (Stun on hit), then cleared.
     telegraphTiles: { x: number; y: number; turnsUntil: number }[];
@@ -112,7 +124,7 @@ export interface Enemy {
 
 export interface Item {
   id: string;
-  kind: 'WEAPON' | 'ACCESSORY' | 'POTION' | 'ANCHOR' | 'TIME_SHARD';
+  kind: 'WEAPON' | 'ACCESSORY' | 'POTION' | 'CONSUMABLE' | 'ANCHOR' | 'TIME_SHARD';
   name: string;
   value: number;             // Heal amount for potions; +turns for Time Shards; unused otherwise
 }
@@ -127,6 +139,16 @@ export interface Weapon extends Item {
 export interface Accessory extends Item {
   kind: 'ACCESSORY';
   passive: string;           // ID of passive effect (see Accessories table)
+}
+
+/** Section 6E's 8 Tactical Consumables (Phase 8) — always 1 turn to use, in or
+ * out of combat, unlike Potions (0 turns out of combat, see Section 7).
+ * `Item.kind` for these is 'CONSUMABLE'; the base Potion stays 'POTION'
+ * (a Phase 3-era kind, kept as-is rather than folded into this to avoid
+ * touching already-working equip/pickup code for no behavioral gain). */
+export interface Consumable extends Item {
+  kind: 'CONSUMABLE';
+  effect: string;            // ID of the specific effect (see Section 6E's table)
 }
 
 export interface WorldItem {

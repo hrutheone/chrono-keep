@@ -3,9 +3,9 @@
 // same Player Move Phase -> resolvePlayerTurn sequence as a move or attack.
 
 import { SKILLS } from './content';
-import { pickupItemsAt, totalAtk } from './inventory';
+import { elementSynergyBonus, pickupItemsAt, totalAtk } from './inventory';
 import { applyEnemyStatus, skillDamageEnemy } from './combat';
-import { isWalkable } from './mapgen';
+import { isWalkableAt, TILE } from './mapgen';
 import { consumeStunnedAction, tryDescendIfOnStairs } from './movement';
 import { isTurnBusy, resolvePlayerTurn } from './turnController';
 import { isRunOver, logLine } from './turns';
@@ -30,20 +30,19 @@ const ORTHO_DELTA: ReadonlyArray<{ dx: number; dy: number }> = [
 
 const FLAME_ARC_HAZARD_TURNS = 4;
 
-function inBounds(state: GameState, x: number, y: number): boolean {
-  return x >= 0 && x < state.dungeon.width && y >= 0 && y < state.dungeon.height;
-}
-
 function walkableAt(state: GameState, x: number, y: number): boolean {
-  return inBounds(state, x, y) && isWalkable(state.dungeon.tiles[y][x]);
+  return isWalkableAt(state, x, y);
 }
 
 function enemyAt(state: GameState, x: number, y: number): Enemy | undefined {
   return state.dungeon.enemies.find((e) => e.x === x && e.y === y);
 }
 
-/** Static Shift Lvl 3 (2 Stamina instead of 3) and Boots of Haste (Dash 1 instead of 2). */
+/** Static Shift Lvl 3 (2 Stamina instead of 3), Boots of Haste (Dash 1 instead
+ * of 2), and Adrenaline Gland (Section 6D, Phase 8): below 10 HP, all Active
+ * Skills cost 0 Stamina. */
 function skillStaminaCost(state: GameState, skillId: string, level: number): number {
+  if (state.run.equippedAccessory?.passive === 'adrenaline' && state.run.currentHp < 10) return 0;
   if (skillId === 'static_shift' && level >= 3) return 2;
   if (skillId === 'dash' && state.run.equippedAccessory?.passive === 'dash_discount') return 1;
   return SKILLS[skillId].stamina;
@@ -75,7 +74,7 @@ function castDash(state: GameState, level: number): void {
 
 function castCleave(state: GameState, level: number): void {
   const mult = level >= 2 ? 1.5 : 1.2;
-  const base = Math.round(totalAtk(state) * mult);
+  const base = Math.round(totalAtk(state) * mult) + elementSynergyBonus(state, 'PHYSICAL');
   const { dx, dy } = FACING_DELTA[state.run.facing];
   for (let i = 1; i <= 3; i++) {
     const tx = state.run.playerX + dx * i;
@@ -98,10 +97,11 @@ function castCleave(state: GameState, level: number): void {
 }
 
 function castFlameArc(state: GameState, level: number): void {
+  const base = 5 + elementSynergyBonus(state, 'FIRE');
   for (const { dx, dy } of ORTHO_DELTA) {
     const enemy = enemyAt(state, state.run.playerX + dx, state.run.playerY + dy);
     if (!enemy) continue;
-    const killed = skillDamageEnemy(state, enemy, 5, 'FIRE', 'Flame Arc');
+    const killed = skillDamageEnemy(state, enemy, base, 'FIRE', 'Flame Arc');
     if (!killed && level >= 2 && Math.random() < 0.5) {
       applyEnemyStatus(enemy, 'BURN', 3);
       logLine(state, `${enemy.kind} catches fire!`);
@@ -114,7 +114,7 @@ function castFlameArc(state: GameState, level: number): void {
       if (!walkableAt(state, tx, ty)) continue;
       const existing = state.dungeon.expiringTiles.find((t) => t.x === tx && t.y === ty);
       if (existing) existing.turnsLeft = FLAME_ARC_HAZARD_TURNS;
-      else state.dungeon.expiringTiles.push({ x: tx, y: ty, turnsLeft: FLAME_ARC_HAZARD_TURNS });
+      else state.dungeon.expiringTiles.push({ x: tx, y: ty, turnsLeft: FLAME_ARC_HAZARD_TURNS, tileType: TILE.FIRE_HAZARD });
     }
     logLine(state, 'Flame Arc leaves a fire hazard.');
   }

@@ -17,7 +17,7 @@ import { tryMove, passTurn } from '../src/movement';
 import { useSkill } from '../src/skills';
 import { equipItem, usePotion } from '../src/inventory';
 import { buySkillUpgrade, buyStatUpgrade, type StatTrack } from '../src/shop';
-import { SKILLS } from '../src/content';
+import { SKILLS, WEAPON_RANGE } from '../src/content';
 import { isRunOver } from '../src/turns';
 import type { GameState, Weapon } from '../src/types';
 
@@ -112,9 +112,20 @@ function currentTarget(state: GameState): { x: number; y: number } | null {
 }
 
 /** Equips any strictly-better weapon/first accessory sitting in inventory. */
+/** The bot only ever bump-attacks or uses Cleave — it has no logic to stand
+ * off at range, so a min-range weapon (Ashwood Bow, Static Whip: "cannot hit
+ * adjacent") would leave it unable to fight at all. Skip those specifically;
+ * every other weapon is fair game by raw ATK. */
+function botCanUseWeapon(weapon: Weapon): boolean {
+  const profile = WEAPON_RANGE[weapon.passive];
+  return !profile || profile.min <= 1;
+}
+
 function maybeEquipBetterGear(state: GameState): void {
   const { inventory, equippedWeapon, equippedAccessory } = state.run;
-  const weaponIdx = inventory.findIndex((i) => i.kind === 'WEAPON' && (!equippedWeapon || (i as Weapon).atk > equippedWeapon.atk));
+  const weaponIdx = inventory.findIndex(
+    (i) => i.kind === 'WEAPON' && botCanUseWeapon(i as Weapon) && (!equippedWeapon || (i as Weapon).atk > equippedWeapon.atk),
+  );
   if (weaponIdx !== -1) {
     equipItem(state, weaponIdx);
     return;

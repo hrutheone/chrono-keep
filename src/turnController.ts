@@ -6,7 +6,7 @@
 
 import { applyEnemyStatus, applyPlayerStatus, consumeHitStopFlag } from './combat';
 import { runEnemyPhase } from './enemyAI';
-import { enterFloor, TILE } from './mapgen';
+import { enterFloor, TILE, effectiveTileAt } from './mapgen';
 import { resetRunForNewLoop } from './state';
 import { logLine } from './turns';
 import { markFloorDamageTaken, onFloorEntered } from './echoes';
@@ -15,11 +15,10 @@ import { playDeathSfx, playLoopResetSfx } from './audio';
 import { PLAYER_ID, notifyDeath } from './animation';
 import type { GameState } from './types';
 
-export type PlayerActionKind = 'move' | 'attack' | 'wait' | 'skill';
+export type PlayerActionKind = 'move' | 'attack' | 'wait' | 'skill' | 'item';
 
 function isHazardAt(state: GameState, x: number, y: number): boolean {
-  if (state.dungeon.tiles[y][x] === TILE.FIRE_HAZARD) return true;
-  return state.dungeon.expiringTiles.some((t) => t.x === x && t.y === y);
+  return effectiveTileAt(state, x, y) === TILE.FIRE_HAZARD;
 }
 
 function applyFireHazard(state: GameState): void {
@@ -92,6 +91,16 @@ function runTickPhase(state: GameState, actionKind: PlayerActionKind): void {
     state.run.currentStamina = Math.min(state.run.maxStamina, state.run.currentStamina + 1);
   }
 
+  // Quicksilver Flask (Section 6E): "your next 3 Moves or Attacks" only —
+  // not skills, and not the Tactical Consumable use that grants the charges
+  // (which always costs its own 1 turn per Section 6E/7, unless Alchemist's
+  // Belt makes it free through a separate path).
+  if (state.run.quicksilverCharges > 0 && (actionKind === 'move' || actionKind === 'attack')) {
+    state.run.quicksilverCharges -= 1;
+    logLine(state, `Quicksilver — this action was free (${state.run.quicksilverCharges} left).`);
+    return;
+  }
+
   const penalty = actionKind === 'move' && chilledBeforeTick ? 2 : 1;
   state.run.turnsRemaining = Math.max(0, state.run.turnsRemaining - penalty);
 }
@@ -120,8 +129,22 @@ function clearCrtWarp(): void {
  * screen once it finishes, preserving the just-ended run's stats (floor,
  * turns) for display. The actual Full Loop Reset happens in
  * continueAfterDeath(), once the player dismisses it. */
+/** Shattered Hourglass (Section 6D, Phase 8): a Check-Phase interception —
+ * turns hitting 0 restores 15 and destroys the item instead of triggering
+ * the loop reset. Checked before the loss-reset path; doesn't apply to
+ * dying from HP loss, only the turn-timeout case. */
+function tryShatteredHourglass(state: GameState): boolean {
+  if (state.run.turnsRemaining > 0 || state.run.currentHp <= 0) return false;
+  if (state.run.equippedAccessory?.passive !== 'safety_net_15') return false;
+  state.run.equippedAccessory = null;
+  state.run.turnsRemaining = 15;
+  logLine(state, 'The Shattered Hourglass shatters completely — 15 Turns restored!');
+  return true;
+}
+
 function runCheckPhase(state: GameState): void {
   if (lossPending || (state.run.turnsRemaining > 0 && state.run.currentHp > 0)) return;
+  if (tryShatteredHourglass(state)) return;
   lossPending = true;
   if (state.run.currentHp <= 0) {
     notifyDeath(PLAYER_ID, 'PLAYER', state.run.playerX, state.run.playerY, state.run.facing);

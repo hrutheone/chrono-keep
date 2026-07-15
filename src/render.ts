@@ -179,6 +179,17 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     }
   }
 
+  // Player-created tile mutations (Flame Arc Lvl 3's Fire Hazard, Phase 8's
+  // Ice-Barricade Scroll): kept off `dungeon.tiles` entirely, so they need
+  // their own overlay draw on top of the base tile underneath them.
+  for (const t of state.dungeon.expiringTiles) {
+    const sx = t.x - cam.x;
+    const sy = t.y - cam.y;
+    if (sx < 0 || sx >= VIEWPORT_TILES_W || sy < 0 || sy >= VIEWPORT_TILES_H) continue;
+    const sprite = TILE_SPRITES[t.tileType];
+    if (sprite) drawSprite(ctx, sprite, sx * TILE_SIZE, sy * TILE_SIZE);
+  }
+
   // Chrono-Lich Time-Blast telegraph (Section 11): a pulsing warning tile,
   // reusing the enemy-alarm red rather than adding a new accent color.
   if (state.dungeon.telegraphTiles.length > 0) {
