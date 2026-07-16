@@ -52,6 +52,15 @@ export const BESTIARY: Record<EnemyKind, EnemyTemplate> = {
   // documented window; ATK trimmed 12->10 so the fight's own damage race
   // doesn't kill the player faster than they can clear that HP pool.
   CHRONO_LICH: { hp: 100, attack: 10, defense: 0, speed: 1, element: 'CHRONO' },
+
+  // Deep-Biome Regulars (Section 6C, Phase 14): first appear Biome 3+
+  // (Floors 21+), mixed into every deeper Biome after that. Stats verbatim
+  // from the GDD table — DEF/Speed are fixed like every other regular
+  // (scaleEnemyForDepth only scales hp/attack).
+  BONE_KNIGHT: { hp: 22, attack: 5, defense: 6, speed: 1, element: 'PHYSICAL' },
+  CINDER_SHAMAN: { hp: 14, attack: 6, defense: 1, speed: 1, element: 'FIRE' },
+  VOLT_HOUND: { hp: 10, attack: 6, defense: 0, speed: 2, element: 'VOLT' },
+  FROST_SENTINEL: { hp: 20, attack: 5, defense: 5, speed: 0, element: 'FROST' },
 };
 
 export const ENEMY_NAME: Record<EnemyKind, string> = {
@@ -61,6 +70,10 @@ export const ENEMY_NAME: Record<EnemyKind, string> = {
   FROST_WRAITH: 'Frost-Wraith',
   TIME_WEAVER: 'Time-Weaver',
   CHRONO_LICH: 'Chrono-Lich',
+  BONE_KNIGHT: 'Bone-Knight',
+  CINDER_SHAMAN: 'Cinder-Shaman',
+  VOLT_HOUND: 'Volt-Hound',
+  FROST_SENTINEL: 'Frost-Sentinel',
 };
 
 // Bestiary lore (Section 6C's "Lore / Origin" column) — shown in the Bestiary
@@ -78,6 +91,14 @@ export const MONSTER_LORE: Record<EnemyKind, string> = {
     "The Lich's corrupted apprentices. They desperately stitch the tears in the loop together. Striking them causes them to slip backwards through the timeline, appearing elsewhere.",
   CHRONO_LICH:
     'The architect of this purgatory. He sits at the bottom of the temporal well, hoarding the Anchors in a mad bid to ascend. He no longer remembers why he wanted to live forever.',
+  BONE_KNIGHT:
+    'The honor guard never abandoned their posts. Centuries of resets have fused their plate to their bones.',
+  CINDER_SHAMAN:
+    'It still performs the rain-summoning rite of old Oakhaven. What falls now is not water.',
+  VOLT_HOUND:
+    "The kennels of the citadel guard, warped into living capacitors. They hunt in pairs, herding prey into each other's arcs.",
+  FROST_SENTINEL:
+    'Statues of the old kings, animated by the cold between seconds. Their gaze sweeps the halls in four directions at once.',
 };
 
 export function createEnemy(kind: EnemyKind, id: string, x: number, y: number): Enemy {
@@ -100,6 +121,32 @@ export function createEnemy(kind: EnemyKind, id: string, x: number, y: number): 
   };
 }
 
+// --- 99-Floor Descent structure (GDD Sections 6C & 7) ---
+
+/** Which 10-floor Biome a floor belongs to (1-10). Floor 99 caps Biome 10. */
+export function biomeOf(floorNumber: number): number {
+  return Math.min(10, Math.floor((floorNumber - 1) / 10) + 1);
+}
+
+/** Depth Multiplier (Section 6C): +15% compounding every 5 floors, applied to
+ * enemy HP and ATK at spawn time. DEF and Speed never scale (armor/mobility
+ * stay a readable, fixed property of each kind). */
+export function depthMultiplier(floorNumber: number): number {
+  return Math.pow(1.15, Math.floor((floorNumber - 1) / 5));
+}
+
+/** Applies the Depth Multiplier for the floor an enemy spawns on. Regular
+ * enemies and Elites only — Mini-Bosses and the Chrono-Lich use hand-tuned
+ * stats and are exempt (their floors are fixed, so scaling is baked in).
+ * NG+ scaling (scaleEnemyForNgPlus) multiplies ON TOP of this. */
+export function scaleEnemyForDepth(enemy: Enemy, floorNumber: number): void {
+  const mult = depthMultiplier(floorNumber);
+  if (mult <= 1) return;
+  enemy.hp = Math.round(enemy.hp * mult);
+  enemy.maxHp = enemy.hp;
+  enemy.attack = Math.round(enemy.attack * mult);
+}
+
 /** Fun & Feel #8: New Game+ escalation — +10% HP per NG+ cycle, applied as a
  * post-generation pass (mapgen.ts/bossArena.ts, and enemyAI.ts's Grunt
  * summons) rather than inside `createEnemy` itself, so the seeded generator
@@ -111,6 +158,42 @@ export function scaleEnemyForNgPlus(enemy: Enemy, ngPlusLevel: number): void {
   const scaled = Math.round(enemy.hp * (1 + 0.1 * ngPlusLevel));
   enemy.hp = scaled;
   enemy.maxHp = scaled;
+}
+
+/** Procedural-floor enemy pool for Phase 12's 99-floor descent. Phase 14 adds
+ * the deep-biome regulars' AI, so Biome 3+ uses the full roster the GDD
+ * specifies (Bone-Knight/Cinder-Shaman/Volt-Hound/Frost-Sentinel alongside
+ * the Biome 1-2 kinds and Time-Weaver pressure), with elemental
+ * over-representation by Biome theme. */
+export function enemyPoolForFloor(floorNumber: number): EnemyKind[] {
+  const biome = biomeOf(floorNumber);
+  if (biome === 1) return ['BONE_GRUNT', 'EMBER_BAT'];
+  if (biome === 2) return ['BONE_GRUNT', 'EMBER_BAT', 'VOLT_TURRET', 'FROST_WRAITH'];
+
+  const full: EnemyKind[] = [
+    'BONE_GRUNT',
+    'EMBER_BAT',
+    'VOLT_TURRET',
+    'FROST_WRAITH',
+    'TIME_WEAVER',
+    'BONE_KNIGHT',
+    'CINDER_SHAMAN',
+    'VOLT_HOUND',
+    'FROST_SENTINEL',
+  ];
+  if (biome === 10) return [...full, 'TIME_WEAVER', 'TIME_WEAVER'];
+
+  const theme = (biome - 4) % 3;
+  if (theme === 0) return [...full, 'EMBER_BAT', 'EMBER_BAT'];
+  if (theme === 1) return [...full, 'VOLT_TURRET', 'VOLT_TURRET'];
+  return [...full, 'FROST_WRAITH', 'FROST_WRAITH'];
+}
+
+export function enemyCountRangeForFloor(floorNumber: number): { min: number; max: number } {
+  const biome = biomeOf(floorNumber);
+  if (biome <= 2) return { min: 3, max: 5 };
+  if (biome <= 5) return { min: 4, max: 6 };
+  return { min: 5, max: 6 };
 }
 
 // Weapons (Section 6A). The first 6 are the original Phase 0-6 roster; the
@@ -453,12 +536,14 @@ export function loreForItem(name: string): string | undefined {
   return LORE_BY_NAME[name];
 }
 
-// Chest loot pools per floor (Section 6D tiers: Floor 2+ and Floor 3 accessories
-// unlock deeper). Contents are rolled from the floor's deterministic RNG stream,
-// so they are identical every loop of a save.
+// Chest loot pools by Biome (Section 6D drop-source tiers: "Chests",
+// "Chests (Biome 2+)", "Chests (Biome 3+)"). Tiering up with depth is what
+// lets a warp-in player re-gear appropriately for the local Depth Scaling
+// (Section 7, Dynamic Chest Loot). Positions are seeded; contents are
+// rerolled from gameplay RNG at pickup time (inventory.ts).
 type ChestRoll = (id: string) => Item;
 
-const CHEST_POOL_F1: ChestRoll[] = [
+const CHEST_POOL_B1: ChestRoll[] = [
   createPotion,
   (id) => createWeapon('EMBER_BLADE', id),
   (id) => createAccessory('IRON_RING', id),
@@ -468,8 +553,8 @@ const CHEST_POOL_F1: ChestRoll[] = [
   (id) => createWeapon('TORCH_OF_THE_WATCH', id),
   (id) => createConsumable('STAMINA_DRAUGHT', id),
 ];
-const CHEST_POOL_F2: ChestRoll[] = [
-  ...CHEST_POOL_F1,
+const CHEST_POOL_B2: ChestRoll[] = [
+  ...CHEST_POOL_B1,
   (id) => createAccessory('BOOTS_OF_HASTE', id),
   (id) => createAccessory('ECHO_CHARM', id),
   (id) => createAccessory('EMBER_PENDANT', id),
@@ -487,8 +572,8 @@ const CHEST_POOL_F2: ChestRoll[] = [
   (id) => createConsumable('WHETSTONE', id),
   (id) => createConsumable('QUICKSILVER_FLASK', id),
 ];
-const CHEST_POOL_F3: ChestRoll[] = [
-  ...CHEST_POOL_F2,
+const CHEST_POOL_B3: ChestRoll[] = [
+  ...CHEST_POOL_B2,
   (id) => createAccessory('GROUNDING_BAND', id),
   // Phase 8: the highest-power weapons/accessories/consumables.
   (id) => createWeapon('OBSIDIAN_GREATSWORD', id),
@@ -510,7 +595,8 @@ const CHEST_POOL_F3: ChestRoll[] = [
 ];
 
 export function rollChestItem(rng: () => number, floorNumber: number, id: string): Item {
-  const pool = floorNumber >= 3 ? CHEST_POOL_F3 : floorNumber === 2 ? CHEST_POOL_F2 : CHEST_POOL_F1;
+  const biome = biomeOf(floorNumber);
+  const pool = biome >= 3 ? CHEST_POOL_B3 : biome === 2 ? CHEST_POOL_B2 : CHEST_POOL_B1;
   return pool[Math.floor(rng() * pool.length)](id);
 }
 
@@ -546,6 +632,10 @@ const ENEMY_DROPS: Partial<Record<EnemyKind, DropRoll[]>> = {
   VOLT_TURRET: [(id) => createWeapon('VOLT_SPEAR', id)],
   FROST_WRAITH: [(id) => createWeapon('FROST_WAND', id)],
   TIME_WEAVER: [(id) => createWeapon('CHRONO_BLADE', id), (id) => ({ ...createPotion(id), name: 'Max Potion', value: 999 })],
+  BONE_KNIGHT: [(id) => createWeapon('OBSIDIAN_GREATSWORD', id), createPotion],
+  CINDER_SHAMAN: [(id) => createConsumable('LIQUID_FIRE_FLASK', id), (id) => createWeapon('CINDER_AXE', id)],
+  VOLT_HOUND: [(id) => createWeapon('STATIC_WHIP', id), (id) => createConsumable('STAMINA_DRAUGHT', id)],
+  FROST_SENTINEL: [(id) => createWeapon('GLACIAL_MACE', id), (id) => createWeapon('FROSTBITE_DAGGER', id)],
 };
 
 /** Rolls one item from this enemy kind's drop table (null if it has none, e.g. the Boss). */
@@ -561,5 +651,7 @@ export function rollEnemyDrop(rng: Rng, kind: EnemyKind, id: string): Item | nul
 export const TIME_SHARD_DROP_CHANCE = 0.25;
 
 export function createTimeShard(id: string): Item {
-  return { id, kind: 'TIME_SHARD', name: 'Time Shard', value: 2 };
+  // +5 turns (Section 6C, 99-Floor Descent): worth a real detour against a
+  // per-floor 100-turn counter, where the old +2 was tuned for a shared one.
+  return { id, kind: 'TIME_SHARD', name: 'Time Shard', value: 5 };
 }

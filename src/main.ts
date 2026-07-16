@@ -1,6 +1,7 @@
 import './style.css';
+import { loadSpritesheet } from './assets';
 import { createNewGameState } from './state';
-import { enterFloor } from './mapgen';
+import { enterHub } from './hub';
 import { loadAudioSettings, loadPersistent } from './persistence';
 import { renderWorld } from './render';
 import { installInput } from './movement';
@@ -80,9 +81,21 @@ installInput(state);
 installSkillInput(state);
 initMenus(state);
 installTouchControls();
-// A live (but not yet "entered") dungeon renders behind the TITLE overlay;
-// TITLE's Continue/New Game buttons are what actually start the run.
-enterFloor(state, 1);
+// A live (but not yet "entered") Hub renders behind the TITLE overlay;
+// TITLE's Continue/New Game buttons are what actually start the run (Phase 13:
+// both now land in the Hub itself, same as this background view).
+enterHub(state);
 state.ui.currentScreen = 'TITLE';
 
-requestAnimationFrame(frame);
+// GDD Section 4: the render loop must not start until the spritesheet has
+// decoded — the first frame() would otherwise drawImage an empty image (a
+// silent no-op on some browsers, an exception on others). The HTML UI (HUD,
+// menus) also only updates inside frame(), so everything waits together.
+loadSpritesheet()
+  .then(() => requestAnimationFrame(frame))
+  .catch((err) => {
+    console.error(err);
+    // Still start the loop so the HTML overlays (TITLE, Help) stay usable
+    // and the failure is visible as a blank world rather than a dead page.
+    requestAnimationFrame(frame);
+  });

@@ -1,14 +1,24 @@
-// Phase 1: deterministic Room & Corridor floor generator (GDD Sections 7 & 9).
+// Deterministic Room & Corridor floor generator for the 99-Floor Descent
+// (GDD Sections 6C, 7 & 9).
 //
 // Every floor derives from hash(persistent.rngSeed, floorNumber), so a save's
-// dungeon is identical across loops. If a layout fails the turn-budget check
-// (spawn -> Anchor -> Stairs <= 20 walked tiles, BFS on geometry only), the
-// floor regenerates from the next derived attempt seed — also deterministic.
+// dungeon is identical across loops; floors 1-99 are generated lazily (only
+// the current floor is ever materialized). If a layout fails the turn-budget
+// check (spawn -> Stairs <= 40 walked tiles, BFS on geometry only), the floor
+// regenerates from the next derived attempt seed — also deterministic.
 
 import type { Enemy, GameState, WorldItem } from './types';
-import { DUNGEON_SIZE } from './state';
+import { DUNGEON_SIZE, floorTurnLimit } from './state';
 import { hash, mulberry32 } from './rng';
-import { createEnemy, createAnchorItem, rollChestItem, scaleEnemyForNgPlus, type EnemyKind } from './content';
+import {
+  createEnemy,
+  enemyCountRangeForFloor,
+  enemyPoolForFloor,
+  rollChestItem,
+  scaleEnemyForDepth,
+  scaleEnemyForNgPlus,
+  type EnemyKind,
+} from './content';
 
 export const TILE = {
   VOID: 0,
@@ -19,18 +29,28 @@ export const TILE = {
   SHORTCUT_GATE: 5,
   BOSS_GATE: 6,
   FIRE_HAZARD: 7,
+  SHOP_TERMINAL: 8,
 } as const;
 
-/** Turn-budget guarantee: spawn -> Anchor -> Stairs within 20 walked tiles. */
-export const PATH_BUDGET = 20;
+/** Turn-budget guarantee: spawn -> Stairs within 40 walked tiles. */
+export const PATH_BUDGET = 40;
 
 const MAX_ATTEMPTS = 50;
 const N = DUNGEON_SIZE;
 
-// Shortcut Gates are closed until unlocked, so pathing treats them as solid.
-// Fire Hazard is walkable (that's the point — standing on it inflicts Burn);
-// the generator itself never places one, so this only matters at runtime.
-const WALKABLE = new Set<number>([TILE.FLOOR, TILE.DOOR, TILE.STAIRS, TILE.FIRE_HAZARD]);
+// Fire Hazard is walkable (that's the point — standing on it inflicts Burn).
+// Shortcut Gate and Shop Terminal (Phase 13) only ever appear in the
+// hand-authored Hub (src/hub.ts) and are always walkable there — stepping
+// onto either is what triggers movement.ts's interaction. None of these
+// three are ever placed by the procedural generator itself.
+const WALKABLE = new Set<number>([
+  TILE.FLOOR,
+  TILE.DOOR,
+  TILE.STAIRS,
+  TILE.FIRE_HAZARD,
+  TILE.SHORTCUT_GATE,
+  TILE.SHOP_TERMINAL,
+]);
 
 /** Shared walkability rule (generator pathing and player movement agree). */
 export function isWalkable(tile: number): boolean {
@@ -66,15 +86,8 @@ export interface GeneratedFloor {
   items: WorldItem[];
   spawnX: number;
   spawnY: number;
-  anchorX: number;
-  anchorY: number;
   stairsX: number;
   stairsY: number;
-  gateX: number;
-  gateY: number;
-  gateStairsSideX: number;
-  gateStairsSideY: number;
-  shortcutId: string;
 }
 
 type Rng = () => number;
@@ -220,49 +233,20 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
     return out;
   };
 
-  // 3. Pick Anchor and Stairs guided by BFS distance so the 20-tile budget
-  //    almost always holds; the mandated check in step 6 remains authoritative.
+  // 3. Pick Stairs guided by BFS distance so the 40-tile budget almost always
+  //    holds; the mandated check in step 5 remains authoritative.
   const fromSpawn = walkDistances(tiles, spawn.x, spawn.y);
   const inRange = (dist: Int32Array, x: number, y: number, lo: number, hi: number): boolean => {
     const d = dist[y * N + x];
     return d >= lo && d <= hi;
   };
-  let anchorCands = candidates((x, y) => inRange(fromSpawn, x, y, 6, 12));
-  if (anchorCands.length === 0) anchorCands = candidates((x, y) => inRange(fromSpawn, x, y, 4, 14));
-  if (anchorCands.length === 0) return null;
-  const anchor = pick(rng, anchorCands);
-
-  const fromAnchor = walkDistances(tiles, anchor.x, anchor.y);
-  const spawnToAnchor = fromSpawn[anchor.y * N + anchor.x];
-  const stairsCands = candidates(
-    (x, y) =>
-      !(x === anchor.x && y === anchor.y) &&
-      inRange(fromAnchor, x, y, 4, PATH_BUDGET - spawnToAnchor),
-  );
+  let stairsCands = candidates((x, y) => inRange(fromSpawn, x, y, 12, PATH_BUDGET));
+  if (stairsCands.length === 0) stairsCands = candidates((x, y) => inRange(fromSpawn, x, y, 6, PATH_BUDGET));
   if (stairsCands.length === 0) return null;
   const stairs = pick(rng, stairsCands);
   tiles[stairs.y][stairs.x] = TILE.STAIRS;
 
-  // 4. Shortcut corridor from spawn room to stairwell room, blocked mid-way by
-  //    a closed gate (opens from the stairwell side; persists across loops).
-  const stairsRoom = rooms.find((r) => inRoom(r, stairs.x, stairs.y))!;
-  const beforeShortcut = new Set(corridor);
-  carveL(spawn, roomCenter(stairsRoom));
-  const shortcutTiles = [...corridor].filter((idx) => !beforeShortcut.has(idx));
-  if (shortcutTiles.length === 0) return null; // nowhere to put a gate
-  const gateListIdx = shortcutTiles.length >> 1;
-  const gateIdx = shortcutTiles[gateListIdx];
-  const gateX = gateIdx % N;
-  const gateY = Math.floor(gateIdx / N);
-  tiles[gateY][gateX] = TILE.SHORTCUT_GATE;
-  corridor.delete(gateIdx);
-  // shortcutTiles walks spawn -> stairsRoom (Section 7: "opens only from the
-  // stairwell side"); the entry just past the gate is that stairwell-side tile.
-  const stairsSideIdx = shortcutTiles[Math.min(shortcutTiles.length - 1, gateListIdx + 1)];
-  const gateStairsSideX = stairsSideIdx % N;
-  const gateStairsSideY = Math.floor(stairsSideIdx / N);
-
-  // 5. Walls around all carved space, then doors where a 1-wide corridor meets
+  // 4. Walls around all carved space, then doors where a 1-wide corridor meets
   //    a room.
   for (let y = 0; y < N; y++) {
     for (let x = 0; x < N; x++) {
@@ -296,18 +280,14 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
     if (ORTHO.some(([dx, dy]) => inAnyRoom(x + dx, y + dy))) tiles[y][x] = TILE.DOOR;
   }
 
-  // 6. The mandated turn-budget check on the finished geometry.
+  // 5. The mandated turn-budget check on the finished geometry.
   const distSpawn = walkDistances(tiles, spawn.x, spawn.y);
-  const legA = distSpawn[anchor.y * N + anchor.x];
-  const legB = walkDistances(tiles, anchor.x, anchor.y)[stairs.y * N + stairs.x];
-  if (legA < 0 || legB < 0 || legA + legB > PATH_BUDGET) return null;
+  const spawnToStairs = distSpawn[stairs.y * N + stairs.x];
+  if (spawnToStairs < 0 || spawnToStairs > PATH_BUDGET) return null;
 
-  // 7. Chokepoint guards: 1-2 enemies on 1-wide corridor tiles that lie on the
-  //    shortest spawn -> Anchor -> Stairs route (kept off the player's doorstep).
-  const routeTiles = [
-    ...(shortestPath(tiles, spawn, anchor) ?? []),
-    ...(shortestPath(tiles, anchor, stairs) ?? []),
-  ];
+  // 6. Chokepoint guards: 1-2 enemies on 1-wide corridor tiles that lie on the
+  //    shortest spawn -> Stairs route (kept off the player's doorstep).
+  const routeTiles = shortestPath(tiles, spawn, stairs) ?? [];
   const chokeCands: Point[] = [];
   const seenChoke = new Set<number>();
   for (const p of routeTiles) {
@@ -322,19 +302,20 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
 
   const occupied = new Set<number>([
     spawn.y * N + spawn.x,
-    anchor.y * N + anchor.x,
     stairs.y * N + stairs.x,
-    gateIdx,
   ]);
 
-  // 8. Enemies: 3-5 total from the floor's mix, chokepoint guards first.
-  //    F1: Grunts/Bats. F2 adds Turrets/Wraiths. F3 adds one Time-Weaver Elite.
-  const pool: EnemyKind[] =
-    floorNumber >= 2
-      ? ['BONE_GRUNT', 'EMBER_BAT', 'VOLT_TURRET', 'FROST_WRAITH']
-      : ['BONE_GRUNT', 'EMBER_BAT'];
-  const totalEnemies = randInt(rng, 3, 5);
+  // 7. Enemies: 3-6 total from the floor's biome mix, chokepoint guards first.
+  const pool = enemyPoolForFloor(floorNumber);
+  const countRange = enemyCountRangeForFloor(floorNumber);
+  const totalEnemies = randInt(rng, countRange.min, countRange.max);
   const enemies: Enemy[] = [];
+
+  const spawnEnemy = (kind: EnemyKind, x: number, y: number): void => {
+    const enemy = createEnemy(kind, `f${floorNumber}-enemy-${enemies.length}`, x, y);
+    scaleEnemyForDepth(enemy, floorNumber);
+    enemies.push(enemy);
+  };
 
   const chokeCount = Math.min(chokeCands.length, randInt(rng, 1, 2));
   for (let i = 0; i < chokeCount; i++) {
@@ -342,30 +323,52 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
     if (free.length === 0) break;
     const pos = pick(rng, free);
     occupied.add(pos.y * N + pos.x);
-    enemies.push(createEnemy(pick(rng, pool), `f${floorNumber}-enemy-${enemies.length}`, pos.x, pos.y));
+    spawnEnemy(pick(rng, pool), pos.x, pos.y);
   }
   if (enemies.length === 0) return null;
 
   const roomKinds: EnemyKind[] = [];
-  while (enemies.length + roomKinds.length < totalEnemies) roomKinds.push(pick(rng, pool));
-  if (floorNumber >= 3 && roomKinds.length > 0) roomKinds[0] = 'TIME_WEAVER';
+  while (enemies.length + roomKinds.length < totalEnemies) {
+    const kind = pick(rng, pool);
+    roomKinds.push(kind);
+    // Volt-Hound pack hunter (Section 6C, Phase 14): "spawns in pairs" — claim
+    // the next budget slot for its pack-mate instead of an independent draw,
+    // as long as the floor's enemy-count budget still has room for it.
+    if (kind === 'VOLT_HOUND' && enemies.length + roomKinds.length < totalEnemies) roomKinds.push('VOLT_HOUND');
+  }
+  if (floorNumber >= 21 && roomKinds.length > 0) roomKinds[0] = 'TIME_WEAVER';
+
+  let openHoundPos: Point | null = null;
   for (const kind of roomKinds) {
-    const spots = candidates(
-      (x, y) =>
-        tiles[y][x] === TILE.FLOOR && distSpawn[y * N + x] >= 6 && !occupied.has(y * N + x),
-    );
-    if (spots.length === 0) return null;
-    const pos = pick(rng, spots);
+    let pos: Point | undefined;
+    // Land this hound next to the pack-mate placed just before it, if there's
+    // an open adjacent tile; otherwise it falls through to an independent spot
+    // below (still a pair in composition, just not adjacent this floor).
+    if (kind === 'VOLT_HOUND' && openHoundPos) {
+      const adjacent = ORTHO.map(([dx, dy]) => ({ x: openHoundPos!.x + dx, y: openHoundPos!.y + dy })).filter(
+        (p) => tiles[p.y]?.[p.x] === TILE.FLOOR && !occupied.has(p.y * N + p.x),
+      );
+      if (adjacent.length > 0) pos = pick(rng, adjacent);
+      openHoundPos = null;
+    }
+    if (!pos) {
+      const spots = candidates(
+        (x, y) => tiles[y][x] === TILE.FLOOR && distSpawn[y * N + x] >= 6 && !occupied.has(y * N + x),
+      );
+      if (spots.length === 0) return null;
+      pos = pick(rng, spots);
+      if (kind === 'VOLT_HOUND') openHoundPos = pos;
+    }
     occupied.add(pos.y * N + pos.x);
-    enemies.push(createEnemy(kind, `f${floorNumber}-enemy-${enemies.length}`, pos.x, pos.y));
+    spawnEnemy(kind, pos.x, pos.y);
   }
 
-  // 9. The Anchor chest plus 1-2 loot chests with seed-determined contents.
+  // 8. 1-2 loot chests with seed-determined positions.
   // Fun & Feel #9: when a chokepoint guard exists, the first chest is biased
   // to sit just past it (farther from spawn than the guard, within 3 tiles)
   // — sharpening the existing "fight through or go around" tension instead
   // of scattering every chest fully independently of what's gating it.
-  const items: WorldItem[] = [{ item: createAnchorItem(`f${floorNumber}-anchor`), x: anchor.x, y: anchor.y }];
+  const items: WorldItem[] = [];
   const chestCount = randInt(rng, 1, 2);
   const chokeGuards = enemies.filter((e) => chokeCands.some((c) => c.x === e.x && c.y === e.y));
   for (let i = 0; i < chestCount; i++) {
@@ -409,15 +412,8 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
     items,
     spawnX: spawn.x,
     spawnY: spawn.y,
-    anchorX: anchor.x,
-    anchorY: anchor.y,
     stairsX: stairs.x,
     stairsY: stairs.y,
-    gateX,
-    gateY,
-    gateStairsSideX,
-    gateStairsSideY,
-    shortcutId: `f${floorNumber}-shortcut`,
   };
 }
 
@@ -425,6 +421,7 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
 export function enterFloor(state: GameState, floorNumber: number): GeneratedFloor {
   const floor = generateFloor(state.persistent.rngSeed, floorNumber);
   state.run.currentFloor = floorNumber;
+  state.run.turnsRemaining = floorTurnLimit(state);
   state.run.playerX = floor.spawnX;
   state.run.playerY = floor.spawnY;
   state.dungeon.width = N;
@@ -437,17 +434,6 @@ export function enterFloor(state: GameState, floorNumber: number): GeneratedFloo
   state.dungeon.spawnY = floor.spawnY;
   state.dungeon.expiringTiles = [];
   state.dungeon.telegraphTiles = [];
-  state.dungeon.shortcutGate = {
-    x: floor.gateX,
-    y: floor.gateY,
-    stairsSideX: floor.gateStairsSideX,
-    stairsSideY: floor.gateStairsSideY,
-    shortcutId: floor.shortcutId,
-  };
-  // Section 7: a Shortcut Gate opened in an earlier loop stays open forever.
-  if (state.persistent.unlockedShortcuts.includes(floor.shortcutId)) {
-    state.dungeon.tiles[floor.gateY][floor.gateX] = TILE.FLOOR;
-  }
   return floor;
 }
 
@@ -463,6 +449,10 @@ export function floorToAscii(floor: GeneratedFloor): string {
     FROST_WRAITH: 'w',
     TIME_WEAVER: 'W',
     CHRONO_LICH: 'L',
+    BONE_KNIGHT: 'K',
+    CINDER_SHAMAN: 'C',
+    VOLT_HOUND: 'h',
+    FROST_SENTINEL: 'S',
   };
   for (const e of floor.enemies) grid[e.y][e.x] = enemyGlyphs[e.kind];
   grid[floor.spawnY][floor.spawnX] = '@';

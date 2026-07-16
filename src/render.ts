@@ -1,61 +1,29 @@
-// Canvas world rendering (GDD Sections 4 & 8): sprites, camera, and the
-// per-frame draw of tiles -> world items -> enemies -> player. The canvas is
-// strictly game-world — no UI is ever drawn here.
+// Canvas world rendering (GDD Sections 4 & 8): spritesheet tiles, camera, and
+// the per-frame draw of tiles -> world items -> enemies -> player. The canvas
+// is strictly game-world — no UI is ever drawn here. Game-world art comes from
+// the full-color spritesheet (assets.ts + sprites.ts); the amber palette is
+// retained for canvas UI accents (health bars, telegraphs, particles, text).
 
 import {
   COLOR_BG,
   COLOR_LIGHT,
   COLOR_MID,
   COLOR_PLAYER_LIGHT,
-  COLOR_PLAYER_MID,
   COLOR_ENEMY_LIGHT,
   COLOR_ENEMY_MID,
   COLOR_FLASH,
 } from './palette';
 import { TILE } from './mapgen';
+import { spritesheet, SPRITE_PX } from './assets';
+import { SPRITES, type SpriteRef } from './sprites';
 import { PLAYER_ID, updateAnimations, getEntityVisual, getDeathGhosts, getParticles } from './animation';
 import type { GhostVisual } from './animation';
 import { drawGlyphText, getFloatingTexts, measureGlyphText, type FloatKind } from './floatingText';
 import type { GameState, Enemy } from './types';
-import type { Sprite } from './sprites';
-import {
-  PLAYER_SPRITE,
-  PLAYER_SPRITE_UP,
-  PLAYER_SPRITE_SIDE,
-  BONE_GRUNT_SPRITE,
-  EMBER_BAT_SPRITE,
-  VOLT_TURRET_SPRITE,
-  FROST_WRAITH_SPRITE,
-  TIME_WEAVER_SPRITE,
-  CHRONO_LICH_SPRITE,
-  WALL_SPRITE,
-  DOOR_SPRITE,
-  STAIRS_SPRITE,
-  ANCHOR_SPRITE,
-  SHORTCUT_GATE_SPRITE,
-  BOSS_GATE_SPRITE,
-  CHEST_SPRITE,
-  WEAPON_PICKUP_SPRITE,
-  ACCESSORY_PICKUP_SPRITE,
-  POTION_SPRITE,
-  CONSUMABLE_PICKUP_SPRITE,
-  TIME_SHARD_SPRITE,
-  FIRE_HAZARD_SPRITE,
-} from './sprites';
 
 export const TILE_SIZE = 8;
 export const VIEWPORT_TILES_W = 30; // 240 / 8
 export const VIEWPORT_TILES_H = 20; // 160 / 8
-
-export interface SpriteColors {
-  light: string;
-  mid: string;
-}
-
-const TERRAIN_COLORS: SpriteColors = { light: COLOR_LIGHT, mid: COLOR_MID };
-const PLAYER_COLORS: SpriteColors = { light: COLOR_PLAYER_LIGHT, mid: COLOR_PLAYER_MID };
-const ENEMY_COLORS: SpriteColors = { light: COLOR_ENEMY_LIGHT, mid: COLOR_ENEMY_MID };
-const FLASH_COLORS: SpriteColors = { light: COLOR_FLASH, mid: COLOR_FLASH };
 
 const FLOAT_COLOR: Record<FloatKind, string> = {
   damage: COLOR_LIGHT,
@@ -64,53 +32,104 @@ const FLOAT_COLOR: Record<FloatKind, string> = {
   turns: COLOR_PLAYER_LIGHT,
 };
 
-/** Draws an 8x8 sprite matrix at pixel (px, py); 0 = transparent, 1 = light, 2 = midtone. */
-export function drawSprite(
+/**
+ * Draws one spritesheet cell at canvas pixel (dx, dy).
+ * Source rect: sx = col * 8, sy = row * 8, 8x8 (GDD Section 4).
+ * flipX mirrors around the tile via translate + scale(-1, 1) — used for LEFT facing.
+ */
+export function drawTile(
   ctx: CanvasRenderingContext2D,
-  sprite: Sprite,
-  px: number,
-  py: number,
+  col: number,
+  row: number,
+  dx: number,
+  dy: number,
   flipX = false,
-  colors: SpriteColors = TERRAIN_COLORS,
 ): void {
-  for (let y = 0; y < sprite.length; y++) {
-    const row = sprite[y];
-    for (let x = 0; x < row.length; x++) {
-      const v = row[flipX ? row.length - 1 - x : x];
-      if (v === 0) continue;
-      ctx.fillStyle = v === 1 ? colors.light : colors.mid;
-      ctx.fillRect(px + x, py + y, 1, 1);
-    }
+  const sx = col * SPRITE_PX;
+  const sy = row * SPRITE_PX;
+  if (flipX) {
+    ctx.save();
+    ctx.translate(dx + TILE_SIZE, dy);
+    ctx.scale(-1, 1);
+    ctx.drawImage(spritesheet, sx, sy, SPRITE_PX, SPRITE_PX, 0, 0, TILE_SIZE, TILE_SIZE);
+    ctx.restore();
+  } else {
+    ctx.drawImage(spritesheet, sx, sy, SPRITE_PX, SPRITE_PX, dx, dy, TILE_SIZE, TILE_SIZE);
   }
 }
 
-const TILE_SPRITES: Partial<Record<number, Sprite>> = {
-  [TILE.WALL]: WALL_SPRITE,
-  [TILE.DOOR]: DOOR_SPRITE,
-  [TILE.STAIRS]: STAIRS_SPRITE,
-  [TILE.SHORTCUT_GATE]: SHORTCUT_GATE_SPRITE,
-  [TILE.BOSS_GATE]: BOSS_GATE_SPRITE,
-  [TILE.FIRE_HAZARD]: FIRE_HAZARD_SPRITE,
+// Damage-flash support: full-color sprites can't be recolored per-pixel like
+// the old matrices, so the white flash renders the cell's silhouette through
+// a tiny offscreen scratch canvas (draw cell, then source-in fill).
+const scratch = document.createElement('canvas');
+scratch.width = SPRITE_PX;
+scratch.height = SPRITE_PX;
+const scratchCtx = scratch.getContext('2d')!;
+scratchCtx.imageSmoothingEnabled = false;
+
+function drawTileFlash(
+  ctx: CanvasRenderingContext2D,
+  col: number,
+  row: number,
+  dx: number,
+  dy: number,
+  flipX = false,
+): void {
+  scratchCtx.globalCompositeOperation = 'source-over';
+  scratchCtx.clearRect(0, 0, SPRITE_PX, SPRITE_PX);
+  scratchCtx.drawImage(spritesheet, col * SPRITE_PX, row * SPRITE_PX, SPRITE_PX, SPRITE_PX, 0, 0, SPRITE_PX, SPRITE_PX);
+  scratchCtx.globalCompositeOperation = 'source-in';
+  scratchCtx.fillStyle = COLOR_FLASH;
+  scratchCtx.fillRect(0, 0, SPRITE_PX, SPRITE_PX);
+  if (flipX) {
+    ctx.save();
+    ctx.translate(dx + TILE_SIZE, dy);
+    ctx.scale(-1, 1);
+    ctx.drawImage(scratch, 0, 0, SPRITE_PX, SPRITE_PX, 0, 0, TILE_SIZE, TILE_SIZE);
+    ctx.restore();
+  } else {
+    ctx.drawImage(scratch, 0, 0, SPRITE_PX, SPRITE_PX, dx, dy, TILE_SIZE, TILE_SIZE);
+  }
+}
+
+function drawRef(ctx: CanvasRenderingContext2D, ref: SpriteRef, dx: number, dy: number, flipX = false, flash = false): void {
+  if (flash) drawTileFlash(ctx, ref.col, ref.row, dx, dy, flipX);
+  else drawTile(ctx, ref.col, ref.row, dx, dy, flipX);
+}
+
+const TILE_REFS: Partial<Record<number, SpriteRef>> = {
+  [TILE.FLOOR]: SPRITES.FLOOR,
+  [TILE.WALL]: SPRITES.WALL,
+  [TILE.DOOR]: SPRITES.DOOR,
+  [TILE.STAIRS]: SPRITES.STAIRS,
+  [TILE.SHORTCUT_GATE]: SPRITES.SHORTCUT_GATE,
+  [TILE.BOSS_GATE]: SPRITES.BOSS_GATE,
+  [TILE.FIRE_HAZARD]: SPRITES.FIRE_HAZARD,
+  [TILE.SHOP_TERMINAL]: SPRITES.SHOP_TERMINAL,
 };
 
-const ENEMY_SPRITES: Record<Enemy['kind'], Sprite> = {
-  BONE_GRUNT: BONE_GRUNT_SPRITE,
-  EMBER_BAT: EMBER_BAT_SPRITE,
-  VOLT_TURRET: VOLT_TURRET_SPRITE,
-  FROST_WRAITH: FROST_WRAITH_SPRITE,
-  TIME_WEAVER: TIME_WEAVER_SPRITE,
-  CHRONO_LICH: CHRONO_LICH_SPRITE,
+const ENEMY_REFS: Record<Enemy['kind'], SpriteRef> = {
+  BONE_GRUNT: SPRITES.BONE_GRUNT,
+  EMBER_BAT: SPRITES.EMBER_BAT,
+  VOLT_TURRET: SPRITES.VOLT_TURRET,
+  FROST_WRAITH: SPRITES.FROST_WRAITH,
+  TIME_WEAVER: SPRITES.TIME_WEAVER,
+  CHRONO_LICH: SPRITES.CHRONO_LICH,
+  BONE_KNIGHT: SPRITES.BONE_KNIGHT,
+  CINDER_SHAMAN: SPRITES.CINDER_SHAMAN,
+  VOLT_HOUND: SPRITES.VOLT_HOUND,
+  FROST_SENTINEL: SPRITES.FROST_SENTINEL,
 };
 
 // Fun & Feel #2: world-item pickups read as their own kind instead of one
 // generic chest icon (ANCHOR keeps its own dedicated sprite, drawn separately).
-const WORLD_ITEM_SPRITES: Partial<Record<string, Sprite>> = {
-  WEAPON: WEAPON_PICKUP_SPRITE,
-  ACCESSORY: ACCESSORY_PICKUP_SPRITE,
-  POTION: POTION_SPRITE,
-  CONSUMABLE: CONSUMABLE_PICKUP_SPRITE,
-  TIME_SHARD: TIME_SHARD_SPRITE,
-  ANCHOR: ANCHOR_SPRITE,
+const WORLD_ITEM_REFS: Partial<Record<string, SpriteRef>> = {
+  WEAPON: SPRITES.WEAPON,
+  ACCESSORY: SPRITES.ACCESSORY,
+  POTION: SPRITES.POTION,
+  CONSUMABLE: SPRITES.CONSUMABLE,
+  TIME_SHARD: SPRITES.TIME_SHARD,
+  ANCHOR: SPRITES.ANCHOR,
 };
 
 function clamp(v: number, lo: number, hi: number): number {
@@ -126,27 +145,15 @@ export function computeCamera(state: GameState): { x: number; y: number } {
   };
 }
 
+/** LEFT mirrors the sheet cell; UP/DOWN/RIGHT draw it as-authored (GDD Section 8). */
 function drawPlayer(
   ctx: CanvasRenderingContext2D,
   facing: GameState['run']['facing'],
   px: number,
   py: number,
-  colors: SpriteColors,
+  flash = false,
 ): void {
-  switch (facing) {
-    case 'DOWN':
-      drawSprite(ctx, PLAYER_SPRITE, px, py, false, colors);
-      break;
-    case 'UP':
-      drawSprite(ctx, PLAYER_SPRITE_UP, px, py, false, colors);
-      break;
-    case 'RIGHT':
-      drawSprite(ctx, PLAYER_SPRITE_SIDE, px, py, false, colors);
-      break;
-    case 'LEFT':
-      drawSprite(ctx, PLAYER_SPRITE_SIDE, px, py, true, colors);
-      break;
-  }
+  drawRef(ctx, SPRITES.PLAYER, px, py, facing === 'LEFT', flash);
 }
 
 /** A 2px enemy health bar, drawn just above the sprite: a dark backdrop row plus a red fill/track row. */
@@ -166,9 +173,9 @@ function drawHealthBar(ctx: CanvasRenderingContext2D, px: number, py: number, hp
 function drawGhost(ctx: CanvasRenderingContext2D, ghost: GhostVisual, px: number, py: number): void {
   ctx.globalAlpha = ghost.alpha;
   if (ghost.kind === 'PLAYER') {
-    drawPlayer(ctx, ghost.facing ?? 'DOWN', px, py, PLAYER_COLORS);
+    drawPlayer(ctx, ghost.facing ?? 'DOWN', px, py);
   } else {
-    drawSprite(ctx, ENEMY_SPRITES[ghost.kind], px, py, false, ENEMY_COLORS);
+    drawRef(ctx, ENEMY_REFS[ghost.kind], px, py);
   }
   ctx.globalAlpha = 1;
 }
@@ -190,8 +197,8 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     for (let x = 0; x < VIEWPORT_TILES_W; x++) {
       const tx = cam.x + x;
       if (tx < 0 || tx >= width) continue;
-      const sprite = TILE_SPRITES[row[tx]];
-      if (sprite) drawSprite(ctx, sprite, x * TILE_SIZE, y * TILE_SIZE);
+      const ref = TILE_REFS[row[tx]];
+      if (ref) drawRef(ctx, ref, x * TILE_SIZE, y * TILE_SIZE);
     }
   }
 
@@ -202,8 +209,8 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     const sx = t.x - cam.x;
     const sy = t.y - cam.y;
     if (sx < 0 || sx >= VIEWPORT_TILES_W || sy < 0 || sy >= VIEWPORT_TILES_H) continue;
-    const sprite = TILE_SPRITES[t.tileType];
-    if (sprite) drawSprite(ctx, sprite, sx * TILE_SIZE, sy * TILE_SIZE);
+    const ref = TILE_REFS[t.tileType];
+    if (ref) drawRef(ctx, ref, sx * TILE_SIZE, sy * TILE_SIZE);
   }
 
   // Chrono-Lich Time-Blast telegraph (Section 11): a pulsing warning tile,
@@ -228,8 +235,8 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     // Fun & Feel #2: a chest still marks a not-yet-rerolled Dynamic Chest Loot
     // spot (its identity isn't decided until pickup), but everything else
     // reads as its own kind at a glance instead of one generic box icon.
-    const sprite = wi.chestLoot ? CHEST_SPRITE : (WORLD_ITEM_SPRITES[wi.item.kind] ?? CHEST_SPRITE);
-    drawSprite(ctx, sprite, sx * TILE_SIZE, sy * TILE_SIZE);
+    const ref = wi.chestLoot ? SPRITES.CHEST : (WORLD_ITEM_REFS[wi.item.kind] ?? SPRITES.CHEST);
+    drawRef(ctx, ref, sx * TILE_SIZE, sy * TILE_SIZE);
   }
 
   for (const e of state.dungeon.enemies) {
@@ -241,7 +248,7 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     const px = Math.round((visual.tileX - cam.x) * TILE_SIZE);
     const py = Math.round((visual.tileY - cam.y) * TILE_SIZE);
     if (e.hp < e.maxHp) drawHealthBar(ctx, px, py, e.hp, e.maxHp);
-    drawSprite(ctx, ENEMY_SPRITES[e.kind], px, py, false, visual.flashing ? FLASH_COLORS : ENEMY_COLORS);
+    drawRef(ctx, ENEMY_REFS[e.kind], px, py, false, visual.flashing);
   }
 
   for (const ghost of getDeathGhosts()) {
@@ -254,7 +261,7 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
   const playerVisual = getEntityVisual(PLAYER_ID, state.run.playerX, state.run.playerY);
   const playerPx = Math.round((playerVisual.tileX - cam.x) * TILE_SIZE);
   const playerPy = Math.round((playerVisual.tileY - cam.y) * TILE_SIZE);
-  drawPlayer(ctx, state.run.facing, playerPx, playerPy, playerVisual.flashing ? FLASH_COLORS : PLAYER_COLORS);
+  drawPlayer(ctx, state.run.facing, playerPx, playerPy, playerVisual.flashing);
 
   // 1-Bit Pixel Particles (Section 11): drawn on top of sprites.
   ctx.fillStyle = COLOR_ENEMY_LIGHT;

@@ -13,6 +13,13 @@ const STATUS_LABEL: Record<StatusEffect, string> = {
 
 let lastTurns: number | null = null;
 
+const SKILL_SLOT_IDS: readonly [string, string][] = [
+  ['skill-q', 'Q'],
+  ['skill-e', 'E'],
+  ['skill-r', 'R'],
+  ['skill-f', 'F'],
+];
+
 function el(id: string): HTMLElement {
   return document.getElementById(id)!;
 }
@@ -25,6 +32,7 @@ const HINT_STRIP: Record<GameState['ui']['currentScreen'], string> = {
   INVENTORY: 'Click: Equip/Use · I/Esc: Close',
   SKILL_MENU: 'Click: Assign Q/E, Switch Tab · K/Esc: Close',
   UPGRADE_SHOP: 'Click: Buy · Esc: Continue',
+  SHORTCUT_GATE: 'Click: Warp · Esc: Cancel',
   HELP: '?/F1/Esc: Close',
   CONFIRM: 'Click Proceed/Cancel',
   DEATH: 'Esc: Continue',
@@ -51,8 +59,12 @@ export function initHud(): void {
     <div id="action-log" class="action-log"></div>
     <div class="hud-row">
       <span id="weapon-info" class="weapon-info">Unarmed</span>
+    </div>
+    <div class="hud-row">
       <span id="skill-q" class="skill-slot">Q: --</span>
       <span id="skill-e" class="skill-slot">E: --</span>
+      <span id="skill-r" class="skill-slot">R: --</span>
+      <span id="skill-f" class="skill-slot">F: --</span>
     </div>
     <div id="hint-strip" class="hint-strip"></div>`;
 }
@@ -88,10 +100,10 @@ export function updateHud(state: GameState): void {
   statusEl.className = `status-icon status-${run.status.toLowerCase()}`;
 
   el('weapon-info').textContent = run.equippedWeapon ? run.equippedWeapon.name : 'Unarmed';
-  const q = run.activeSkills[0];
-  const e = run.activeSkills[1];
-  el('skill-q').textContent = `Q: ${q ? `${q} (Lv${state.persistent.skills[q] ?? 0})` : '--'}`;
-  el('skill-e').textContent = `E: ${e ? `${e} (Lv${state.persistent.skills[e] ?? 0})` : '--'}`;
+  SKILL_SLOT_IDS.forEach(([elId, label], i) => {
+    const skillId = run.activeSkills[i];
+    el(elId).textContent = `${label}: ${skillId ? `${skillId} (Lv${state.persistent.skills[skillId] ?? 0})` : '--'}`;
+  });
 
   // Inventory/Skill Menu are full-screen overlays; on mobile's portrait
   // layout #hud-bottom sits in normal flex flow (not absolutely positioned

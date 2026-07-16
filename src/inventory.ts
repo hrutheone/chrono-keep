@@ -122,9 +122,13 @@ export function pickupItemsAt(state: GameState, x: number, y: number): void {
 
     if (item.kind === 'ANCHOR') {
       state.dungeon.items.splice(idx, 1);
-      state.run.anchorsCollected += 1;
-      awardEchoes(state, 5, 'Anchor collected');
-      logLine(state, 'Temporal Anchor secured!');
+      const nextBiomeStart = Math.min(91, Math.floor(state.run.currentFloor / 10) * 10 + 1);
+      if (!state.persistent.unlockedAnchors.includes(nextBiomeStart)) {
+        state.persistent.unlockedAnchors.push(nextBiomeStart);
+        state.persistent.unlockedAnchors.sort((a, b) => a - b);
+      }
+      awardEchoes(state, 25, 'Anchor collected');
+      logLine(state, `Temporal Anchor secured! Floor ${nextBiomeStart} unlocked.`);
       playAnchorSfx();
       continue;
     }
@@ -148,6 +152,18 @@ export function pickupItemsAt(state: GameState, x: number, y: number): void {
     logLine(state, `Picked up ${finalItem.name}.`);
     playPickupSfx();
   }
+}
+
+/** Discards the inventory item at this slot for good — Small Improvements:
+ * the only way to clear out a duplicate/unwanted pickup once the 10-slot cap
+ * is in reach. Same context-sensitive turn cost as an equip/unequip swap. */
+export function dropItem(state: GameState, invIndex: number): void {
+  const item = state.run.inventory[invIndex];
+  if (!item) return;
+  state.run.inventory.splice(invIndex, 1);
+  chargeInventoryAction(state, false);
+  logLine(state, `Dropped ${item.name}.`);
+  playUnequipSfx();
 }
 
 function equipWeapon(state: GameState, invIndex: number, weapon: Weapon): void {

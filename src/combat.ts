@@ -26,7 +26,19 @@ function markHitStop(): void {
   hitStopPending = true;
 }
 
-const NORMAL_ENEMY_KINDS = new Set<Enemy['kind']>(['BONE_GRUNT', 'EMBER_BAT', 'VOLT_TURRET', 'FROST_WRAITH']);
+// Phase 14: the Deep-Biome Regulars are "Regular" tier per the GDD (not
+// Elite), so they belong in this set too — otherwise killing them would
+// silently award 0 Echoes and never drop Time Shards.
+const NORMAL_ENEMY_KINDS = new Set<Enemy['kind']>([
+  'BONE_GRUNT',
+  'EMBER_BAT',
+  'VOLT_TURRET',
+  'FROST_WRAITH',
+  'BONE_KNIGHT',
+  'CINDER_SHAMAN',
+  'VOLT_HOUND',
+  'FROST_SENTINEL',
+]);
 
 /** 1.5x (rounded up) attacking down the wheel, 0.5x (rounded down) attacking up it, else 1x. Chrono is exempt either way. */
 export function elementalMultiplier(attackerEl: Element, defenderEl: Element): number {
@@ -45,7 +57,7 @@ export function computeDamage(atk: number, def: number, attackerEl: Element, def
 
 /** The player has no fixed element; their equipped weapon's element (Physical if unarmed)
  * stands in for it on both offense and defense, per Section 5's "both directions" rule. */
-function playerElement(state: GameState): Element {
+export function playerElement(state: GameState): Element {
   return state.run.equippedWeapon?.element ?? 'PHYSICAL';
 }
 
@@ -328,6 +340,12 @@ export function enemyAttackPlayer(state: GameState, enemy: Enemy): void {
   if (enemy.kind === 'FROST_WRAITH' && Math.random() < 0.25) {
     applyPlayerStatus(state, 'CHILLED', 3);
     logLine(state, 'You are Chilled!');
+  }
+
+  // Volt-Hound (Section 6C, Phase 14): 25% Stun chance on hit.
+  if (enemy.kind === 'VOLT_HOUND' && Math.random() < 0.25) {
+    applyPlayerStatus(state, 'STUN', 1);
+    logLine(state, 'You are Stunned!');
   }
 
   if (state.run.equippedAccessory?.passive === 'retaliation_2') {

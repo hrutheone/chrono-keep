@@ -11,6 +11,13 @@ export const BASE_MAX_HP = 25;
 export const BASE_MAX_STAMINA = 10;
 export const BASE_TURNS = 100;
 
+/** 99-Floor Descent (Section 7): the turn counter is PER FLOOR — this is the
+ * value it refills to on every floor entry (the Turn Bonus upgrade therefore
+ * applies to every floor's counter, not once per run). */
+export function floorTurnLimit(state: GameState): number {
+  return BASE_TURNS + state.persistent.turnBonusUpgrade * 5;
+}
+
 /** Dungeon grid size (GDD Section 7: 32x32 Room & Corridor generator). */
 export const DUNGEON_SIZE = 32;
 
@@ -32,7 +39,8 @@ export function createNewGameState(): GameState {
       maxStamUpgrade: 0,
       turnBonusUpgrade: 0,
       skills: { dash: 1 },
-      unlockedShortcuts: [],
+      skillLoadout: ['dash'],
+      unlockedAnchors: [],
       stats: {
         deepestFloor: 1,
         bestTurnsRemaining: 0,
@@ -49,7 +57,7 @@ export function createNewGameState(): GameState {
       maxStamina: BASE_MAX_STAMINA,
       turnsRemaining: BASE_TURNS,
       currentFloor: 1,
-      anchorsCollected: 0,
+      startFloor: 1,
       playerX: 0, // Placed at the spawn room by the generator (Phase 1)
       playerY: 0,
       facing: 'DOWN',
@@ -78,7 +86,6 @@ export function createNewGameState(): GameState {
       spawnY: 0,
       expiringTiles: [],
       telegraphTiles: [],
-      shortcutGate: null,
     },
 
     ui: {
@@ -106,19 +113,24 @@ export function rerollSeedKeepProgress(state: GameState): void {
 }
 
 /** Resets `run` to a fresh loop's starting values from `persistent`'s current
- * upgrades — shared by the Full Loop Reset (death/timeout) and New Game+
- * (victory), both of which keep every permanent upgrade/skill. */
-export function resetRunForNewLoop(state: GameState): void {
+ * upgrades — shared by the Full Loop Reset (death/timeout), New Game+
+ * (victory), and the Hub's Shortcut Gate (Phase 13), all of which keep every
+ * permanent upgrade/skill. `startFloor` defaults to 1 (Full Loop Reset/New
+ * Game+ always restart there); the Shortcut Gate passes its warp destination. */
+export function resetRunForNewLoop(state: GameState, startFloor = 1): void {
   state.run.maxHp = BASE_MAX_HP + state.persistent.maxHpUpgrade * 5;
   state.run.currentHp = state.run.maxHp;
   state.run.maxStamina = BASE_MAX_STAMINA + state.persistent.maxStamUpgrade * 2;
   state.run.currentStamina = state.run.maxStamina;
-  state.run.turnsRemaining = BASE_TURNS + state.persistent.turnBonusUpgrade * 5;
-  state.run.anchorsCollected = 0;
+  state.run.turnsRemaining = floorTurnLimit(state);
+  state.run.startFloor = startFloor;
   state.run.inventory = [];
   state.run.equippedWeapon = startingWeapon();
   state.run.equippedAccessory = null;
-  state.run.activeSkills = state.persistent.skills.dash ? ['dash'] : [];
+  // Small Improvements: carry the player's Q/E/R/F loadout across the loop
+  // reset instead of collapsing back to just Dash on Q every time. Copied
+  // (not aliased) so run and persistent stay independently mutable.
+  state.run.activeSkills = [...state.persistent.skillLoadout];
   state.run.status = 'NONE';
   state.run.statusTurns = 0;
   state.run.facing = 'DOWN';

@@ -64,8 +64,8 @@ function castDash(state: GameState, level: number): void {
   playSkillSfx('dash');
   if (moved > 0) {
     pickupItemsAt(state, state.run.playerX, state.run.playerY);
-    tryDescendIfOnStairs(state);
-    if (level >= 3) {
+    const descended = tryDescendIfOnStairs(state);
+    if (!descended && level >= 3) {
       state.run.turnsRemaining += 1;
       logLine(state, 'Dash Lvl 3 refunds a turn.');
     }
@@ -167,9 +167,10 @@ const CASTERS: Record<string, (state: GameState, level: number) => void> = {
   ice_aegis: castIceAegis,
 };
 
-/** Fires the skill mapped to hotkey Q (0) or E (1). Returns the resolvePlayerTurn()
- * promise (or a resolved no-op) so programmatic callers can await full resolution. */
-export function useSkill(state: GameState, slotIndex: 0 | 1): Promise<void> {
+/** Fires the skill mapped to hotkey Q/E/R/F (0-3, Small Improvements: 2 slots
+ * -> 4). Returns the resolvePlayerTurn() promise (or a resolved no-op) so
+ * programmatic callers can await full resolution. */
+export function useSkill(state: GameState, slotIndex: 0 | 1 | 2 | 3): Promise<void> {
   if (consumeStunnedAction(state)) return Promise.resolve();
 
   const skillId = state.run.activeSkills[slotIndex];
@@ -196,22 +197,24 @@ export function useSkill(state: GameState, slotIndex: 0 | 1): Promise<void> {
   state.run.braced = false;
   state.run.currentStamina -= cost;
 
+  const floorBeforeCast = state.run.currentFloor;
   caster(state, level);
+  if (state.run.currentFloor !== floorBeforeCast) return Promise.resolve();
 
   return resolvePlayerTurn(state, 'skill');
 }
 
-/** Wires Q (slot 0) and E (slot 1) to the game state. */
+/** Q/E/R/F -> slots 0-3 (Small Improvements). */
+const SLOT_KEYS: Record<string, 0 | 1 | 2 | 3> = { q: 0, e: 1, r: 2, f: 3 };
+
+/** Wires Q/E/R/F to the game state. */
 export function installSkillInput(state: GameState): void {
   window.addEventListener('keydown', (ev) => {
     if (state.ui.currentScreen !== 'GAME' || isRunOver(state) || isTurnBusy()) return;
     const key = ev.key.toLowerCase();
-    if (key === 'q') {
-      ev.preventDefault();
-      useSkill(state, 0);
-    } else if (key === 'e') {
-      ev.preventDefault();
-      useSkill(state, 1);
-    }
+    const slot = SLOT_KEYS[key];
+    if (slot === undefined) return;
+    ev.preventDefault();
+    useSkill(state, slot);
   });
 }

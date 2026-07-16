@@ -11,9 +11,9 @@ const MOVE_MS = 120;
 const ATTACK_MS = 150;
 const HIT_FLASH_MS = 150;
 const DEATH_MS = 350;
-const IDLE_PERIOD_MS = 900;
+const IDLE_PERIOD_MS = 1600; // slow breathing cycle (GDD Section 4)
 const ATTACK_LUNGE = 0.25; // tile-fractions
-const IDLE_BOB = 1 / 8; // one pixel at an 8px tile
+const IDLE_BOB_PX = 2; // sine amplitude: +/- canvas pixels at an 8px tile
 
 export const PLAYER_ID = '__player__';
 export type GhostKind = 'PLAYER' | Enemy['kind'];
@@ -199,9 +199,13 @@ export function getEntityVisual(id: string, logicalX: number, logicalY: number):
       tileY += pulse.dy * k;
     }
   } else if (moveT >= 1) {
-    // Idle bob only when neither mid-move nor mid-attack.
-    const phase = (now + track.idlePhase) % IDLE_PERIOD_MS;
-    tileY += phase < IDLE_PERIOD_MS / 2 ? 0 : -IDLE_BOB;
+    // Idle bob only when neither mid-move nor mid-attack: a slow Math.sin()
+    // vertical drift (+/- IDLE_BOB_PX canvas pixels, GDD Section 4) so
+    // single-frame spritesheet cells read as breathing/floating. Each entity
+    // keeps its own random idlePhase so a room never bobs in lockstep.
+    // render.ts rounds final pixel positions, keeping the art on whole pixels.
+    const phase = ((now + track.idlePhase) % IDLE_PERIOD_MS) / IDLE_PERIOD_MS;
+    tileY += Math.sin(phase * Math.PI * 2) * (IDLE_BOB_PX / 8);
   }
 
   return { tileX, tileY, flashing: now < track.hitFlashUntil };

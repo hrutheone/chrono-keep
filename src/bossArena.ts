@@ -1,6 +1,5 @@
-// Floor 4 Boss Arena (GDD Section 7): a fixed, hand-authored layout — never
-// touches rng.ts/mapgen.ts's seeded generator. Reached through the Boss Gate
-// once `run.anchorsCollected === 3` (movement.ts wires the actual check).
+// Legacy Chrono-Lich arena from the pre-99-floor build. Phase 16 relocates
+// and re-stats this fight for Floor 99.
 
 import { createEnemy, scaleEnemyForNgPlus } from './content';
 import { TILE } from './mapgen';
@@ -64,8 +63,7 @@ export function enterBossFloor(state: GameState): void {
   state.run.playerY = floor.spawnY;
   state.dungeon.width = N;
   state.dungeon.height = N;
-  // Fixes a latent Phase 8 bug: without this, Recall Rune on the boss floor
-  // would teleport back to Floor 3's stale spawn point instead of the arena's.
+  // Recall Rune must return to the arena entry point, not the prior floor.
   state.dungeon.spawnX = floor.spawnX;
   state.dungeon.spawnY = floor.spawnY;
   state.dungeon.tiles = floor.tiles;
@@ -74,5 +72,4 @@ export function enterBossFloor(state: GameState): void {
   state.dungeon.items = floor.items;
   state.dungeon.expiringTiles = [];
   state.dungeon.telegraphTiles = [];
-  state.dungeon.shortcutGate = null;
 }

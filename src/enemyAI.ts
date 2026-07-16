@@ -16,12 +16,15 @@ const ORTHO: ReadonlyArray<readonly [number, number]> = [
   [0, -1],
 ];
 
-// Volt-Turret's "fires every 2nd turn" cadence, keyed by enemy id (pruned each phase).
-const turretTimers = new Map<string, number>();
+// Per-id "every Nth activation" cadence counter, pruned each phase. Shared by
+// every enemy whose behavior fires on a fixed cycle rather than every turn —
+// Volt-Turret (every 2nd), Cinder-Shaman (every 3rd), Frost-Sentinel (every
+// 2nd) — since it's the same counting pattern regardless of what it gates.
+const activationCounters = new Map<string, number>();
 
-function pruneTurretTimers(state: GameState): void {
+function pruneActivationCounters(state: GameState): void {
   const liveIds = new Set(state.dungeon.enemies.map((e) => e.id));
-  for (const id of turretTimers.keys()) if (!liveIds.has(id)) turretTimers.delete(id);
+  for (const id of activationCounters.keys()) if (!liveIds.has(id)) activationCounters.delete(id);
 }
 
 function inBounds(state: GameState, x: number, y: number): boolean {
@@ -82,6 +85,34 @@ function chaseStep(state: GameState, enemy: Enemy, steps: number, respectWalls: 
   }
 }
 
+/** Cinder-Shaman's kite (Phase 14): the mirror of chaseStep — steps AWAY from
+ * the player along the longer axis first, never attacking (fleeing should
+ * never accidentally bump into the player) and never stepping onto them. */
+function fleeStep(state: GameState, enemy: Enemy, steps: number): void {
+  for (let i = 0; i < steps; i++) {
+    const ddx = enemy.x - state.run.playerX;
+    const ddy = enemy.y - state.run.playerY;
+    const stepX: readonly [number, number] = [Math.sign(ddx), 0];
+    const stepY: readonly [number, number] = [0, Math.sign(ddy)];
+    const attempts = Math.abs(ddx) >= Math.abs(ddy) ? [stepX, stepY] : [stepY, stepX];
+
+    let moved = false;
+    for (const [ax, ay] of attempts) {
+      if (ax === 0 && ay === 0) continue;
+      const nx = enemy.x + ax;
+      const ny = enemy.y + ay;
+      if (nx === state.run.playerX && ny === state.run.playerY) continue;
+      if (!inBounds(state, nx, ny) || !isWalkableAt(state, nx, ny)) continue;
+      if (occupiedByOtherEnemy(state, enemy, nx, ny)) continue;
+      enemy.x = nx;
+      enemy.y = ny;
+      moved = true;
+      break;
+    }
+    if (!moved) return;
+  }
+}
+
 /** Ember-Bat: erratic — a random valid direction each step, still attacking on contact. */
 function erraticStep(state: GameState, enemy: Enemy, steps: number): void {
   for (let i = 0; i < steps; i++) {
@@ -104,8 +135,8 @@ function erraticStep(state: GameState, enemy: Enemy, steps: number): void {
 
 /** Volt-Turret: stationary, fires a 4-tile line every 2nd activation if aligned with the player. */
 function turretAct(state: GameState, enemy: Enemy): void {
-  const count = (turretTimers.get(enemy.id) ?? 0) + 1;
-  turretTimers.set(enemy.id, count);
+  const count = (activationCounters.get(enemy.id) ?? 0) + 1;
+  activationCounters.set(enemy.id, count);
   if (count % 2 !== 0) return;
 
   const sameRow = enemy.y === state.run.playerY;
@@ -123,6 +154,89 @@ function turretAct(state: GameState, enemy: Enemy): void {
     }
     if (!inBounds(state, tx, ty) || !isWalkableAt(state, tx, ty)) return;
   }
+}
+
+// Cinder-Shaman's firebomb (Section 6C, Phase 14): a 1-turn telegraph on the
+// player's CURRENT tile + its 3x3 neighborhood, matching the GDD's spelled-
+// out "after a 1-turn telegraph, it detonates in a 3x3 area" wording. Set to
+// 2, not 1: tickTelegraphTiles decrements a freshly-cast entry in the SAME
+// resolvePlayerTurn call that created it (see Chrono-Lich's identically-
+// shaped TIME_BLAST_WARNING_TURNS below), so turnsUntil=1 would detonate
+// with zero visible warning — 2 gives exactly one real turn to react.
+const FIREBOMB_TELEGRAPH_TURNS = 2;
+
+function castFirebomb(state: GameState, enemy: Enemy): void {
+  const cx = state.run.playerX;
+  const cy = state.run.playerY;
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      const tx = cx + dx;
+      const ty = cy + dy;
+      if (!inBounds(state, tx, ty) || !isWalkableAt(state, tx, ty)) continue;
+      state.dungeon.telegraphTiles.push({
+        x: tx,
+        y: ty,
+        turnsUntil: FIREBOMB_TELEGRAPH_TURNS,
+        payload: 'fire_aoe',
+        sourceAttack: enemy.attack,
+        hazard: dx === 0 && dy === 0, // only the center tile keeps burning afterward
+      });
+    }
+  }
+  logLine(state, `${ENEMY_NAME[enemy.kind]} lobs a firebomb at your position!`);
+  playBossTelegraphSfx();
+}
+
+/** Cinder-Shaman: kites to keep 4-6 tiles from the player (fleeing below 4,
+ * closing in past 6 so it isn't stranded off-screen after waking), lobbing
+ * its telegraphed firebomb every 3rd activation regardless of exact range —
+ * the GDD's behavior text ties the bomb to a turn cadence, not a distance
+ * check, unlike Volt-Turret's line shot. */
+function shamanAct(state: GameState, enemy: Enemy): void {
+  const count = (activationCounters.get(enemy.id) ?? 0) + 1;
+  activationCounters.set(enemy.id, count);
+
+  const dist = Math.abs(enemy.x - state.run.playerX) + Math.abs(enemy.y - state.run.playerY);
+  if (dist <= 1) enemyAttackPlayer(state, enemy);
+  else if (dist < 4) fleeStep(state, enemy, enemy.speed);
+  else if (dist > 6) chaseStep(state, enemy, enemy.speed, true);
+
+  if (count % 3 === 0) castFirebomb(state, enemy);
+}
+
+// Frost-Sentinel's cross pulse (Section 6C, Phase 14): same 1-turn telegraph
+// treatment as the firebomb above — the GDD doesn't spell one out for this
+// enemy, but firing a 12-tile AOE with zero warning read as an unfair
+// "gotcha" in testing, and the Bestiary-facing acceptance bar for this phase
+// wants every new AOE to read clearly before it lands. 2, not 1 — see
+// FIREBOMB_TELEGRAPH_TURNS's comment for why.
+const FROST_PULSE_TELEGRAPH_TURNS = 2;
+
+function castFrostPulse(state: GameState, enemy: Enemy): void {
+  for (const [dx, dy] of ORTHO) {
+    for (let i = 1; i <= 3; i++) {
+      const tx = enemy.x + dx * i;
+      const ty = enemy.y + dy * i;
+      if (!inBounds(state, tx, ty) || !isWalkableAt(state, tx, ty)) break;
+      state.dungeon.telegraphTiles.push({
+        x: tx,
+        y: ty,
+        turnsUntil: FROST_PULSE_TELEGRAPH_TURNS,
+        payload: 'chill_pulse',
+        sourceAttack: enemy.attack,
+      });
+    }
+  }
+  logLine(state, `${ENEMY_NAME[enemy.kind]} channels a frost pulse!`);
+  playBossTelegraphSfx();
+}
+
+/** Frost-Sentinel: stationary, fires its cross pulse every 2nd activation. */
+function sentinelAct(state: GameState, enemy: Enemy): void {
+  const count = (activationCounters.get(enemy.id) ?? 0) + 1;
+  activationCounters.set(enemy.id, count);
+  if (count % 2 !== 0) return;
+  castFrostPulse(state, enemy);
 }
 
 // Chrono-Lich (GDD Section 6C): activation counter driving its attack cadence,
@@ -144,7 +258,13 @@ function castTimeBlast(state: GameState, enemy: Enemy): void {
   ];
   for (const t of targets) {
     if (!inBounds(state, t.x, t.y) || !isWalkableAt(state, t.x, t.y)) continue;
-    state.dungeon.telegraphTiles.push({ x: t.x, y: t.y, turnsUntil: TIME_BLAST_WARNING_TURNS });
+    state.dungeon.telegraphTiles.push({
+      x: t.x,
+      y: t.y,
+      turnsUntil: TIME_BLAST_WARNING_TURNS,
+      payload: 'stun',
+      sourceAttack: enemy.attack, // unused by the 'stun' payload, kept for a uniform shape
+    });
   }
   logLine(state, `${ENEMY_NAME[enemy.kind]} channels a Time-Blast!`);
   playBossTelegraphSfx();
@@ -203,6 +323,8 @@ function actEnemy(state: GameState, enemy: Enemy): void {
   switch (enemy.kind) {
     case 'BONE_GRUNT':
     case 'TIME_WEAVER':
+    case 'BONE_KNIGHT': // Phase 14: DEF 6 is a stat-only wall, no AI difference from Bone-Grunt.
+    case 'VOLT_HOUND': // Phase 14: speed 2 chase; the 25% Stun-on-hit lives in combat.ts.
       chaseStep(state, enemy, speed, true);
       break;
     case 'EMBER_BAT':
@@ -214,6 +336,12 @@ function actEnemy(state: GameState, enemy: Enemy): void {
     case 'VOLT_TURRET':
       turretAct(state, enemy);
       break;
+    case 'CINDER_SHAMAN':
+      shamanAct(state, enemy);
+      break;
+    case 'FROST_SENTINEL':
+      sentinelAct(state, enemy);
+      break;
     case 'CHRONO_LICH':
       bossAct(state, enemy);
       break;
@@ -222,7 +350,7 @@ function actEnemy(state: GameState, enemy: Enemy): void {
 
 /** Runs one Enemy Phase: wake checks, Burn/Stun gating, then each awake enemy's behavior. */
 export function runEnemyPhase(state: GameState): void {
-  pruneTurretTimers(state);
+  pruneActivationCounters(state);
   pruneBossTimers(state);
 
   for (const enemy of state.dungeon.enemies) {

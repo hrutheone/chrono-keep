@@ -1,276 +1,60 @@
-// Programmatic 8x8 sprite matrices (GDD Section 4).
-// 0 = transparent, 1 = light (#ffb300), 2 = midtone (#996600).
+// Sprite Registry (GDD Section 4): every drawable maps to one {col, row} cell
+// of assets/spritesheet.png (Kenney Micro Roguelike — 8x8 tiles, tightly
+// packed, 16 columns x 10 rows). Source rect: sx = col * 8, sy = row * 8,
+// 8x8. Re-pointing an entity's art is a data edit here, never a code edit.
+//
+// NOTE: coordinates below were assigned by eyeballing the sheet at 10x zoom —
+// they land on sensible cells (hero, ghost, door, portal, potion, ...) but are
+// still first-pass picks. Adjust any {col, row} to taste; nothing else needs
+// to change.
 
-export type Sprite = number[][];
+export interface SpriteRef {
+  col: number;
+  row: number;
+}
 
-// Facing DOWN (front view): 2-pixel eye marker at row 1.
-export const PLAYER_SPRITE: Sprite = [
-  [0,0,1,1,1,1,0,0],
-  [0,1,2,1,1,2,1,0],
-  [0,1,1,1,1,1,1,0],
-  [0,0,1,2,2,1,0,0],
-  [0,1,1,1,1,1,1,0],
-  [0,1,0,1,1,0,1,0],
-  [0,0,1,1,1,1,0,0],
-  [0,1,0,0,0,0,1,0],
-];
+export const SHEET_COLS = 16;
+export const SHEET_ROWS = 10;
 
-// Facing UP (back view): same silhouette, no eye marker on the back of the head.
-export const PLAYER_SPRITE_UP: Sprite = [
-  [0,0,1,1,1,1,0,0],
-  [0,1,1,1,1,1,1,0],
-  [0,1,1,1,1,1,1,0],
-  [0,0,1,2,2,1,0,0],
-  [0,1,1,1,1,1,1,0],
-  [0,1,0,1,1,0,1,0],
-  [0,0,1,1,1,1,0,0],
-  [0,1,0,0,0,0,1,0],
-];
+export const SPRITES = {
+  // --- Player ---
+  PLAYER: { col: 5, row: 0 }, // orange-haired hero
 
-// Facing RIGHT (profile view, single eye toward the front); flipped
-// horizontally at draw time for LEFT.
-export const PLAYER_SPRITE_SIDE: Sprite = [
-  [0,0,1,1,1,1,0,0],
-  [0,1,1,1,1,2,1,0],
-  [0,1,1,1,1,1,1,0],
-  [0,0,1,1,2,1,0,0],
-  [0,1,1,1,1,1,1,0],
-  [0,1,0,1,1,0,1,0],
-  [0,0,1,1,1,1,0,0],
-  [0,1,0,0,0,0,1,0],
-];
+  // --- Enemies (kinds in types.ts) ---
+  BONE_GRUNT: { col: 10, row: 0 }, // grey skeletal figure
+  EMBER_BAT: { col: 11, row: 1 }, // small red critter
+  VOLT_TURRET: { col: 10, row: 2 }, // squat grey automaton
+  FROST_WRAITH: { col: 9, row: 1 }, // white ghost
+  TIME_WEAVER: { col: 8, row: 0 }, // hooded figure
+  CHRONO_LICH: { col: 13, row: 0 }, // dark, yellow-eyed horror
+  // Phase 11 roster (GDD Section 6C) — reserved now so the art pass is a
+  // data edit when the kinds land in code.
+  BONE_KNIGHT: { col: 5, row: 0 }, // armored figure
+  CINDER_SHAMAN: { col: 9, row: 0 }, // round-hatted caster
+  VOLT_HOUND: { col: 5, row: 1 }, // four-legged beast
+  FROST_SENTINEL: { col: 13, row: 1 }, // pale statue
+  INFERNO_GOLEM: { col: 12, row: 0 }, // broad red hulk
+  STORM_CALLER: { col: 7, row: 0 }, // green-garbed caster
+  GLACIAL_KNIGHT: { col: 6, row: 0 }, // plated warrior
 
-// --- Monsters ---
+  // --- Terrain (TILE values in mapgen.ts) ---
+  FLOOR: { col: 4, row: 4 }, // dark speckled ground
+  WALL: { col: 1, row: 0 }, // grey brick face
+  DOOR: { col: 4, row: 2 }, // brown door in frame
+  STAIRS: { col: 5, row: 3 }, // stairs down
+  SHORTCUT_GATE: { col: 1, row: 8 }, // green swirl portal
+  BOSS_GATE: { col: 7, row: 2 }, // golden padlock
+  FIRE_HAZARD: { col: 8, row: 8 }, // burning flame
+  SHOP_TERMINAL: { col: 3, row: 8 }, // Hub-only Upgrade Shop terminal (Phase 13)
 
-// Skull head with hollow eyes over a narrow ribcage.
-export const BONE_GRUNT_SPRITE: Sprite = [
-  [0,0,1,1,1,1,0,0],
-  [0,1,1,1,1,1,1,0],
-  [0,1,0,1,1,0,1,0],
-  [0,1,1,2,2,1,1,0],
-  [0,0,1,1,1,1,0,0],
-  [0,0,2,1,1,2,0,0],
-  [0,0,1,2,2,1,0,0],
-  [0,0,2,0,0,2,0,0],
-];
+  // --- World-item pickups (Item.kind in types.ts) ---
+  CHEST: { col: 8, row: 2 }, // urn-shaped container
+  WEAPON: { col: 6, row: 4 }, // diagonal sword
+  ACCESSORY: { col: 10, row: 5 }, // gold ring
+  POTION: { col: 7, row: 8 }, // red-liquid bottle
+  CONSUMABLE: { col: 5, row: 8 }, // banded rod/scroll
+  TIME_SHARD: { col: 4, row: 8 }, // yellow sparkles
+  ANCHOR: { col: 11, row: 5 }, // golden key ("pins" the Biome)
+} as const satisfies Record<string, SpriteRef>;
 
-// Wide wings around a small fanged body.
-export const EMBER_BAT_SPRITE: Sprite = [
-  [0,0,0,0,0,0,0,0],
-  [1,0,0,0,0,0,0,1],
-  [1,1,0,1,1,0,1,1],
-  [1,1,1,1,1,1,1,1],
-  [0,1,1,2,2,1,1,0],
-  [0,0,1,1,1,1,0,0],
-  [0,0,0,1,1,0,0,0],
-  [0,0,0,0,0,0,0,0],
-];
-
-// Boxy chassis on a base, glowing bolt core.
-export const VOLT_TURRET_SPRITE: Sprite = [
-  [0,2,2,2,2,2,2,0],
-  [0,2,1,1,1,1,2,0],
-  [0,2,1,0,1,1,2,0],
-  [0,2,1,1,0,1,2,0],
-  [0,2,1,0,1,1,2,0],
-  [0,2,1,1,1,1,2,0],
-  [0,2,2,2,2,2,2,0],
-  [2,2,2,2,2,2,2,2],
-];
-
-// Hooded ghost with dark eyes and a ragged, trailing hem.
-export const FROST_WRAITH_SPRITE: Sprite = [
-  [0,0,1,1,1,1,0,0],
-  [0,1,1,1,1,1,1,0],
-  [0,1,0,1,1,0,1,0],
-  [0,1,1,1,1,1,1,0],
-  [0,2,1,1,1,1,2,0],
-  [0,2,1,1,1,1,2,0],
-  [0,1,2,1,1,2,1,0],
-  [0,1,0,2,0,2,1,0],
-];
-
-// Robed elite holding an hourglass at its core.
-export const TIME_WEAVER_SPRITE: Sprite = [
-  [0,0,0,1,1,0,0,0],
-  [0,0,1,2,2,1,0,0],
-  [0,1,1,1,1,1,1,0],
-  [1,1,1,2,2,1,1,1],
-  [1,0,1,0,0,1,0,1],
-  [0,0,1,2,2,1,0,0],
-  [0,1,1,1,1,1,1,0],
-  [0,2,2,2,2,2,2,0],
-];
-
-// Crowned skull boss with burning eye sockets and a broad robe.
-export const CHRONO_LICH_SPRITE: Sprite = [
-  [1,0,1,0,0,1,0,1],
-  [1,1,1,1,1,1,1,1],
-  [1,2,0,1,1,0,2,1],
-  [1,1,1,2,2,1,1,1],
-  [0,1,2,1,1,2,1,0],
-  [0,1,1,1,1,1,1,0],
-  [1,1,2,1,1,2,1,1],
-  [1,2,2,1,1,2,2,1],
-];
-
-// --- Tiles ---
-
-// Solid brick courses with midtone mortar lines.
-export const WALL_SPRITE: Sprite = [
-  [1,1,1,2,1,1,1,2],
-  [1,1,1,2,1,1,1,2],
-  [2,2,2,2,2,2,2,2],
-  [1,2,1,1,1,2,1,1],
-  [1,2,1,1,1,2,1,1],
-  [2,2,2,2,2,2,2,2],
-  [1,1,1,2,1,1,1,2],
-  [1,1,1,2,1,1,1,2],
-];
-
-// Arched door with planked midtone face and a handle.
-export const DOOR_SPRITE: Sprite = [
-  [0,1,1,1,1,1,1,0],
-  [1,2,2,1,1,2,2,1],
-  [1,2,2,1,1,2,2,1],
-  [1,2,2,1,1,2,2,1],
-  [1,2,2,1,1,2,2,1],
-  [1,2,2,1,1,1,2,1],
-  [1,2,2,1,1,1,2,1],
-  [1,2,2,1,1,2,2,1],
-];
-
-// Steps descending into darkness (top-left to bottom-right).
-export const STAIRS_SPRITE: Sprite = [
-  [1,1,1,1,1,1,1,1],
-  [1,0,0,0,0,0,0,1],
-  [1,2,0,0,0,0,0,1],
-  [1,2,2,0,0,0,0,1],
-  [1,2,2,2,0,0,0,1],
-  [1,2,2,2,2,0,0,1],
-  [1,2,2,2,2,2,0,1],
-  [1,1,1,1,1,1,1,1],
-];
-
-// Temporal Anchor: an hourglass with sand mid-fall.
-export const ANCHOR_SPRITE: Sprite = [
-  [0,1,1,1,1,1,1,0],
-  [0,0,1,2,2,1,0,0],
-  [0,0,1,2,2,1,0,0],
-  [0,0,0,1,1,0,0,0],
-  [0,0,0,1,1,0,0,0],
-  [0,0,1,0,0,1,0,0],
-  [0,0,1,2,2,1,0,0],
-  [0,1,1,1,1,1,1,0],
-];
-
-// Shortcut Gate: light portcullis bars with a lever notch.
-export const SHORTCUT_GATE_SPRITE: Sprite = [
-  [1,1,1,1,1,1,1,1],
-  [1,0,2,0,0,2,0,1],
-  [1,0,2,0,0,2,0,1],
-  [1,2,2,2,2,2,2,1],
-  [1,0,2,0,0,2,0,1],
-  [1,0,2,0,0,2,0,1],
-  [1,0,2,0,0,2,0,1],
-  [1,1,1,1,1,1,1,1],
-];
-
-// Boss Gate: heavy slab bearing a skull sigil.
-export const BOSS_GATE_SPRITE: Sprite = [
-  [1,1,1,1,1,1,1,1],
-  [1,2,2,2,2,2,2,1],
-  [1,2,1,1,1,1,2,1],
-  [1,2,1,0,0,1,2,1],
-  [1,2,1,1,1,1,2,1],
-  [1,2,0,1,1,0,2,1],
-  [1,2,2,2,2,2,2,1],
-  [1,1,1,1,1,1,1,1],
-];
-
-// --- Pickups & hazards ---
-
-// Chest: lid seam across the middle, midtone latch.
-export const CHEST_SPRITE: Sprite = [
-  [0,0,0,0,0,0,0,0],
-  [0,1,1,1,1,1,1,0],
-  [1,2,2,2,2,2,2,1],
-  [1,1,1,1,1,1,1,1],
-  [1,2,2,1,1,2,2,1],
-  [1,2,2,2,2,2,2,1],
-  [1,1,1,1,1,1,1,1],
-  [0,0,0,0,0,0,0,0],
-];
-
-// Weapon pickup: diagonal sword with midtone crossguard.
-export const WEAPON_PICKUP_SPRITE: Sprite = [
-  [0,0,0,0,0,0,1,0],
-  [0,0,0,0,0,1,1,0],
-  [0,0,0,0,1,1,0,0],
-  [0,0,0,1,1,0,0,0],
-  [0,2,1,1,0,0,0,0],
-  [0,0,2,2,0,0,0,0],
-  [0,2,2,0,2,0,0,0],
-  [2,2,0,0,0,0,0,0],
-];
-
-// Potion: corked flask with liquid fill.
-export const POTION_SPRITE: Sprite = [
-  [0,0,0,2,2,0,0,0],
-  [0,0,0,1,1,0,0,0],
-  [0,0,0,1,1,0,0,0],
-  [0,0,1,0,0,1,0,0],
-  [0,1,0,2,2,0,1,0],
-  [0,1,2,2,2,2,1,0],
-  [0,1,2,2,2,2,1,0],
-  [0,0,1,1,1,1,0,0],
-];
-
-// Accessory pickup: a ring, so it reads distinctly from a chest at a glance.
-export const ACCESSORY_PICKUP_SPRITE: Sprite = [
-  [0,0,1,1,1,1,0,0],
-  [0,1,2,2,2,2,1,0],
-  [1,2,0,0,0,0,2,1],
-  [1,2,0,0,0,0,2,1],
-  [1,2,0,0,0,0,2,1],
-  [1,2,0,0,0,0,2,1],
-  [0,1,2,2,2,2,1,0],
-  [0,0,1,1,1,1,0,0],
-];
-
-// Tactical Consumable pickup: a rolled, banded scroll (distinct from the
-// corked-flask Potion silhouette).
-export const CONSUMABLE_PICKUP_SPRITE: Sprite = [
-  [1,1,0,0,0,0,1,1],
-  [1,2,1,1,1,1,2,1],
-  [0,1,1,1,1,1,1,0],
-  [0,1,2,2,2,2,1,0],
-  [0,1,2,2,2,2,1,0],
-  [0,1,1,1,1,1,1,0],
-  [1,2,1,1,1,1,2,1],
-  [1,1,0,0,0,0,1,1],
-];
-
-// Time Shard: a small faceted shard, distinct from the Anchor hourglass.
-export const TIME_SHARD_SPRITE: Sprite = [
-  [0,0,0,1,0,0,0,0],
-  [0,0,1,1,1,0,0,0],
-  [0,1,1,2,1,1,0,0],
-  [1,1,2,2,2,1,1,0],
-  [0,1,1,2,1,1,0,0],
-  [0,0,1,1,1,0,0,0],
-  [0,0,0,1,0,0,0,0],
-  [0,0,0,0,0,0,0,0],
-];
-
-// Fire hazard: flame licks over a midtone ember bed.
-export const FIRE_HAZARD_SPRITE: Sprite = [
-  [0,0,0,1,0,0,0,0],
-  [0,1,0,1,0,0,1,0],
-  [0,1,0,1,1,0,1,0],
-  [1,1,1,0,1,1,1,0],
-  [1,0,1,1,1,0,1,1],
-  [1,1,2,1,2,1,1,1],
-  [2,1,2,2,2,2,1,2],
-  [2,2,2,2,2,2,2,2],
-];
+export type SpriteName = keyof typeof SPRITES;

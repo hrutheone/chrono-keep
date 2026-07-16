@@ -4,6 +4,7 @@
 // Screens & Music and Progression SFX on top of this same engine.
 
 import { saveAudioSettings } from './persistence';
+import { HUB_FLOOR } from './hub';
 import type { Element, GameState, StatusEffect } from './types';
 
 let ctx: AudioContext | null = null;
@@ -445,6 +446,9 @@ export function updateMusicForState(state: GameState): void {
   const musicScreens = screen === 'GAME' || screen === 'INVENTORY' || screen === 'SKILL_MENU' || screen === 'HELP';
   let desired: TrackKey | null = null;
   if (screen === 'TITLE') desired = 'title';
+  // Hub (Section 9C): "the one place the Anxiety Clock never plays" — always
+  // the calm track, regardless of a possibly-stale turnsRemaining.
+  else if (musicScreens && state.run.currentFloor === HUB_FLOOR) desired = 'game';
   else if (musicScreens) desired = state.run.currentFloor >= 4 ? 'boss' : state.run.turnsRemaining < 20 ? 'game_tense' : 'game';
 
   if (desired !== currentTrackKey) {
@@ -503,7 +507,10 @@ function stopAnxietyClock(): void {
  * screens) and while unmuted; stops cleanly otherwise. */
 export function updateAnxietyClock(state: GameState): void {
   if (!ctx) return;
-  const shouldRun = state.ui.currentScreen === 'GAME' && !muted;
+  // Section 9C: the Hub is "the one place the Anxiety Clock never plays" —
+  // guarded on currentFloor rather than relying on turnsRemaining staying
+  // high, in case it's ever stale when the player warps in.
+  const shouldRun = state.ui.currentScreen === 'GAME' && state.run.currentFloor !== HUB_FLOOR && !muted;
   if (shouldRun) {
     const wasRunning = anxietyStateRef !== null;
     anxietyStateRef = state;

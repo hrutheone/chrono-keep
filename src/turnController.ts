@@ -4,15 +4,18 @@
 // Inventory actions follow Phase 3's separate context-sensitive rule and
 // never go through here.
 
-import { applyEnemyStatus, applyPlayerStatus, consumeHitStopFlag } from './combat';
+import { applyEnemyStatus, applyPlayerStatus, computeDamage, consumeHitStopFlag, playerElement } from './combat';
 import { runEnemyPhase } from './enemyAI';
-import { enterFloor, TILE, effectiveTileAt } from './mapgen';
+import { TILE, effectiveTileAt } from './mapgen';
+import { HUB_FLOOR, enterHub } from './hub';
 import { resetRunForNewLoop } from './state';
 import { logLine } from './turns';
-import { markFloorDamageTaken, onFloorEntered } from './echoes';
+import { markFloorDamageTaken } from './echoes';
 import { saveGame } from './persistence';
 import { playDeathSfx, playLoopResetSfx } from './audio';
 import { PLAYER_ID, notifyDeath } from './animation';
+import { notifyFloatingText } from './floatingText';
+import { totalDef } from './inventory';
 import type { GameState } from './types';
 
 export type PlayerActionKind = 'move' | 'attack' | 'wait' | 'skill' | 'item';
@@ -39,20 +42,62 @@ function tickExpiringTiles(state: GameState): void {
   state.dungeon.expiringTiles = state.dungeon.expiringTiles.filter((t) => t.turnsLeft > 0);
 }
 
-/** Chrono-Lich Time-Blast (Section 6C): decrements the 2-turn warning, then
- * Stuns whoever is standing on a tile the instant it detonates. */
-function tickTelegraphTiles(state: GameState): void {
-  for (const t of state.dungeon.telegraphTiles) t.turnsUntil -= 1;
-  const detonating = state.dungeon.telegraphTiles.filter((t) => t.turnsUntil <= 0);
-  for (const t of detonating) {
-    if (state.run.playerX === t.x && state.run.playerY === t.y) {
+// Cinder-Shaman's firebomb (Section 6C, Phase 14): the Fire Hazard left on
+// the 3x3's center tile burns for this many turns — same duration Flame Arc
+// Lvl 3 uses (skills.ts), so hazard tiles read consistently across sources.
+const CINDER_FIRE_HAZARD_TURNS = 2;
+
+function detonateTelegraph(state: GameState, t: GameState['dungeon']['telegraphTiles'][number]): void {
+  const hitsPlayer = state.run.playerX === t.x && state.run.playerY === t.y;
+
+  if (t.payload === 'stun') {
+    if (hitsPlayer) {
       applyPlayerStatus(state, 'STUN', 1);
       logLine(state, 'The Time-Blast detonates — you are Stunned!');
     }
     for (const enemy of state.dungeon.enemies) {
       if (enemy.x === t.x && enemy.y === t.y && enemy.kind !== 'CHRONO_LICH') applyEnemyStatus(enemy, 'STUN', 1);
     }
+    return;
   }
+
+  if (t.payload === 'fire_aoe') {
+    if (hitsPlayer) {
+      const dmg = computeDamage(t.sourceAttack, totalDef(state), 'FIRE', playerElement(state));
+      state.run.currentHp = Math.max(0, state.run.currentHp - dmg);
+      markFloorDamageTaken(state);
+      logLine(state, `The firebomb detonates — you take ${dmg} Fire damage!`);
+      notifyFloatingText(t.x, t.y, `${dmg}`, 'damage');
+    }
+    if (t.hazard) {
+      const existing = state.dungeon.expiringTiles.find((et) => et.x === t.x && et.y === t.y);
+      if (existing) existing.turnsLeft = CINDER_FIRE_HAZARD_TURNS;
+      else state.dungeon.expiringTiles.push({ x: t.x, y: t.y, turnsLeft: CINDER_FIRE_HAZARD_TURNS, tileType: TILE.FIRE_HAZARD });
+    }
+    return;
+  }
+
+  // 'chill_pulse'
+  if (hitsPlayer) {
+    const dmg = computeDamage(t.sourceAttack, totalDef(state), 'FROST', playerElement(state));
+    state.run.currentHp = Math.max(0, state.run.currentHp - dmg);
+    markFloorDamageTaken(state);
+    logLine(state, `The frost pulse hits you for ${dmg}.`);
+    notifyFloatingText(t.x, t.y, `${dmg}`, 'damage');
+    if (Math.random() < 0.5) {
+      applyPlayerStatus(state, 'CHILLED', 3);
+      logLine(state, 'You are Chilled!');
+    }
+  }
+}
+
+/** Telegraphed AOE tiles (Phase 6 Chrono-Lich Time-Blast; Phase 14
+ * Cinder-Shaman's firebomb / Frost-Sentinel's cross pulse): decrements each
+ * tile's warning, then detonates whichever hit 0 per their `payload`. */
+function tickTelegraphTiles(state: GameState): void {
+  for (const t of state.dungeon.telegraphTiles) t.turnsUntil -= 1;
+  const detonating = state.dungeon.telegraphTiles.filter((t) => t.turnsUntil <= 0);
+  for (const t of detonating) detonateTelegraph(state, t);
   state.dungeon.telegraphTiles = state.dungeon.telegraphTiles.filter((t) => t.turnsUntil > 0);
 }
 
@@ -77,6 +122,12 @@ function tickEnemyStatuses(state: GameState): void {
 }
 
 function runTickPhase(state: GameState, actionKind: PlayerActionKind): void {
+  // The Hub's turn counter is frozen (GDD Section 7) — no hazards, statuses,
+  // or expiring tiles exist there either, so skipping the whole phase is
+  // equivalent to (and simpler than) ticking everything and zeroing the
+  // final decrement.
+  if (state.run.currentFloor === HUB_FLOOR) return;
+
   const chilledBeforeTick = state.run.status === 'CHILLED';
 
   applyFireHazard(state);
@@ -143,6 +194,10 @@ function tryShatteredHourglass(state: GameState): boolean {
 }
 
 function runCheckPhase(state: GameState): void {
+  // No loss condition can fire at the Hub: no enemies to deal damage, and the
+  // timer never decrements there (runTickPhase above). Guarded explicitly
+  // too, in case turnsRemaining is ever stale when the player warps in.
+  if (state.run.currentFloor === HUB_FLOOR) return;
   if (lossPending || (state.run.turnsRemaining > 0 && state.run.currentHp > 0)) return;
   if (tryShatteredHourglass(state)) return;
   lossPending = true;
@@ -159,11 +214,12 @@ function runCheckPhase(state: GameState): void {
   }, CRT_WARP_MS);
 }
 
-/** Full Loop Reset (GDD Section 7, Phase 5/6): bank Echoes (already banked
- * live as earned), keep unlockedShortcuts/upgrades/skills (all in
- * `persistent`), drop the run's inventory/equipment, then hand off to the
- * Upgrade Shop before the next loop starts on Floor 1. Called from the DEATH
- * screen's Continue action. */
+/** Full Loop Reset (GDD Section 7, Phase 11/13): bank Echoes (already banked
+ * live as earned), keep unlockedAnchors/upgrades/skills (all in
+ * `persistent`), drop the run's inventory/equipment, then return to the Hub
+ * — the Upgrade Shop terminal and Shortcut Gate live there now, not behind
+ * an automatic screen transition. Called from the DEATH screen's Continue
+ * action. */
 export function continueAfterDeath(state: GameState): void {
   lossPending = false;
   clearCrtWarp();
@@ -172,11 +228,10 @@ export function continueAfterDeath(state: GameState): void {
 
   resetRunForNewLoop(state);
 
-  enterFloor(state, 1);
-  onFloorEntered(state);
+  enterHub(state);
   playLoopResetSfx();
 
-  state.ui.currentScreen = 'UPGRADE_SHOP';
+  state.ui.currentScreen = 'GAME';
   saveGame(state);
 }
 

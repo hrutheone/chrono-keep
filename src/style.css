@@ -263,9 +263,23 @@ body {
   letter-spacing: 0.05em;
 }
 
+/* The row layout is scoped to .inventory-panes, not .inventory-menu itself —
+ * .inventory-menu stays a normal column .menu so the Close button/hint below
+ * it render as full-width bars (like every other menu), not squeezed into
+ * the same flex row as the two panes. overflow-y:auto is a defensive fallback
+ * (matches .skill-menu/.upgrade-shop/.help-menu below) so Close/the detail
+ * panel stay reachable via scroll even if the grid content ever runs tall,
+ * rather than silently overflowing past the viewport with no way back. */
 .inventory-menu {
+  overflow-y: auto;
+}
+
+.inventory-panes {
+  display: flex;
   flex-direction: row;
   gap: 12px;
+  flex: 1;
+  min-height: 0;
 }
 
 .menu-pane {
@@ -307,6 +321,12 @@ body {
   cursor: default;
 }
 
+.equip-slot-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .equip-slot {
   width: 100%;
 }
@@ -327,6 +347,11 @@ body {
   flex: 1;
 }
 
+/* Mobile Inventory rework: a slot is a single tap-to-select button — no
+ * per-slot lore text (that's what was inflating the grid past the viewport)
+ * and no instant equip/use/drop on tap (a stray tap on a crowded touch grid
+ * used to cost the player gear or a consumable). Selecting shows the item in
+ * the fixed-height .item-detail panel below, with explicit Use/Drop buttons. */
 .inv-slot {
   border: 1px solid var(--color-mid);
   display: flex;
@@ -338,6 +363,63 @@ body {
 .inv-slot.empty {
   border-style: dashed;
   opacity: 0.4;
+}
+
+.inv-slot.selected {
+  border-color: var(--color-light);
+  background: var(--color-mid);
+}
+
+/* Equipped Weapon/Accessory lore: only 2 of these ever exist (unlike the
+ * 10-slot grid), so always-visible text here doesn't risk the same overflow —
+ * hidden on desktop, where hovering the button's `title` already covers it. */
+.equip-lore {
+  display: none;
+}
+
+.item-detail {
+  border: 1px solid var(--color-mid);
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.item-detail-empty {
+  opacity: 0.6;
+  font-style: italic;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.item-detail-name {
+  font-weight: bold;
+  color: var(--color-light);
+}
+
+.item-detail-stat {
+  opacity: 0.85;
+}
+
+.item-detail-lore {
+  opacity: 0.8;
+  font-style: italic;
+}
+
+.item-detail-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.item-detail-actions button {
+  flex: 1;
+  text-align: center;
+}
+
+.item-detail-actions .drop-btn {
+  opacity: 0.7;
 }
 
 .skill-list {
@@ -623,7 +705,7 @@ body {
   }
 
   /* Stack every side-by-side overlay row into a column */
-  .inventory-menu {
+  .inventory-panes {
     flex-direction: column;
   }
 
@@ -633,6 +715,23 @@ body {
 
   .inv-slot {
     min-height: 48px;
+    font-size: 14px;
+  }
+
+  /* No hover on touch — the equipped Weapon/Accessory lore (only 2 of these,
+   * so no overflow risk) becomes always-visible instead of hover-only. Grid
+   * item lore lives in .item-detail now (shown on both desktop and mobile —
+   * see the base rule above), reached by tapping a slot instead of hovering. */
+  .equip-lore {
+    display: block;
+    font-size: 12px;
+    line-height: 1.4;
+    opacity: 0.8;
+    font-style: italic;
+    margin-top: -2px;
+  }
+
+  .item-detail {
     font-size: 14px;
   }
 

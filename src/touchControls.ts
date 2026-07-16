@@ -13,6 +13,8 @@ const BUTTON_KEYS: Record<string, string> = {
   brace: ' ',
   'skill-q': 'q',
   'skill-e': 'e',
+  'skill-r': 'r',
+  'skill-f': 'f',
   'open-inventory': 'i',
   'open-skills': 'k',
   'open-help': '?',
