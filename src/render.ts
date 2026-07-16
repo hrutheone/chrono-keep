@@ -35,6 +35,11 @@ import {
   SHORTCUT_GATE_SPRITE,
   BOSS_GATE_SPRITE,
   CHEST_SPRITE,
+  WEAPON_PICKUP_SPRITE,
+  ACCESSORY_PICKUP_SPRITE,
+  POTION_SPRITE,
+  CONSUMABLE_PICKUP_SPRITE,
+  TIME_SHARD_SPRITE,
   FIRE_HAZARD_SPRITE,
 } from './sprites';
 
@@ -95,6 +100,17 @@ const ENEMY_SPRITES: Record<Enemy['kind'], Sprite> = {
   FROST_WRAITH: FROST_WRAITH_SPRITE,
   TIME_WEAVER: TIME_WEAVER_SPRITE,
   CHRONO_LICH: CHRONO_LICH_SPRITE,
+};
+
+// Fun & Feel #2: world-item pickups read as their own kind instead of one
+// generic chest icon (ANCHOR keeps its own dedicated sprite, drawn separately).
+const WORLD_ITEM_SPRITES: Partial<Record<string, Sprite>> = {
+  WEAPON: WEAPON_PICKUP_SPRITE,
+  ACCESSORY: ACCESSORY_PICKUP_SPRITE,
+  POTION: POTION_SPRITE,
+  CONSUMABLE: CONSUMABLE_PICKUP_SPRITE,
+  TIME_SHARD: TIME_SHARD_SPRITE,
+  ANCHOR: ANCHOR_SPRITE,
 };
 
 function clamp(v: number, lo: number, hi: number): number {
@@ -209,7 +225,11 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     const sx = wi.x - cam.x;
     const sy = wi.y - cam.y;
     if (sx < 0 || sx >= VIEWPORT_TILES_W || sy < 0 || sy >= VIEWPORT_TILES_H) continue;
-    drawSprite(ctx, wi.item.kind === 'ANCHOR' ? ANCHOR_SPRITE : CHEST_SPRITE, sx * TILE_SIZE, sy * TILE_SIZE);
+    // Fun & Feel #2: a chest still marks a not-yet-rerolled Dynamic Chest Loot
+    // spot (its identity isn't decided until pickup), but everything else
+    // reads as its own kind at a glance instead of one generic box icon.
+    const sprite = wi.chestLoot ? CHEST_SPRITE : (WORLD_ITEM_SPRITES[wi.item.kind] ?? CHEST_SPRITE);
+    drawSprite(ctx, sprite, sx * TILE_SIZE, sy * TILE_SIZE);
   }
 
   for (const e of state.dungeon.enemies) {

@@ -23,9 +23,10 @@ const HINT_STRIP: Record<GameState['ui']['currentScreen'], string> = {
   TITLE: 'Enter: Start',
   GAME: 'WASD Move · Space Brace · Q/E Skill · I Inv · K Skills · ? Help',
   INVENTORY: 'Click: Equip/Use · I/Esc: Close',
-  SKILL_MENU: 'Click: Assign Q/E · K/Esc: Close',
+  SKILL_MENU: 'Click: Assign Q/E, Switch Tab · K/Esc: Close',
   UPGRADE_SHOP: 'Click: Buy · Esc: Continue',
   HELP: '?/F1/Esc: Close',
+  CONFIRM: 'Click Proceed/Cancel',
   DEATH: 'Esc: Continue',
   VICTORY: 'Esc: Continue',
 };

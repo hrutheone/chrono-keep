@@ -1,7 +1,7 @@
 // Enemy Phase (GDD Sections 6C & 7): wake radius, per-kind behavior, and the
 // status effects that gate a turn (Burn tick, Stun skip, Chilled half-speed).
 
-import { createEnemy, ENEMY_NAME } from './content';
+import { createEnemy, ENEMY_NAME, scaleEnemyForNgPlus } from './content';
 import { enemyAttackPlayer, killEnemy } from './combat';
 import { isWalkableAt } from './mapgen';
 import { logLine } from './turns';
@@ -47,6 +47,8 @@ function wakeIfNear(state: GameState, enemy: Enemy): void {
   if (dist <= WAKE_RADIUS) {
     enemy.awake = true;
     logLine(state, `${ENEMY_NAME[enemy.kind]} wakes up!`);
+    // Fun & Feel #1: the Bestiary tab only shows what's actually been fought.
+    if (!state.persistent.bestiaryKnown.includes(enemy.kind)) state.persistent.bestiaryKnown.push(enemy.kind);
   }
 }
 
@@ -156,6 +158,7 @@ function summonGrunt(state: GameState, enemy: Enemy): void {
     if (occupiedByOtherEnemy(state, enemy, nx, ny) || (nx === state.run.playerX && ny === state.run.playerY)) continue;
     const grunt = createEnemy('BONE_GRUNT', `${enemy.id}-summon-${state.dungeon.enemies.length}-${Date.now()}`, nx, ny);
     grunt.awake = true;
+    scaleEnemyForNgPlus(grunt, state.persistent.ngPlusLevel);
     state.dungeon.enemies.push(grunt);
     logLine(state, `${ENEMY_NAME[enemy.kind]} summons a Bone-Grunt!`);
     return;
@@ -163,7 +166,11 @@ function summonGrunt(state: GameState, enemy: Enemy): void {
 }
 
 /** Chrono-Lich: bump-attacks when adjacent, otherwise cycles between chasing,
- * a telegraphed Time-Blast, and summoning Grunt reinforcements. */
+ * a telegraphed Time-Blast, and summoning Grunt reinforcements. Fun & Feel
+ * #3: below 50% HP the pattern tightens (an "enrage" phase, since the fight
+ * would otherwise run its whole length on one flat cadence), and a small
+ * random skip keeps the exact turn-count pattern from being purely
+ * memorized loop after loop. */
 function bossAct(state: GameState, enemy: Enemy): void {
   const count = (bossTimers.get(enemy.id) ?? 0) + 1;
   bossTimers.set(enemy.id, count);
@@ -173,11 +180,18 @@ function bossAct(state: GameState, enemy: Enemy): void {
     enemyAttackPlayer(state, enemy);
     return;
   }
-  if (count % 4 === 0) {
+
+  const enraged = enemy.hp <= enemy.maxHp * 0.5;
+  const blastCadence = enraged ? 3 : 4;
+  const summonCadence = enraged ? 4 : 6;
+  const summonCap = enraged ? 6 : 5;
+  const jitter = Math.random() < 0.2 ? (Math.random() < 0.5 ? -1 : 1) : 0;
+
+  if ((count + jitter) % blastCadence === 0) {
     castTimeBlast(state, enemy);
     return;
   }
-  if (count % 6 === 0 && state.dungeon.enemies.length < 5) {
+  if ((count + jitter) % summonCadence === 0 && state.dungeon.enemies.length < summonCap) {
     summonGrunt(state, enemy);
     return;
   }

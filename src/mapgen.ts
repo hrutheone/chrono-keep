@@ -8,7 +8,7 @@
 import type { Enemy, GameState, WorldItem } from './types';
 import { DUNGEON_SIZE } from './state';
 import { hash, mulberry32 } from './rng';
-import { createEnemy, createAnchorItem, rollChestItem, type EnemyKind } from './content';
+import { createEnemy, createAnchorItem, rollChestItem, scaleEnemyForNgPlus, type EnemyKind } from './content';
 
 export const TILE = {
   VOID: 0,
@@ -361,15 +361,35 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
   }
 
   // 9. The Anchor chest plus 1-2 loot chests with seed-determined contents.
+  // Fun & Feel #9: when a chokepoint guard exists, the first chest is biased
+  // to sit just past it (farther from spawn than the guard, within 3 tiles)
+  // — sharpening the existing "fight through or go around" tension instead
+  // of scattering every chest fully independently of what's gating it.
   const items: WorldItem[] = [{ item: createAnchorItem(`f${floorNumber}-anchor`), x: anchor.x, y: anchor.y }];
   const chestCount = randInt(rng, 1, 2);
+  const chokeGuards = enemies.filter((e) => chokeCands.some((c) => c.x === e.x && c.y === e.y));
   for (let i = 0; i < chestCount; i++) {
-    const spots = candidates(
-      (x, y) =>
-        tiles[y][x] === TILE.FLOOR && distSpawn[y * N + x] >= 3 && !occupied.has(y * N + x),
-    );
-    if (spots.length === 0) return null;
-    const pos = pick(rng, spots);
+    let pos: Point | undefined;
+    if (i === 0 && chokeGuards.length > 0) {
+      const guard = pick(rng, chokeGuards);
+      const guardDist = distSpawn[guard.y * N + guard.x];
+      const pastGuard = candidates(
+        (x, y) =>
+          tiles[y][x] === TILE.FLOOR &&
+          !occupied.has(y * N + x) &&
+          Math.abs(x - guard.x) + Math.abs(y - guard.y) <= 3 &&
+          distSpawn[y * N + x] > guardDist,
+      );
+      if (pastGuard.length > 0) pos = pick(rng, pastGuard);
+    }
+    if (!pos) {
+      const spots = candidates(
+        (x, y) =>
+          tiles[y][x] === TILE.FLOOR && distSpawn[y * N + x] >= 3 && !occupied.has(y * N + x),
+      );
+      if (spots.length === 0) return null;
+      pos = pick(rng, spots);
+    }
     occupied.add(pos.y * N + pos.x);
     // Contents are placeholder-rolled here (deterministic stream, keeps this
     // function's output self-consistent for the same seed); inventory.ts
@@ -411,6 +431,7 @@ export function enterFloor(state: GameState, floorNumber: number): GeneratedFloo
   state.dungeon.height = N;
   state.dungeon.tiles = floor.tiles;
   state.dungeon.enemies = floor.enemies;
+  for (const enemy of state.dungeon.enemies) scaleEnemyForNgPlus(enemy, state.persistent.ngPlusLevel);
   state.dungeon.items = floor.items;
   state.dungeon.spawnX = floor.spawnX;
   state.dungeon.spawnY = floor.spawnY;

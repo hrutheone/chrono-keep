@@ -2,7 +2,7 @@
 // touches rng.ts/mapgen.ts's seeded generator. Reached through the Boss Gate
 // once `run.anchorsCollected === 3` (movement.ts wires the actual check).
 
-import { createEnemy } from './content';
+import { createEnemy, scaleEnemyForNgPlus } from './content';
 import { TILE } from './mapgen';
 import { DUNGEON_SIZE } from './state';
 import type { Enemy, GameState, WorldItem } from './types';
@@ -64,8 +64,13 @@ export function enterBossFloor(state: GameState): void {
   state.run.playerY = floor.spawnY;
   state.dungeon.width = N;
   state.dungeon.height = N;
+  // Fixes a latent Phase 8 bug: without this, Recall Rune on the boss floor
+  // would teleport back to Floor 3's stale spawn point instead of the arena's.
+  state.dungeon.spawnX = floor.spawnX;
+  state.dungeon.spawnY = floor.spawnY;
   state.dungeon.tiles = floor.tiles;
   state.dungeon.enemies = floor.enemies;
+  for (const enemy of state.dungeon.enemies) scaleEnemyForNgPlus(enemy, state.persistent.ngPlusLevel);
   state.dungeon.items = floor.items;
   state.dungeon.expiringTiles = [];
   state.dungeon.telegraphTiles = [];

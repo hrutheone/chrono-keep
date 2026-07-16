@@ -38,6 +38,8 @@ export function createNewGameState(): GameState {
         bestTurnsRemaining: 0,
         wins: 0,
       },
+      bestiaryKnown: [],
+      ngPlusLevel: 0,
     },
 
     run: {

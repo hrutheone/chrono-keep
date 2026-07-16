@@ -448,3 +448,63 @@ body {
 .victory-menu button {
   width: 12em;
 }
+
+.framing {
+  font-style: italic;
+  opacity: 0.8;
+  max-width: 26em;
+}
+
+/* Skill Menu tabs / Bestiary (Fun & Feel #1, #5) */
+.skill-menu {
+  overflow-y: auto;
+}
+
+.tab-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.tab-btn {
+  flex: 1;
+}
+
+.bestiary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+}
+
+.bestiary-row.unknown {
+  opacity: 0.5;
+  font-style: italic;
+}
+
+.bestiary-name {
+  font-weight: bold;
+  color: var(--color-light);
+}
+
+.bestiary-lore {
+  opacity: 0.85;
+  font-style: italic;
+  margin-top: 2px;
+}
+
+/* Confirm overlay (Fun & Feel #6) — replaces window.confirm() */
+.confirm-menu {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 12px;
+}
+
+.confirm-message {
+  max-width: 28em;
+}
+
+.confirm-menu button {
+  width: 12em;
+}

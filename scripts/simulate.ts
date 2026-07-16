@@ -14,6 +14,7 @@ import { enterFloor, isWalkable, TILE } from '../src/mapgen';
 import { onFloorEntered } from '../src/echoes';
 import { continueAfterDeath, isTurnBusy } from '../src/turnController';
 import { tryMove, passTurn } from '../src/movement';
+import { answerPendingConfirm } from '../src/menus';
 import { useSkill } from '../src/skills';
 import { equipItem, usePotion } from '../src/inventory';
 import { buySkillUpgrade, buyStatUpgrade, type StatTrack } from '../src/shop';
@@ -150,6 +151,13 @@ interface SeedStats {
 }
 
 async function botStep(state: GameState, stats: SeedStats): Promise<void> {
+  // The Boss Gate Threshold Warning (Fun & Feel #6) is now a styled overlay,
+  // not a blocking window.confirm() — the bot always proceeds, same as the
+  // old stubbed `window.confirm = () => true`.
+  if (state.ui.currentScreen === 'CONFIRM') {
+    answerPendingConfirm(state, true);
+    return;
+  }
   if (state.ui.currentScreen !== 'GAME' || isTurnBusy() || isRunOver(state)) return;
 
   if (state.run.currentHp < state.run.maxHp * 0.4) {

@@ -8,6 +8,7 @@ import { onFloorCleared, onFloorEntered } from './echoes';
 import { enterFloor, isWalkableAt, TILE } from './mapgen';
 import { enterBossFloor } from './bossArena';
 import { saveGame } from './persistence';
+import { showConfirm } from './menus';
 import { isTurnBusy, resolvePlayerTurn } from './turnController';
 import { isRunOver, logLine } from './turns';
 import { playBlockedSfx, playMoveSfx, playUnlockSfx } from './audio';
@@ -18,8 +19,21 @@ type Facing = GameState['run']['facing'];
 export const MAX_PLAYABLE_FLOOR = 3; // Floor 3's Stairs is the Boss Gate threshold.
 const BOSS_GATE_TURN_WARNING = 15;
 
+function enterBossArenaNow(state: GameState): void {
+  onFloorCleared(state);
+  enterBossFloor(state);
+  onFloorEntered(state);
+  state.ui.currentScreen = 'GAME';
+  logLine(state, 'You step through the Boss Gate into the Chrono-Lich\'s lair.');
+}
+
 /** Floor 3's Stairs double as the Boss Gate (Section 7): requires all 3
- * Temporal Anchors, and warns before entry with fewer than 15 turns left. */
+ * Temporal Anchors, and warns before entry with fewer than 15 turns left.
+ * Fun & Feel #6: the warning is a styled in-game overlay (menus.ts's
+ * showConfirm), not a native window.confirm() — this means the rest of this
+ * turn (Enemy Phase etc.) resolves immediately rather than blocking on the
+ * dialog the way a real confirm() would; entry itself only happens later,
+ * from the overlay's own Proceed click. */
 function tryEnterBossArena(state: GameState): void {
   if (state.run.anchorsCollected < 3) {
     logLine(state, 'The Boss Gate is sealed — it needs all 3 Temporal Anchors.');
@@ -27,15 +41,14 @@ function tryEnterBossArena(state: GameState): void {
     return;
   }
   if (state.run.turnsRemaining < BOSS_GATE_TURN_WARNING) {
-    const proceed = window.confirm(
+    showConfirm(
+      state,
       'The temporal density ahead is overwhelming. You may not have enough time left to survive what lies beyond. Proceed anyway?',
+      () => enterBossArenaNow(state),
     );
-    if (!proceed) return;
+    return;
   }
-  onFloorCleared(state);
-  enterBossFloor(state);
-  onFloorEntered(state);
-  logLine(state, 'You step through the Boss Gate into the Chrono-Lich\'s lair.');
+  enterBossArenaNow(state);
 }
 
 /** Descends to the next floor if the player is standing on Stairs, awarding the

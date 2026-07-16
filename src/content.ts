@@ -63,6 +63,23 @@ export const ENEMY_NAME: Record<EnemyKind, string> = {
   CHRONO_LICH: 'Chrono-Lich',
 };
 
+// Bestiary lore (Section 6C's "Lore / Origin" column) — shown in the Bestiary
+// tab of the Skill Menu (Fun & Feel #1). Never displayed anywhere before this.
+export const MONSTER_LORE: Record<EnemyKind, string> = {
+  BONE_GRUNT:
+    'Once your comrades-in-arms, now trapped in a cycle of endless decay and resurrection. They attack blindly, trying to enforce a quarantine that failed lifetimes ago.',
+  EMBER_BAT:
+    'Scavengers mutated by the friction of fractured time. They feed on the ambient heat of collapsing realities, moving with jarring, erratic bursts.',
+  VOLT_TURRET:
+    "The citadel's automated defense grid. Unaware that the kingdom has already fallen, they patiently charge their capacitors to vaporize intruders.",
+  FROST_WRAITH:
+    "The frozen souls of Oakhaven's nobility, trapped at the exact moment the Hourglass shattered. Their touch induces the chilling lethargy of stopped time.",
+  TIME_WEAVER:
+    "The Lich's corrupted apprentices. They desperately stitch the tears in the loop together. Striking them causes them to slip backwards through the timeline, appearing elsewhere.",
+  CHRONO_LICH:
+    'The architect of this purgatory. He sits at the bottom of the temporal well, hoarding the Anchors in a mad bid to ascend. He no longer remembers why he wanted to live forever.',
+};
+
 export function createEnemy(kind: EnemyKind, id: string, x: number, y: number): Enemy {
   const t = BESTIARY[kind];
   return {
@@ -83,26 +100,136 @@ export function createEnemy(kind: EnemyKind, id: string, x: number, y: number): 
   };
 }
 
+/** Fun & Feel #8: New Game+ escalation — +10% HP per NG+ cycle, applied as a
+ * post-generation pass (mapgen.ts/bossArena.ts, and enemyAI.ts's Grunt
+ * summons) rather than inside `createEnemy` itself, so the seeded generator
+ * stays a pure function of (rngSeed, floorNumber) — determinism never
+ * depends on meta-progression. A no-op at ngPlusLevel 0 (every first
+ * playthrough). */
+export function scaleEnemyForNgPlus(enemy: Enemy, ngPlusLevel: number): void {
+  if (ngPlusLevel <= 0) return;
+  const scaled = Math.round(enemy.hp * (1 + 0.1 * ngPlusLevel));
+  enemy.hp = scaled;
+  enemy.maxHp = scaled;
+}
+
 // Weapons (Section 6A). The first 6 are the original Phase 0-6 roster; the
-// remaining 10 are Phase 8's expansion.
+// remaining 10 are Phase 8's expansion. `lore` is Section 6A's "Lore /
+// Flavor Text" column — see loreForItem() below for how it reaches the UI.
 const WEAPONS = {
-  RUSTY_SWORD: { name: 'Rusty Sword', atk: 3, element: 'PHYSICAL', passive: 'none' },
-  BONE_DAGGER: { name: 'Bone Dagger', atk: 2, element: 'PHYSICAL', passive: 'free_swap' },
-  EMBER_BLADE: { name: 'Ember Blade', atk: 5, element: 'FIRE', passive: 'burn_25' },
-  VOLT_SPEAR: { name: 'Volt Spear', atk: 4, element: 'VOLT', passive: 'pierce_1' },
-  FROST_WAND: { name: 'Frost Wand', atk: 3, element: 'FROST', passive: 'ranged_3' },
-  CHRONO_BLADE: { name: 'Chrono-Blade', atk: 7, element: 'CHRONO', passive: 'kill_refund_turn' },
-  ASHWOOD_BOW: { name: 'Ashwood Bow', atk: 3, element: 'PHYSICAL', passive: 'ranged_no_adjacent_3' },
-  CINDER_AXE: { name: 'Cinder Axe', atk: 6, element: 'FIRE', passive: 'heavy_stamina' },
-  STATIC_WHIP: { name: 'Static Whip', atk: 4, element: 'VOLT', passive: 'exact_range_2' },
-  GLACIAL_MACE: { name: 'Glacial Mace', atk: 4, element: 'FROST', passive: 'knockback_1' },
-  TESLA_GAUNTLETS: { name: 'Tesla Gauntlets', atk: 3, element: 'VOLT', passive: 'pull_1' },
-  OBSIDIAN_GREATSWORD: { name: 'Obsidian Greatsword', atk: 8, element: 'PHYSICAL', passive: 'blood_magic' },
-  FROSTBITE_DAGGER: { name: 'Frostbite Dagger', atk: 2, element: 'FROST', passive: 'chill_50_free_swap' },
-  CLOCKWORK_RAPIER: { name: 'Clockwork Rapier', atk: 3, element: 'PHYSICAL', passive: 'stun_synergy_2x' },
-  TORCH_OF_THE_WATCH: { name: 'Torch of the Watch', atk: 3, element: 'FIRE', passive: 'cure_chill_on_attack' },
-  PARADOX_STAFF: { name: 'Paradox Staff', atk: 4, element: 'CHRONO', passive: 'knockback_2_randomize_element' },
-} as const satisfies Record<string, { name: string; atk: number; element: Element; passive: string }>;
+  RUSTY_SWORD: {
+    name: 'Rusty Sword',
+    atk: 3,
+    element: 'PHYSICAL',
+    passive: 'none',
+    lore: 'Your service weapon from a timeline long forgotten. It remembers the taste of blood, but its edge has dulled across a thousand failed resets.',
+  },
+  BONE_DAGGER: {
+    name: 'Bone Dagger',
+    atk: 2,
+    element: 'PHYSICAL',
+    passive: 'free_swap',
+    lore: 'Carved from the femur of a fallen Watchwarden. It demands so little weight to wield, you can draw it between the ticks of a clock.',
+  },
+  EMBER_BLADE: {
+    name: 'Ember Blade',
+    atk: 5,
+    element: 'FIRE',
+    passive: 'burn_25',
+    lore: "Forged in the Keep's thermal underbelly. The blade is perpetually melting and reforming, burning with the heat of Oakhaven's final day.",
+  },
+  VOLT_SPEAR: {
+    name: 'Volt Spear',
+    atk: 4,
+    element: 'VOLT',
+    passive: 'pierce_1',
+    lore: "Standard issue for the citadel's riot vanguard. It hums with an erratic, restless energy, desperate to arc through flesh and armor alike.",
+  },
+  FROST_WAND: {
+    name: 'Frost Wand',
+    atk: 3,
+    element: 'FROST',
+    passive: 'ranged_3',
+    lore: 'Wielded by the court diviners to read the stars. Now, it channels the absolute zero of the void between seconds.',
+  },
+  CHRONO_BLADE: {
+    name: 'Chrono-Blade',
+    atk: 7,
+    element: 'CHRONO',
+    passive: 'kill_refund_turn',
+    lore: "A paradox wrought into steel. It does not cut flesh; it severs the victim's future, allowing you to steal their remaining moments.",
+  },
+  ASHWOOD_BOW: {
+    name: 'Ashwood Bow',
+    atk: 3,
+    element: 'PHYSICAL',
+    passive: 'ranged_no_adjacent_3',
+    lore: "Carved from the dying trees of the upper courtyard. Best used from a coward's distance.",
+  },
+  CINDER_AXE: {
+    name: 'Cinder Axe',
+    atk: 6,
+    element: 'FIRE',
+    passive: 'heavy_stamina',
+    lore: 'It burns hot and swings slow. Make every execution count.',
+  },
+  STATIC_WHIP: {
+    name: 'Static Whip',
+    atk: 4,
+    element: 'VOLT',
+    passive: 'exact_range_2',
+    lore: "A live wire stripped from the citadel's walls. Keep your enemies at arm's length.",
+  },
+  GLACIAL_MACE: {
+    name: 'Glacial Mace',
+    atk: 4,
+    element: 'FROST',
+    passive: 'knockback_1',
+    lore: "A chunk of permafrost on a steel rod. It doesn't just freeze; it shatters momentum.",
+  },
+  TESLA_GAUNTLETS: {
+    name: 'Tesla Gauntlets',
+    atk: 3,
+    element: 'VOLT',
+    passive: 'pull_1',
+    lore: 'Magnetic lodestones hum within the palms. Bring them into the killing zone.',
+  },
+  OBSIDIAN_GREATSWORD: {
+    name: 'Obsidian Greatsword',
+    atk: 8,
+    element: 'PHYSICAL',
+    passive: 'blood_magic',
+    lore: 'A blade that demands a sacrifice for its devastating edge.',
+  },
+  FROSTBITE_DAGGER: {
+    name: 'Frostbite Dagger',
+    atk: 2,
+    element: 'FROST',
+    passive: 'chill_50_free_swap',
+    lore: 'A sliver of ice. Easily concealed, quickly drawn, bitterly cold.',
+  },
+  CLOCKWORK_RAPIER: {
+    name: 'Clockwork Rapier',
+    atk: 3,
+    element: 'PHYSICAL',
+    passive: 'stun_synergy_2x',
+    lore: "A duelist's weapon that strikes precisely between the ticks of a stopped clock.",
+  },
+  TORCH_OF_THE_WATCH: {
+    name: 'Torch of the Watch',
+    atk: 3,
+    element: 'FIRE',
+    passive: 'cure_chill_on_attack',
+    lore: 'Standard issue for night patrols. Good for bashing skulls and staying warm.',
+  },
+  PARADOX_STAFF: {
+    name: 'Paradox Staff',
+    atk: 4,
+    element: 'CHRONO',
+    passive: 'knockback_2_randomize_element',
+    lore: "It bends reality upon impact. You never quite know what you'll leave behind.",
+  },
+} as const satisfies Record<string, { name: string; atk: number; element: Element; passive: string; lore: string }>;
 
 export type WeaponKey = keyof typeof WEAPONS;
 
@@ -129,28 +256,105 @@ export const WEAPON_RANGE: Partial<Record<string, WeaponRangeProfile>> = {
 export const FREE_SWAP_PASSIVES = new Set(['free_swap', 'chill_50_free_swap']);
 
 // Accessories (Section 6D). The first 7 are the original roster; the
-// remaining 12 are Phase 8's expansion.
+// remaining 12 are Phase 8's expansion. `lore` is Section 6D's "Lore /
+// Flavor Text" column.
 const ACCESSORIES = {
-  IRON_RING: { name: 'Iron Ring', passive: 'def_plus_2' },
-  RING_OF_VIGOR: { name: 'Ring of Vigor', passive: 'max_hp_plus_10' },
-  BOOTS_OF_HASTE: { name: 'Boots of Haste', passive: 'dash_discount' },
-  ECHO_CHARM: { name: 'Echo Charm', passive: 'echo_bonus_20' },
-  EMBER_PENDANT: { name: 'Ember Pendant', passive: 'burn_immune' },
-  WINGED_ANKLET: { name: 'Winged Anklet', passive: 'chill_immune' },
-  GROUNDING_BAND: { name: 'Grounding Band', passive: 'stun_immune' },
-  BERSERKERS_CUFF: { name: "Berserker's Cuff", passive: 'berserker' },
-  PALADINS_MANTLE: { name: "Paladin's Mantle", passive: 'paladin' },
-  BATTERY_CELL: { name: 'Battery Cell', passive: 'max_stam_plus_3' },
-  KINDLING_POUCH: { name: 'Kindling Pouch', passive: 'fire_synergy' },
-  CAPACITOR_RING: { name: 'Capacitor Ring', passive: 'volt_synergy' },
-  PERMAFROST_VIAL: { name: 'Permafrost Vial', passive: 'frost_synergy' },
-  VAMPIRE_TOOTH: { name: 'Vampire Tooth', passive: 'lifesteal_1' },
-  SHATTERED_HOURGLASS: { name: 'Shattered Hourglass', passive: 'safety_net_15' },
-  SPIKED_PAULDRONS: { name: 'Spiked Pauldrons', passive: 'retaliation_2' },
-  GAMBLERS_DICE: { name: "Gambler's Dice", passive: 'gamblers_dice' },
-  ADRENALINE_GLAND: { name: 'Adrenaline Gland', passive: 'adrenaline' },
-  ALCHEMISTS_BELT: { name: "Alchemist's Belt", passive: 'alchemist_belt' },
-} as const;
+  IRON_RING: {
+    name: 'Iron Ring',
+    passive: 'def_plus_2',
+    lore: 'A crude signet of the lower guard. It bears the dents of countless skirmishes that never technically happened.',
+  },
+  RING_OF_VIGOR: {
+    name: 'Ring of Vigor',
+    passive: 'max_hp_plus_10',
+    lore: 'Pulses with a steady heartbeat. Holding it reminds your body that it is still alive, anchoring your physical form.',
+  },
+  BOOTS_OF_HASTE: {
+    name: 'Boots of Haste',
+    passive: 'dash_discount',
+    lore: "The leather is pristine, untouched by the sands of time. Slipping them on makes the world around you feel like it's moving through syrup.",
+  },
+  ECHO_CHARM: {
+    name: 'Echo Charm',
+    passive: 'echo_bonus_20',
+    lore: 'A jagged piece of crystallized memory. It whispers the mistakes of your past lives into your ear, ensuring you do not waste the blood you spill.',
+  },
+  EMBER_PENDANT: {
+    name: 'Ember Pendant',
+    passive: 'burn_immune',
+    lore: "A piece of the citadel's original hearthstone. It recognizes you as a son of Oakhaven, granting safe passage through the flames.",
+  },
+  WINGED_ANKLET: {
+    name: 'Winged Anklet',
+    passive: 'chill_immune',
+    lore: 'Woven with feathers from the mythical Sun-Bird. It rejects the stagnation of the void, keeping your blood rushing when the cold closes in.',
+  },
+  GROUNDING_BAND: {
+    name: 'Grounding Band',
+    passive: 'stun_immune',
+    lore: 'A heavy, copper torc. It grounds not just electricity, but your very consciousness, preventing sudden shocks from interrupting your flow.',
+  },
+  BERSERKERS_CUFF: {
+    name: "Berserker's Cuff",
+    passive: 'berserker',
+    lore: 'Restricts blood flow just enough to induce a permanent state of rage.',
+  },
+  PALADINS_MANTLE: {
+    name: "Paladin's Mantle",
+    passive: 'paladin',
+    lore: 'Heavy leaden weave. It absorbs blows perfectly but exhausts the wearer.',
+  },
+  BATTERY_CELL: {
+    name: 'Battery Cell',
+    passive: 'max_stam_plus_3',
+    lore: 'A glowing hum of ancient energy that hooks directly into your nervous system.',
+  },
+  KINDLING_POUCH: {
+    name: 'Kindling Pouch',
+    passive: 'fire_synergy',
+    lore: "Contains the ever-burning embers of the citadel's first hearth.",
+  },
+  CAPACITOR_RING: {
+    name: 'Capacitor Ring',
+    passive: 'volt_synergy',
+    lore: 'It sparks constantly, desperate to ground itself into an unlucky target.',
+  },
+  PERMAFROST_VIAL: {
+    name: 'Permafrost Vial',
+    passive: 'frost_synergy',
+    lore: 'A liquid so cold it freezes the air around your fingertips.',
+  },
+  VAMPIRE_TOOTH: {
+    name: 'Vampire Tooth',
+    passive: 'lifesteal_1',
+    lore: 'A morbid keepsake. It pulses warmly when blood is spilled.',
+  },
+  SHATTERED_HOURGLASS: {
+    name: 'Shattered Hourglass',
+    passive: 'safety_net_15',
+    lore: 'A broken promise of more time. Use it to finish what you started.',
+  },
+  SPIKED_PAULDRONS: {
+    name: 'Spiked Pauldrons',
+    passive: 'retaliation_2',
+    lore: 'The best defense is a jagged piece of rusted metal aimed at their throat.',
+  },
+  GAMBLERS_DICE: {
+    name: "Gambler's Dice",
+    passive: 'gamblers_dice',
+    lore: 'Fate is fluid in the time loop. Roll the bones and steal back some seconds.',
+  },
+  ADRENALINE_GLAND: {
+    name: 'Adrenaline Gland',
+    passive: 'adrenaline',
+    lore: 'Panic is just a resource waiting to be harnessed.',
+  },
+  ALCHEMISTS_BELT: {
+    name: "Alchemist's Belt",
+    passive: 'alchemist_belt',
+    lore: 'A perfectly organized bandolier. Your hand finds what it needs instantly.',
+  },
+} as const satisfies Record<string, { name: string; passive: string; lore: string }>;
 
 export type AccessoryKey = keyof typeof ACCESSORIES;
 
@@ -158,6 +362,9 @@ export function createAccessory(key: AccessoryKey, id: string): Accessory {
   const a = ACCESSORIES[key];
   return { id, kind: 'ACCESSORY', name: a.name, value: 0, passive: a.passive };
 }
+
+const POTION_LORE = 'A murky, lukewarm brew. It tastes like failure, but it works.';
+const MAX_POTION_LORE = "Distilled from a Watchwarden's final, desperate moment. It remembers what it means to be whole.";
 
 export function createPotion(id: string): Item {
   return { id, kind: 'POTION', name: 'Potion', value: 10 };
@@ -171,23 +378,79 @@ export function createAnchorItem(id: string): Item {
 // of combat (Alchemist's Belt overrides this to 0). `value` carries the one
 // numeric parameter each effect needs, the same convention Potion/Time Shard
 // already use; secondary parameters (range, AOE, duration) are baked into
-// the implementing code by `effect` ID, same as a Weapon's `passive`.
+// the implementing code by `effect` ID, same as a Weapon's `passive`. `lore`
+// is Section 6E's "Lore / Flavor Text" column.
 const CONSUMABLES = {
-  LIQUID_FIRE_FLASK: { name: 'Liquid Fire Flask', effect: 'throw_fire_hazard', value: 3 }, // range
-  SHOCK_GRENADE: { name: 'Shock Grenade', effect: 'throw_shock_grenade', value: 3 }, // range
-  ICE_BARRICADE_SCROLL: { name: 'Ice-Barricade Scroll', effect: 'ice_barricade', value: 5 }, // turns
-  STAMINA_DRAUGHT: { name: 'Stamina Draught', effect: 'restore_stamina', value: 0 },
-  QUICKSILVER_FLASK: { name: 'Quicksilver Flask', effect: 'quicksilver', value: 3 }, // charges
-  RECALL_RUNE: { name: 'Recall Rune', effect: 'recall', value: 0 },
-  ECHO_GEODE: { name: 'Echo Geode', effect: 'echo_geode', value: 50 }, // Echoes
-  WHETSTONE: { name: 'Whetstone', effect: 'whetstone', value: 0 },
-} as const satisfies Record<string, { name: string; effect: string; value: number }>;
+  LIQUID_FIRE_FLASK: {
+    name: 'Liquid Fire Flask',
+    effect: 'throw_fire_hazard',
+    value: 3, // range
+    lore: 'Ignites upon exposure to the air. Excellent for blocking corridors.',
+  },
+  SHOCK_GRENADE: {
+    name: 'Shock Grenade',
+    effect: 'throw_shock_grenade',
+    value: 3, // range
+    lore: 'Overloads the nervous system of anything caught in the flash.',
+  },
+  ICE_BARRICADE_SCROLL: {
+    name: 'Ice-Barricade Scroll',
+    effect: 'ice_barricade',
+    value: 5, // turns
+    lore: 'Draw the rune, summon the frost, and buy yourself a moment to breathe.',
+  },
+  STAMINA_DRAUGHT: {
+    name: 'Stamina Draught',
+    effect: 'restore_stamina',
+    value: 0,
+    lore: 'Tastes like copper and ozone. Your muscles twitch violently.',
+  },
+  QUICKSILVER_FLASK: {
+    name: 'Quicksilver Flask',
+    effect: 'quicksilver',
+    value: 3, // charges
+    lore: 'Time stretches. You move between the raindrops.',
+  },
+  RECALL_RUNE: {
+    name: 'Recall Rune',
+    effect: 'recall',
+    value: 0,
+    lore: 'A coward\'s exit, or a tactician\'s reset. Depends on who is asking.',
+  },
+  ECHO_GEODE: {
+    name: 'Echo Geode',
+    effect: 'echo_geode',
+    value: 50, // Echoes
+    lore: 'A massive cluster of memories. Cash it in before you forget.',
+  },
+  WHETSTONE: {
+    name: 'Whetstone',
+    effect: 'whetstone',
+    value: 0,
+    lore: 'A few quick strikes along the blade ensures the next cut will be deep.',
+  },
+} as const satisfies Record<string, { name: string; effect: string; value: number; lore: string }>;
 
 export type ConsumableKey = keyof typeof CONSUMABLES;
 
 export function createConsumable(key: ConsumableKey, id: string): Consumable {
   const c = CONSUMABLES[key];
   return { id, kind: 'CONSUMABLE', name: c.name, value: c.value, effect: c.effect };
+}
+
+// Fun & Feel #1: lore is kept out of the runtime Item objects (so it doesn't
+// bloat every save file with static, per-kind text) and looked up by display
+// name instead — names are already unique identifiers throughout this file.
+const LORE_BY_NAME: Record<string, string> = { Potion: POTION_LORE, 'Max Potion': MAX_POTION_LORE };
+for (const w of Object.values(WEAPONS)) LORE_BY_NAME[w.name] = w.lore;
+for (const a of Object.values(ACCESSORIES)) LORE_BY_NAME[a.name] = a.lore;
+for (const c of Object.values(CONSUMABLES)) LORE_BY_NAME[c.name] = c.lore;
+
+/** Flavor text for the Inventory overlay (Section 6's "Lore / Flavor Text"
+ * columns) — undefined for items that never had any (Temporal Anchor, Time
+ * Shard). */
+export function loreForItem(name: string): string | undefined {
+  return LORE_BY_NAME[name];
 }
 
 // Chest loot pools per floor (Section 6D tiers: Floor 2+ and Floor 3 accessories
@@ -262,6 +525,16 @@ export const SKILLS: Record<string, { name: string; element: Element; stamina: n
 };
 
 export type SkillId = keyof typeof SKILLS;
+
+// Fun & Feel #5: Section 6B's Lvl1/Lvl2/Lvl3 columns, verbatim — shown next to
+// the Buy button in the Skill Menu/Upgrade Shop so a purchase is never blind.
+export const SKILL_LEVEL_EFFECTS: Record<SkillId, readonly [string, string, string]> = {
+  dash: ['Move 2 tiles in one turn.', 'Move 3 tiles.', '+1 Turn refunded on use.'],
+  cleave: ['Deal 1.2x ATK to 3 front tiles.', 'Deal 1.5x ATK.', 'Inflicts Knockback.'],
+  flame_arc: ['Deal 5 Fire DMG to adjacent enemies.', 'Chance to Burn.', 'Leaves fire hazard on floor.'],
+  static_shift: ['Teleport 3 tiles, Stun adjacent.', 'Range becomes 4 tiles.', 'Costs 2 Stamina instead of 3.'],
+  ice_aegis: ['Block next attack.', 'Block next 2 attacks.', 'Attackers are Chilled.'],
+};
 
 // Enemy death drops (Section 6A/6C). Phase 3 only wires the data + roll
 // function; nothing calls this until Phase 4 implements enemy death.

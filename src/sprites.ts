@@ -226,6 +226,43 @@ export const POTION_SPRITE: Sprite = [
   [0,0,1,1,1,1,0,0],
 ];
 
+// Accessory pickup: a ring, so it reads distinctly from a chest at a glance.
+export const ACCESSORY_PICKUP_SPRITE: Sprite = [
+  [0,0,1,1,1,1,0,0],
+  [0,1,2,2,2,2,1,0],
+  [1,2,0,0,0,0,2,1],
+  [1,2,0,0,0,0,2,1],
+  [1,2,0,0,0,0,2,1],
+  [1,2,0,0,0,0,2,1],
+  [0,1,2,2,2,2,1,0],
+  [0,0,1,1,1,1,0,0],
+];
+
+// Tactical Consumable pickup: a rolled, banded scroll (distinct from the
+// corked-flask Potion silhouette).
+export const CONSUMABLE_PICKUP_SPRITE: Sprite = [
+  [1,1,0,0,0,0,1,1],
+  [1,2,1,1,1,1,2,1],
+  [0,1,1,1,1,1,1,0],
+  [0,1,2,2,2,2,1,0],
+  [0,1,2,2,2,2,1,0],
+  [0,1,1,1,1,1,1,0],
+  [1,2,1,1,1,1,2,1],
+  [1,1,0,0,0,0,1,1],
+];
+
+// Time Shard: a small faceted shard, distinct from the Anchor hourglass.
+export const TIME_SHARD_SPRITE: Sprite = [
+  [0,0,0,1,0,0,0,0],
+  [0,0,1,1,1,0,0,0],
+  [0,1,1,2,1,1,0,0],
+  [1,1,2,2,2,1,1,0],
+  [0,1,1,2,1,1,0,0],
+  [0,0,1,1,1,0,0,0],
+  [0,0,0,1,0,0,0,0],
+  [0,0,0,0,0,0,0,0],
+];
+
 // Fire hazard: flame licks over a midtone ember bed.
 export const FIRE_HAZARD_SPRITE: Sprite = [
   [0,0,0,1,0,0,0,0],

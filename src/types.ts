@@ -27,6 +27,13 @@ export interface GameState {
       bestTurnsRemaining: number; // On victory
       wins: number;
     };
+    // Fun & Feel #1: monster kinds the player has actually encountered (an
+    // enemy waking up marks it known) — the Bestiary tab reads as field notes
+    // being filled in, not a spoiler dump from turn 1.
+    bestiaryKnown: string[];
+    // Fun & Feel #8: New Game+ escalation. Incremented each time New Game+ is
+    // chosen from VICTORY; content.ts scales enemy HP by this.
+    ngPlusLevel: number;
   };
 
   // Active Run State (Reset each loop)
@@ -100,7 +107,9 @@ export interface GameState {
   ui: {
     // 'HELP' added for Section 8's Quick Controls Help overlay (Phase 5); not
     // in the GDD's Section 3 enum literal, but required by Section 8's content.
-    currentScreen: 'TITLE' | 'GAME' | 'INVENTORY' | 'SKILL_MENU' | 'UPGRADE_SHOP' | 'HELP' | 'DEATH' | 'VICTORY';
+    // 'CONFIRM' (Fun & Feel #6) replaces window.confirm()'s native dialog with
+    // a styled overlay for the Boss Gate Threshold Warning and New Game.
+    currentScreen: 'TITLE' | 'GAME' | 'INVENTORY' | 'SKILL_MENU' | 'UPGRADE_SHOP' | 'HELP' | 'CONFIRM' | 'DEATH' | 'VICTORY';
     log: string[];           // Message log for combat actions (last 3 shown in HUD)
   };
 }
