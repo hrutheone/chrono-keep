@@ -93,6 +93,14 @@ export function updateHud(state: GameState): void {
   el('skill-q').textContent = `Q: ${q ? `${q} (Lv${state.persistent.skills[q] ?? 0})` : '--'}`;
   el('skill-e').textContent = `E: ${e ? `${e} (Lv${state.persistent.skills[e] ?? 0})` : '--'}`;
 
+  // Inventory/Skill Menu are full-screen overlays; on mobile's portrait
+  // layout #hud-bottom sits in normal flex flow (not absolutely positioned
+  // under the overlay like on desktop), so its action log/hint strip can
+  // visually bleed through the menu's dashed/low-opacity slots. Hide the
+  // whole bar rather than just the log — it's redundant once a menu covers
+  // the screen anyway.
+  const hideHudBottom = state.ui.currentScreen === 'INVENTORY' || state.ui.currentScreen === 'SKILL_MENU';
+  el('hud-bottom').style.display = hideHudBottom ? 'none' : '';
   el('action-log').innerHTML = state.ui.log
     .slice(-3)
     .map((line) => `<div>${line}</div>`)

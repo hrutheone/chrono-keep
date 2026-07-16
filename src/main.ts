@@ -8,6 +8,7 @@ import { installSkillInput } from './skills';
 import { initAudio, installAudioControls, setMasterVolume, setMuted, updateAnxietyClock, updateLowHealthHeartbeat, updateMusicForState } from './audio';
 import { initHud, updateHud } from './hud';
 import { initMenus, updateMenus } from './menus';
+import { installTouchControls } from './touchControls';
 import type { GameState } from './types';
 
 // Fixed internal resolution: a 30x20-tile viewport into the 32x32 map.
@@ -27,13 +28,28 @@ const ctx = canvas.getContext('2d')!;
 canvas.width = VIEW_W;
 canvas.height = VIEW_H;
 
+// Must match style.css's `@media (max-width: 768px)` breakpoint.
+const MOBILE_BREAKPOINT = 768;
+
 function resize(): void {
-  const scale = Math.max(
-    1,
-    Math.floor(Math.min(window.innerWidth / VIEW_W, window.innerHeight / VIEW_H)),
-  );
-  canvas.style.width = `${VIEW_W * scale}px`;
-  canvas.style.height = `${VIEW_H * scale}px`;
+  if (window.innerWidth <= MOBILE_BREAKPOINT) {
+    // Mobile portrait: let style.css (100% width, max-height clamp) size the
+    // canvas responsively instead of forcing an integer-only scale. On most
+    // phones an integer scale floors to 1x (a 240x160 canvas on a 390px-wide
+    // screen), which is exactly the "text too small" bug this fixes — a
+    // fractional CSS scale that fills the viewport width reads far better,
+    // and image-rendering: pixelated keeps edges crisp even at non-integer
+    // scale.
+    canvas.style.width = '';
+    canvas.style.height = '';
+  } else {
+    const scale = Math.max(
+      1,
+      Math.floor(Math.min(window.innerWidth / VIEW_W, window.innerHeight / VIEW_H)),
+    );
+    canvas.style.width = `${VIEW_W * scale}px`;
+    canvas.style.height = `${VIEW_H * scale}px`;
+  }
   // Changing canvas properties can reset context state — re-disable smoothing.
   ctx.imageSmoothingEnabled = false;
 }
@@ -63,6 +79,7 @@ installAudioControls();
 installInput(state);
 installSkillInput(state);
 initMenus(state);
+installTouchControls();
 // A live (but not yet "entered") dungeon renders behind the TITLE overlay;
 // TITLE's Continue/New Game buttons are what actually start the run.
 enterFloor(state, 1);

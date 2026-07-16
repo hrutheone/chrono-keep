@@ -508,3 +508,290 @@ body {
 .confirm-menu button {
   width: 12em;
 }
+
+/* Virtual controls (mobile portrait) — hidden on desktop; shown, laid out,
+ * and sized in the mobile media query below. */
+.touch-controls {
+  display: none;
+}
+
+/* ==========================================================================
+   Mobile portrait layout & legibility (Fun & Feel: mobile pass)
+   ========================================================================== */
+@media (max-width: 768px) {
+  html,
+  body {
+    overscroll-behavior: none;
+  }
+
+  body {
+    align-items: stretch;
+    justify-content: flex-start;
+  }
+
+  /* Force the vertical column architecture: HUD top, canvas middle
+   * (full-width, height-clamped), action log lower-middle, touch controls
+   * bottom. #hud-top/#hud-bottom are normally absolutely-positioned overlays
+   * on top of the canvas (desktop layout) — pulled back into normal flow
+   * here so they get real, non-overlapping space above/below the canvas. */
+  #app {
+    display: flex;
+    flex-direction: column;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  #hud-top {
+    position: static;
+    order: 1;
+    flex-shrink: 0;
+  }
+
+  #game {
+    order: 2;
+    width: 100%;
+    height: auto;
+    max-height: 42vh;
+    flex-shrink: 0;
+    align-self: center;
+  }
+
+  #hud-bottom {
+    position: static;
+    order: 3;
+    flex-shrink: 0;
+  }
+
+  #touch-controls {
+    order: 4;
+  }
+
+  /* Text sizing & legibility */
+  #hud-top,
+  #hud-bottom {
+    font-size: 15px;
+    line-height: 1.5;
+    padding: 8px 10px;
+  }
+
+  .turn-counter {
+    font-size: 28px;
+    font-weight: bold;
+  }
+
+  .bar {
+    height: 12px;
+  }
+
+  .hint-strip {
+    font-size: 12px;
+  }
+
+  .action-log {
+    font-size: 15px;
+    line-height: 1.7;
+    padding: 4px 0 8px;
+  }
+
+  .skill-slot,
+  .weapon-info,
+  .status-icon,
+  .brace-icon {
+    font-size: 15px;
+  }
+
+  /* Overlays (Inventory, Skill Menu, Upgrade Shop, Help, Title/Death/Victory) */
+  #screen-overlay.active {
+    font-size: 16px;
+  }
+
+  .menu {
+    padding: 16px;
+    gap: 12px;
+  }
+
+  .menu h2 {
+    font-size: 22px;
+  }
+
+  .menu button {
+    font-size: 16px;
+    padding: 11px 12px;
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Stack every side-by-side overlay row into a column */
+  .inventory-menu {
+    flex-direction: column;
+  }
+
+  .inventory-grid {
+    grid-auto-rows: minmax(48px, 1fr);
+  }
+
+  .inv-slot {
+    min-height: 48px;
+    font-size: 14px;
+  }
+
+  .shop-row,
+  .help-row,
+  .skill-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--color-mid);
+  }
+
+  .shop-row button,
+  .skill-row button {
+    width: 100%;
+  }
+
+  .help-key {
+    font-size: 15px;
+  }
+
+  .help-screen {
+    text-align: left;
+    min-width: 0;
+  }
+
+  .bestiary-lore,
+  .framing,
+  .confirm-message {
+    line-height: 1.7;
+  }
+
+  .title-menu button,
+  .death-menu button,
+  .victory-menu button,
+  .confirm-menu button {
+    width: 80vw;
+    max-width: 22em;
+    min-height: 48px;
+    font-size: 16px;
+  }
+
+  .title-menu h1,
+  .victory-menu h1 {
+    font-size: 28px;
+  }
+
+  .death-menu h2,
+  .victory-menu h2 {
+    font-size: 18px;
+  }
+
+  /* Virtual D-Pad (left) + skill/menu buttons (right) — Section 8 controls,
+   * touch-equivalent of WASD/Space/Q/E/I/K/? (touchControls.ts). */
+  .touch-controls {
+    display: flex;
+    order: 4;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 12px;
+    padding: 8px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+    flex-shrink: 0;
+    touch-action: none;
+  }
+
+  .dpad {
+    display: grid;
+    grid-template-areas:
+      ".    up    ."
+      "left .     right"
+      ".    down  .";
+    grid-template-columns: repeat(3, 56px);
+    grid-template-rows: repeat(3, 56px);
+    gap: 4px;
+  }
+
+  .dpad-up {
+    grid-area: up;
+  }
+
+  .dpad-down {
+    grid-area: down;
+  }
+
+  .dpad-left {
+    grid-area: left;
+  }
+
+  .dpad-right {
+    grid-area: right;
+  }
+
+  .pad-btn,
+  .menu-btn {
+    font-family: inherit;
+    color: var(--color-light);
+    background: var(--color-bg);
+    border: 2px solid var(--color-light);
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: none;
+  }
+
+  .pad-btn:active,
+  .menu-btn:active {
+    background: var(--color-mid);
+    color: var(--color-bg);
+  }
+
+  .pad-btn {
+    min-width: 44px;
+    min-height: 44px;
+    font-size: 20px;
+    font-weight: bold;
+  }
+
+  .action-pad {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+  }
+
+  .action-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  .skill-btn {
+    width: 56px;
+    height: 56px;
+    font-size: 20px;
+  }
+
+  .brace-btn {
+    width: 122px;
+    height: 44px;
+    font-size: 13px;
+    letter-spacing: 0.05em;
+  }
+
+  .menu-row {
+    display: flex;
+    gap: 6px;
+  }
+
+  .menu-btn {
+    min-width: 44px;
+    min-height: 44px;
+    font-size: 12px;
+    padding: 0 8px;
+    border-color: var(--color-mid);
+  }
+}

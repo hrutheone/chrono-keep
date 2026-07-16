@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Chrono-Keep</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%231a0f00'/><text x='8' y='13' font-size='12' text-anchor='middle' fill='%23ffb300'>⌛</text></svg>" />
     <link rel="stylesheet" href="/src/style.css" />
@@ -22,6 +22,31 @@
       <!-- Full-screen menus: inventory, skill menu, upgrade shop,
            title/death/victory (Phases 3, 5, 6) -->
       <div id="screen-overlay" class="overlay"></div>
+
+      <!-- Virtual controls (mobile portrait): hidden on desktop via CSS media
+           query. touchControls.ts dispatches the same synthetic keydown
+           events the WASD/Space/Q/E/I/K/? keyboard listeners already
+           consume, so touch and keyboard input share one code path. -->
+      <div id="touch-controls" class="touch-controls">
+        <div class="dpad">
+          <button class="pad-btn dpad-up" data-touch-key="move-up" aria-label="Move up">▲</button>
+          <button class="pad-btn dpad-left" data-touch-key="move-left" aria-label="Move left">◀</button>
+          <button class="pad-btn dpad-right" data-touch-key="move-right" aria-label="Move right">▶</button>
+          <button class="pad-btn dpad-down" data-touch-key="move-down" aria-label="Move down">▼</button>
+        </div>
+        <div class="action-pad">
+          <div class="action-row">
+            <button class="pad-btn skill-btn" data-touch-key="skill-q" aria-label="Skill Q">Q</button>
+            <button class="pad-btn skill-btn" data-touch-key="skill-e" aria-label="Skill E">E</button>
+          </div>
+          <button class="pad-btn brace-btn" data-touch-key="brace" aria-label="Brace">BRACE</button>
+          <div class="menu-row">
+            <button class="menu-btn" data-touch-key="open-inventory" aria-label="Inventory">INV</button>
+            <button class="menu-btn" data-touch-key="open-skills" aria-label="Skills">SKL</button>
+            <button class="menu-btn" data-touch-key="open-help" aria-label="Help">?</button>
+          </div>
+        </div>
+      </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

@@ -159,6 +159,7 @@ function renderInventory(state: GameState): string {
       <div class="menu-pane right-pane">
         <div class="inventory-grid">${gridHtml}</div>
       </div>
+      <button class="continue-btn close-btn" data-action="close-menu">Close</button>
       <div class="menu-hint">Hover an item for its lore · I / TAB / Esc: close</div>
     </div>`;
 }
@@ -210,6 +211,7 @@ function renderSkillMenu(state: GameState): string {
         <button class="tab-btn" data-action="skill-tab" data-tab="bestiary" ${skillMenuTab === 'bestiary' ? 'disabled' : ''}>Bestiary</button>
       </div>
       ${body}
+      <button class="continue-btn close-btn" data-action="close-menu">Close</button>
       <div class="menu-hint">K / Esc: close</div>
     </div>`;
 }
@@ -273,6 +275,7 @@ const HELP_ROWS: readonly [string, string, string][] = [
   ['[ / ]', 'Master volume down/up', 'any screen'],
   ['Esc', 'Close the current overlay', 'INVENTORY, SKILL_MENU, HELP, UPGRADE_SHOP, CONFIRM'],
   ['Click', 'Equip/unequip/use an item, assign a skill, buy an upgrade', 'INVENTORY, SKILL_MENU, UPGRADE_SHOP'],
+  ['Touch D-Pad/buttons', 'Mirrors WASD/Space/Q/E/I/K on mobile portrait', 'any screen'],
 ];
 
 function renderHelp(): string {
@@ -286,6 +289,7 @@ function renderHelp(): string {
       <h2>Controls</h2>
       <div class="stat-line">Volume: ${isMuted() ? 'Muted' : `${volumePct}%`}</div>
       <div class="help-list">${rows}</div>
+      <button class="continue-btn close-btn" data-action="close-menu">Close</button>
       <div class="menu-hint">? / F1 / Esc: close</div>
     </div>`;
 }
@@ -439,6 +443,7 @@ export function initMenus(state: GameState): void {
     else if (action === 'victory-newgameplus') startNewGamePlus(state);
     else if (action === 'confirm-yes') answerPendingConfirm(state, true);
     else if (action === 'confirm-no') answerPendingConfirm(state, false);
+    else if (action === 'close-menu') state.ui.currentScreen = 'GAME';
 
     render(state);
   });
