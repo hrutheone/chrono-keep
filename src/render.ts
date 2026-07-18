@@ -11,7 +11,7 @@ import {
   COLOR_FIRE,
   COLOR_FROST,
 } from './palette';
-import { TILE } from './mapgen';
+import { TILE, effectiveTileAt } from './mapgen';
 import { eliteAffixColor } from './content';
 import { spritesheet, SPRITE_PX } from './assets';
 import {
@@ -42,7 +42,7 @@ const FLOAT_COLOR: Record<FloatKind, string> = {
   turns: COLOR_PLAYER_LIGHT,
 };
 
-/** Draws spritesheet cell. */
+/** Draws spritesheet cell. rotQuarters rotates clockwise in 90-degree steps, about the tile center. */
 export function drawTile(
   ctx: CanvasRenderingContext2D,
   col: number,
@@ -51,14 +51,16 @@ export function drawTile(
   dy: number,
   flipX = false,
   size = TILE_SIZE,
+  rotQuarters = 0,
 ): void {
   const sx = col * SPRITE_PX;
   const sy = row * SPRITE_PX;
-  if (flipX) {
+  if (flipX || rotQuarters) {
     ctx.save();
-    ctx.translate(dx + size, dy);
-    ctx.scale(-1, 1);
-    ctx.drawImage(spritesheet, sx, sy, SPRITE_PX, SPRITE_PX, 0, 0, size, size);
+    ctx.translate(dx + size / 2, dy + size / 2);
+    if (rotQuarters) ctx.rotate((rotQuarters * Math.PI) / 2);
+    if (flipX) ctx.scale(-1, 1);
+    ctx.drawImage(spritesheet, sx, sy, SPRITE_PX, SPRITE_PX, -size / 2, -size / 2, size, size);
     ctx.restore();
   } else {
     ctx.drawImage(spritesheet, sx, sy, SPRITE_PX, SPRITE_PX, dx, dy, size, size);
@@ -98,9 +100,9 @@ function drawTileFlash(
   }
 }
 
-function drawRef(ctx: CanvasRenderingContext2D, ref: SpriteRef, dx: number, dy: number, flipX = false, flash = false, size = TILE_SIZE): void {
+function drawRef(ctx: CanvasRenderingContext2D, ref: SpriteRef, dx: number, dy: number, flipX = false, flash = false, size = TILE_SIZE, rotQuarters = 0): void {
   if (flash) drawTileFlash(ctx, ref.col, ref.row, dx, dy, flipX, size);
-  else drawTile(ctx, ref.col, ref.row, dx, dy, flipX, size);
+  else drawTile(ctx, ref.col, ref.row, dx, dy, flipX, size, rotQuarters);
 }
 
 const TILE_REFS: Partial<Record<number, SpriteRef>> = {
@@ -114,6 +116,51 @@ const TILE_REFS: Partial<Record<number, SpriteRef>> = {
   [TILE.FROST_HAZARD]: SPRITES.FROST_HAZARD,
   [TILE.SHOP_TERMINAL]: SPRITES.SHOP_TERMINAL,
 };
+
+// Wall autotiling: bitmask of which cardinal neighbors are also walls (N=1, E=2, S=4, W=8)
+// picks a sprite + 90-degree rotation so wall art always meets its neighbors correctly.
+interface WallVariant {
+  ref: SpriteRef;
+  rot: number;
+}
+const WALL_VARIANT_BY_MASK: Record<number, WallVariant> = {
+  0: { ref: SPRITES.WALL, rot: 0 }, // isolated
+  1: { ref: SPRITES.WALL_END, rot: 0 }, // N
+  2: { ref: SPRITES.WALL_END, rot: 1 }, // E
+  4: { ref: SPRITES.WALL_END, rot: 2 }, // S
+  8: { ref: SPRITES.WALL_END, rot: 3 }, // W
+  5: { ref: SPRITES.WALL, rot: 0 }, // N+S
+  10: { ref: SPRITES.WALL, rot: 1 }, // E+W
+  6: { ref: SPRITES.WALL_CORNER, rot: 0 }, // E+S
+  12: { ref: SPRITES.WALL_CORNER, rot: 1 }, // S+W
+  9: { ref: SPRITES.WALL_CORNER, rot: 2 }, // W+N
+  3: { ref: SPRITES.WALL_CORNER, rot: 3 }, // N+E
+  7: { ref: SPRITES.WALL_T, rot: 0 }, // N+E+S
+  14: { ref: SPRITES.WALL_T, rot: 1 }, // E+S+W
+  13: { ref: SPRITES.WALL_T, rot: 2 }, // S+W+N
+  11: { ref: SPRITES.WALL_T, rot: 3 }, // W+N+E
+  15: { ref: SPRITES.WALL_CROSS, rot: 0 }, // N+E+S+W
+};
+
+const WALL_NEIGHBOR_OFFSETS: readonly [number, number, number][] = [
+  [0, -1, 1], // N
+  [1, 0, 2], // E
+  [0, 1, 4], // S
+  [-1, 0, 8], // W
+];
+
+/** Picks the correctly-shaped/rotated wall sprite for the tile at (x, y), honoring expiringTiles overlays. */
+function wallVariantAt(state: GameState, x: number, y: number): WallVariant {
+  const { width, height } = state.dungeon;
+  let mask = 0;
+  for (const [dx, dy, bit] of WALL_NEIGHBOR_OFFSETS) {
+    const nx = x + dx;
+    const ny = y + dy;
+    if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+    if (effectiveTileAt(state, nx, ny) === TILE.WALL) mask |= bit;
+  }
+  return WALL_VARIANT_BY_MASK[mask];
+}
 
 const ENEMY_REFS: Record<Enemy['kind'], SpriteRef> = {
   BONE_GRUNT: SPRITES.BONE_GRUNT,
@@ -220,6 +267,11 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     for (let x = 0; x < VIEWPORT_TILES_W; x++) {
       const tx = cam.x + x;
       if (tx < 0 || tx >= width) continue;
+      if (row[tx] === TILE.WALL) {
+        const { ref, rot } = wallVariantAt(state, tx, ty);
+        drawTile(ctx, ref.col, ref.row, x * TILE_SIZE, y * TILE_SIZE, false, TILE_SIZE, rot);
+        continue;
+      }
       const ref = TILE_REFS[row[tx]];
       if (ref) drawRef(ctx, ref, x * TILE_SIZE, y * TILE_SIZE);
     }
@@ -230,6 +282,11 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     const sx = t.x - cam.x;
     const sy = t.y - cam.y;
     if (sx < 0 || sx >= VIEWPORT_TILES_W || sy < 0 || sy >= VIEWPORT_TILES_H) continue;
+    if (t.tileType === TILE.WALL) {
+      const { ref, rot } = wallVariantAt(state, t.x, t.y);
+      drawTile(ctx, ref.col, ref.row, sx * TILE_SIZE, sy * TILE_SIZE, false, TILE_SIZE, rot);
+      continue;
+    }
     const ref = TILE_REFS[t.tileType];
     if (ref) drawRef(ctx, ref, sx * TILE_SIZE, sy * TILE_SIZE);
   }
