@@ -429,6 +429,7 @@ body {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   align-content: start;
+  align-items: start;
   gap: 4px;
   flex: 1;
   min-height: 0;
