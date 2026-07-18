@@ -1,6 +1,4 @@
-// Upgrade Shop (GDD Section 7): permanent stat tracks and skill unlocks/
-// upgrades, purchased with Echoes between loops. Pure state logic — menus.ts
-// owns the HTML overlay.
+// Upgrade Shop state logic.
 
 import { SKILLS } from './content';
 import { logLine } from './turns';
@@ -17,11 +15,7 @@ export const STAT_TRACKS: { track: StatTrack; label: string }[] = [
   { track: 'baseAtkUpgrade', label: 'Base ATK (+1/lvl)' },
 ];
 
-// Phase 17: cap raised from Level 5 to Level 10 (GDD Section 6D) to match
-// the 99-floor stat curve — Levels 6-10 continue the "+40 per level
-// thereafter" rule verbatim from the same GDD line: 80, 120, 160, 200, 240.
-// Base ATK is a distinct, steeper 5-level curve (its own direct damage
-// lever, not a survivability stat) rather than sharing the 10-level array.
+// Stat upgrade costs.
 const STAT_TRACK_COSTS: Record<StatTrack, number[]> = {
   maxHpUpgrade: [10, 20, 35, 55, 80, 120, 160, 200, 240, 280],
   maxStamUpgrade: [10, 20, 35, 55, 80, 120, 160, 200, 240, 280],

@@ -1,8 +1,4 @@
-// Deterministic Room & Corridor floor generator for the 99-Floor Descent.
-// Every floor derives from hash(persistent.rngSeed, floorNumber), so a save's
-// dungeon is identical across loops; floors are generated lazily. A layout
-// that fails the turn-budget check (spawn -> Stairs <= 40 walked tiles)
-// regenerates from the next derived attempt seed — also deterministic.
+// Deterministic floor generator.
 
 import type { Enemy, GameState, WorldItem } from './types';
 import { DUNGEON_SIZE, floorTurnLimit } from './state';
@@ -31,8 +27,7 @@ export const TILE = {
   BOSS_GATE: 6,
   FIRE_HAZARD: 7,
   SHOP_TERMINAL: 8,
-  // Scourge's expiring-tile hazard — never generator-placed, only ever laid
-  // down by the skill itself via dungeon.expiringTiles.
+  // Scourge's expiring-tile hazard.
   FROST_HAZARD: 9,
 } as const;
 
@@ -42,10 +37,7 @@ export const PATH_BUDGET = 40;
 const MAX_ATTEMPTS = 50;
 const N = DUNGEON_SIZE;
 
-// Fire/Frost Hazard are walkable (that's the point — standing on one deals
-// its damage). Shortcut Gate and Shop Terminal only ever appear in the
-// hand-authored Hub (src/hub.ts); stepping onto either triggers
-// movement.ts's interaction. None of these are generator-placed.
+// Walkable tiles.
 const WALKABLE = new Set<number>([
   TILE.FLOOR,
   TILE.DOOR,
@@ -61,17 +53,14 @@ export function isWalkable(tile: number): boolean {
   return WALKABLE.has(tile);
 }
 
-/** The tile at (x, y) as it should render/behave *right now* — an active
- * `dungeon.expiringTiles` overlay wins over the deterministic `dungeon.tiles`
- * grid underneath it, without ever mutating that grid. */
+/** The effective tile at (x, y). */
 export function effectiveTileAt(state: GameState, x: number, y: number): number {
   const overlay = state.dungeon.expiringTiles.find((t) => t.x === x && t.y === y);
   if (overlay) return overlay.tileType;
   return state.dungeon.tiles[y][x];
 }
 
-/** isWalkable, but respecting expiringTiles overlays (e.g. an Ice-Barricade
- * blocks even though the floor tile underneath it is open). */
+/** isWalkable respecting expiringTiles overlays. */
 export function isWalkableAt(state: GameState, x: number, y: number): boolean {
   if (x < 0 || x >= state.dungeon.width || y < 0 || y >= state.dungeon.height) return false;
   return isWalkable(effectiveTileAt(state, x, y));
@@ -91,8 +80,7 @@ export interface GeneratedFloor {
   spawnY: number;
   stairsX: number;
   stairsY: number;
-  // Null on most floors (rare). A coordinate, not a `tiles` grid entry —
-  // see types.ts's dungeon.riftX/Y comment for why.
+  // Cursed Rift coordinates.
   riftX: number | null;
   riftY: number | null;
 }
@@ -172,8 +160,7 @@ function shortestPath(tiles: number[][], from: Point, to: Point): Point[] | null
   return path.reverse();
 }
 
-/** Generates a floor from the save seed. Deterministic; throws only if every
- * derived attempt seed fails the acceptance check. */
+/** Generates a floor from the save seed. */
 export function generateFloor(rngSeed: number, floorNumber: number): GeneratedFloor {
   const floorSeed = hash(rngSeed, floorNumber);
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
@@ -184,8 +171,7 @@ export function generateFloor(rngSeed: number, floorNumber: number): GeneratedFl
 }
 
 function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
-  // 1. Non-overlapping rooms (interiors only; walls come later). Interiors stay
-  //    inside [1, N-2] so the wall ring fits, with a 2-tile gap between rooms.
+  // Generate non-overlapping rooms.
   const rooms: Room[] = [];
   const targetRooms = randInt(rng, 6, 8);
   for (let tries = 0; tries < 80 && rooms.length < targetRooms; tries++) {
@@ -200,7 +186,7 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
   }
   if (rooms.length < 4) return null;
 
-  // 2. Carve rooms, then chain them with L-shaped corridors.
+  // Carve rooms and corridors.
   const tiles: number[][] = Array.from({ length: N }, () => new Array<number>(N).fill(TILE.VOID));
   for (const r of rooms) {
     for (let y = r.y; y < r.y + r.h; y++) {
@@ -240,8 +226,7 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
     return out;
   };
 
-  // 3. Pick Stairs guided by BFS distance so the 40-tile budget almost always
-  //    holds; the mandated check in step 5 remains authoritative.
+  // Pick Stairs guided by BFS distance.
   const fromSpawn = walkDistances(tiles, spawn.x, spawn.y);
   const inRange = (dist: Int32Array, x: number, y: number, lo: number, hi: number): boolean => {
     const d = dist[y * N + x];
@@ -253,8 +238,7 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
   const stairs = pick(rng, stairsCands);
   tiles[stairs.y][stairs.x] = TILE.STAIRS;
 
-  // 4. Walls around all carved space, then doors where a 1-wide corridor meets
-  //    a room.
+  // Create walls and doors.
   for (let y = 0; y < N; y++) {
     for (let x = 0; x < N; x++) {
       if (tiles[y][x] !== TILE.VOID) continue;
@@ -287,13 +271,12 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
     if (ORTHO.some(([dx, dy]) => inAnyRoom(x + dx, y + dy))) tiles[y][x] = TILE.DOOR;
   }
 
-  // 5. The mandated turn-budget check on the finished geometry.
+  // Turn-budget check.
   const distSpawn = walkDistances(tiles, spawn.x, spawn.y);
   const spawnToStairs = distSpawn[stairs.y * N + stairs.x];
   if (spawnToStairs < 0 || spawnToStairs > PATH_BUDGET) return null;
 
-  // 6. Chokepoint guards: 1-2 enemies on 1-wide corridor tiles that lie on the
-  //    shortest spawn -> Stairs route (kept off the player's doorstep).
+  // Place chokepoint guards.
   const routeTiles = shortestPath(tiles, spawn, stairs) ?? [];
   const chokeCands: Point[] = [];
   const seenChoke = new Set<number>();
@@ -312,7 +295,7 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
     stairs.y * N + stairs.x,
   ]);
 
-  // 7. Enemies: 3-6 total from the floor's biome mix, chokepoint guards first.
+  // Place remaining enemies.
   const pool = enemyPoolForFloor(floorNumber);
   const countRange = enemyCountRangeForFloor(floorNumber);
   const totalEnemies = randInt(rng, countRange.min, countRange.max);
@@ -321,9 +304,7 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
   const spawnEnemy = (kind: EnemyKind, x: number, y: number): void => {
     const enemy = createEnemy(kind, `f${floorNumber}-enemy-${enemies.length}`, x, y);
     scaleEnemyForDepth(enemy, floorNumber);
-    // Rolled from the SAME seeded rng stream as everything else here (not
-    // Math.random()) — floor generation must stay a pure function of
-    // (rngSeed, floorNumber) for determinism.
+    // Roll elite spawn deterministically.
     if (rng() < ELITE_SPAWN_CHANCE) {
       const affix = pick(rng, ELITE_AFFIX_KEYS);
       enemy.affix = affix;
@@ -346,8 +327,7 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
   while (enemies.length + roomKinds.length < totalEnemies) {
     const kind = pick(rng, pool);
     roomKinds.push(kind);
-    // Volt-Hound spawns in pairs — claim the next budget slot for its
-    // pack-mate if the floor's enemy-count budget has room.
+    // Volt-Hound spawns in pairs.
     if (kind === 'VOLT_HOUND' && enemies.length + roomKinds.length < totalEnemies) roomKinds.push('VOLT_HOUND');
   }
   if (floorNumber >= 21 && roomKinds.length > 0) roomKinds[0] = 'TIME_WEAVER';
@@ -355,9 +335,7 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
   let openHoundPos: Point | null = null;
   for (const kind of roomKinds) {
     let pos: Point | undefined;
-    // Land this hound next to the pack-mate placed just before it, if there's
-    // an open adjacent tile; otherwise it falls through to an independent spot
-    // below (still a pair in composition, just not adjacent this floor).
+    // Place Volt-Hound adjacent to pack-mate if possible.
     if (kind === 'VOLT_HOUND' && openHoundPos) {
       const adjacent = ORTHO.map(([dx, dy]) => ({ x: openHoundPos!.x + dx, y: openHoundPos!.y + dy })).filter(
         (p) => tiles[p.y]?.[p.x] === TILE.FLOOR && !occupied.has(p.y * N + p.x),
@@ -377,9 +355,7 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
     spawnEnemy(kind, pos.x, pos.y);
   }
 
-  // 8. 1-2 loot chests. When a chokepoint guard exists, the first chest is
-  // biased to sit just past it (farther from spawn, within 3 tiles) —
-  // sharpens the "fight through or go around" tension.
+  // Place loot chests.
   const items: WorldItem[] = [];
   const chestCount = randInt(rng, 1, 2);
   const chokeGuards = enemies.filter((e) => chokeCands.some((c) => c.x === e.x && c.y === e.y));
@@ -406,9 +382,7 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
       pos = pick(rng, spots);
     }
     occupied.add(pos.y * N + pos.x);
-    // Contents are placeholder-rolled here (deterministic stream, keeps this
-    // function's output self-consistent for the same seed); inventory.ts
-    // rerolls the real contents from Math.random() at pickup time.
+    // Reroll chest contents at pickup time.
     items.push({
       item: rollChestItem(rng, floorNumber, `f${floorNumber}-chest-${i}`),
       x: pos.x,
@@ -417,9 +391,7 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
     });
   }
 
-  // 9. Cursed Rift: rare, floors 3+ only. A coordinate sitting on an
-  // ordinary FLOOR tile, not its own tile type — see GeneratedFloor's
-  // riftX/Y comment for why. At most one per floor.
+  // Place Cursed Rift.
   let riftX: number | null = null;
   let riftY: number | null = null;
   if (floorNumber >= 3 && rng() < 0.12) {

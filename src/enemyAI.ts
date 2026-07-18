@@ -1,5 +1,4 @@
-// Enemy Phase: wake radius, per-kind behavior, and the status effects that
-// gate a turn (Burn tick, Stun skip, Chilled half-speed).
+// Enemy Phase and AI behavior.
 
 import { createEnemy, ENEMY_NAME, scaleEnemyForNgPlus } from './content';
 import type { EnemyKind } from './content';
@@ -27,14 +26,10 @@ const DIAGONAL: ReadonlyArray<readonly [number, number]> = [
 ];
 const ALL_8: ReadonlyArray<readonly [number, number]> = [...ORTHO, ...DIAGONAL];
 
-// Per-id "every Nth activation" cadence counter, pruned each phase — shared
-// by every enemy whose behavior fires on a fixed cycle rather than every turn.
+// Enemy cadence counter.
 const activationCounters = new Map<string, number>();
 
-// Separate from activationCounters above: the Colossal affix can roll on a
-// kind that already uses that counter for its own cadence, and sharing one
-// counter between "does this turn happen" and "does my ability fire" would
-// corrupt both.
+// Colossal affix turn counter.
 const colossalTurnCounters = new Map<string, number>();
 
 function pruneActivationCounters(state: GameState): void {
@@ -66,12 +61,12 @@ function wakeIfNear(state: GameState, enemy: Enemy): void {
   if (dist <= WAKE_RADIUS) {
     enemy.awake = true;
     logLine(state, `${ENEMY_NAME[enemy.kind]} wakes up!`);
-    // Bestiary only shows what's actually been fought.
+    // Bestiary tracker.
     if (!state.persistent.bestiaryKnown.includes(enemy.kind)) state.persistent.bestiaryKnown.push(enemy.kind);
   }
 }
 
-/** Greedy chase: steps toward the player along the longer axis first, attacking on contact. */
+/** Greedy chase toward the player. */
 function chaseStep(state: GameState, enemy: Enemy, steps: number, respectWalls: boolean): void {
   for (let i = 0; i < steps; i++) {
     const ddx = state.run.playerX - enemy.x;
@@ -101,8 +96,7 @@ function chaseStep(state: GameState, enemy: Enemy, steps: number, respectWalls: 
   }
 }
 
-/** The mirror of chaseStep — steps away from the player along the longer
- * axis first, never attacking and never stepping onto them. */
+/** Flees away from the player. */
 function fleeStep(state: GameState, enemy: Enemy, steps: number): void {
   for (let i = 0; i < steps; i++) {
     const ddx = enemy.x - state.run.playerX;
@@ -128,9 +122,7 @@ function fleeStep(state: GameState, enemy: Enemy, steps: number): void {
   }
 }
 
-/** Wealthy affix: flees toward the floor's Stairs instead of engaging the
- * player — the mirror of chaseStep, targeting `dungeon.stairsX/Y`, never
- * attacking. */
+/** Flees toward the stairs. */
 function fleeTowardStairs(state: GameState, enemy: Enemy, steps: number): void {
   for (let i = 0; i < steps; i++) {
     const ddx = state.dungeon.stairsX - enemy.x;
@@ -156,16 +148,14 @@ function fleeTowardStairs(state: GameState, enemy: Enemy, steps: number): void {
   }
 }
 
-/** Toxic affix: leaves a short-lived Frost-Hazard-type expiring tile (1
- * direct DEF-piercing HP per turn standing on it — see turnController.ts's
- * applyFrostHazard) at the tile it just stepped off of. */
+/** Toxic trail placement. */
 function placeToxicTrail(state: GameState, x: number, y: number): void {
   const existing = state.dungeon.expiringTiles.find((t) => t.x === x && t.y === y);
   if (existing) existing.turnsLeft = 2;
   else state.dungeon.expiringTiles.push({ x, y, turnsLeft: 2, tileType: TILE.FROST_HAZARD });
 }
 
-/** Ember-Bat: erratic — a random valid direction each step, still attacking on contact. */
+/** Erratic movement. */
 function erraticStep(state: GameState, enemy: Enemy, steps: number): void {
   for (let i = 0; i < steps; i++) {
     for (const [ax, ay] of shuffled(ORTHO)) {
@@ -185,7 +175,7 @@ function erraticStep(state: GameState, enemy: Enemy, steps: number): void {
   }
 }
 
-/** Volt-Turret: stationary, fires a 4-tile line every 2nd activation if aligned with the player. */
+/** Turret behavior. */
 function turretAct(state: GameState, enemy: Enemy): void {
   const count = (activationCounters.get(enemy.id) ?? 0) + 1;
   activationCounters.set(enemy.id, count);
@@ -197,9 +187,7 @@ function turretAct(state: GameState, enemy: Enemy): void {
   const dx = sameRow ? Math.sign(state.run.playerX - enemy.x) : 0;
   const dy = sameCol ? Math.sign(state.run.playerY - enemy.y) : 0;
 
-  // Track the line's actual endpoint (the player's tile on a hit, otherwise
-  // the last open tile before a wall/bound) so the beam VFX below reads as a
-  // real shot along the line, not a melee lunge toward a far-off target.
+  // Track beam endpoint.
   let endX = enemy.x;
   let endY = enemy.y;
   let hit = false;
@@ -220,11 +208,7 @@ function turretAct(state: GameState, enemy: Enemy): void {
   if (hit) enemyAttackPlayer(state, enemy);
 }
 
-// Telegraphed fire AOE centered on the player's current tile — shared by
-// Cinder-Shaman's firebomb and Inferno-Golem's Magma Slam. 2, not 1: a
-// freshly-cast entry gets decremented once already in the same
-// resolvePlayerTurn call that created it, so turnsUntil=1 would detonate
-// with zero visible warning.
+// Turns before telegraphed AOE detonates.
 const AREA_BOMB_TELEGRAPH_TURNS = 2;
 
 interface AreaBombOptions {
@@ -248,7 +232,7 @@ function castAreaBomb(state: GameState, enemy: Enemy, opts: AreaBombOptions): vo
         turnsUntil: AREA_BOMB_TELEGRAPH_TURNS,
         payload: 'fire_aoe',
         sourceAttack: Math.round(enemy.attack * opts.damageMultiplier),
-        hazard: dx === 0 && dy === 0, // only the center tile keeps burning afterward
+        hazard: dx === 0 && dy === 0,
         hazardTurns: opts.hazardTurns,
       });
     }
@@ -266,7 +250,7 @@ function castFirebomb(state: GameState, enemy: Enemy): void {
   });
 }
 
-/** 1.5x ATK, a 3-turn Fire Hazard on the center tile; Mk II+ widens it to a 5x5. */
+/** Cast Magma Slam. */
 function castMagmaSlam(state: GameState, enemy: Enemy): void {
   const radius = miniBossRepeatNumber(state.run.currentFloor) >= 1 ? 2 : 1;
   castAreaBomb(state, enemy, {
@@ -277,8 +261,7 @@ function castMagmaSlam(state: GameState, enemy: Enemy): void {
   });
 }
 
-/** Slow relentless chaser; every 5th turn (every 4th below 50% HP) unleashes
- * Magma Slam instead of moving. */
+/** Golem behavior. */
 function golemAct(state: GameState, enemy: Enemy): void {
   const count = (activationCounters.get(enemy.id) ?? 0) + 1;
   activationCounters.set(enemy.id, count);
@@ -298,8 +281,7 @@ function golemAct(state: GameState, enemy: Enemy): void {
   chaseStep(state, enemy, enemy.speed, true);
 }
 
-/** Kites to keep 4-6 tiles from the player, lobbing its telegraphed firebomb
- * every 3rd activation regardless of exact range. */
+/** Shaman behavior. */
 function shamanAct(state: GameState, enemy: Enemy): void {
   const count = (activationCounters.get(enemy.id) ?? 0) + 1;
   activationCounters.set(enemy.id, count);
@@ -312,10 +294,7 @@ function shamanAct(state: GameState, enemy: Enemy): void {
   if (count % 3 === 0) castFirebomb(state, enemy);
 }
 
-/** A 4-tile Volt line that forks 90° once off the first wall it hits. Aims
- * along whichever axis has the larger offset to the player, forks toward the
- * remaining offset on the perpendicular axis, then keeps traveling until it
- * hits the player, runs out of budget, or hits a second wall. */
+/** Chain Bolt cast. */
 function castChainBolt(state: GameState, enemy: Enemy, stunChance: number): void {
   const ddx = state.run.playerX - enemy.x;
   const ddy = state.run.playerY - enemy.y;
@@ -336,7 +315,7 @@ function castChainBolt(state: GameState, enemy: Enemy, stunChance: number): void
     const nx = x + dx;
     const ny = y + dy;
     if (!inBounds(state, nx, ny) || !isWalkableAt(state, nx, ny)) {
-      if (forked) break; // a second wall — the bolt just stops here
+      if (forked) break;
       forked = true;
       forkX = x;
       forkY = y;
@@ -347,7 +326,7 @@ function castChainBolt(state: GameState, enemy: Enemy, stunChance: number): void
         dx = Math.sign(state.run.playerX - x) || 1;
         dy = 0;
       }
-      continue; // retry from (x, y) along the new axis — the fork itself doesn't spend a tile
+      continue;
     }
     x = nx;
     y = ny;
@@ -376,9 +355,7 @@ function castChainBolt(state: GameState, enemy: Enemy, stunChance: number): void
   }
 }
 
-/** Keeps mid-range (4-6 tiles). Every 3rd turn: Chain Bolt (+25% Stun below
- * 50% HP). Every 5th turn: summons a pack-mate, capped at 2 alive — Volt-
- * Hound early, Frost-Sentinel from Mk II onward. */
+/** Caller behavior. */
 function callerAct(state: GameState, enemy: Enemy): void {
   const count = (activationCounters.get(enemy.id) ?? 0) + 1;
   activationCounters.set(enemy.id, count);
@@ -408,8 +385,7 @@ function callerAct(state: GameState, enemy: Enemy): void {
   else if (dist > 6) chaseStep(state, enemy, enemy.speed, true);
 }
 
-// Same 1-turn-warning telegraph treatment as the firebomb above — see
-// AREA_BOMB_TELEGRAPH_TURNS's comment for why it's 2, not 1.
+// Frost pulse telegraph duration.
 const FROST_PULSE_TELEGRAPH_TURNS = 2;
 
 function castFrostPulse(state: GameState, enemy: Enemy): void {
@@ -431,7 +407,7 @@ function castFrostPulse(state: GameState, enemy: Enemy): void {
   playBossTelegraphSfx();
 }
 
-/** Frost-Sentinel: stationary, fires its cross pulse every 2nd activation. */
+/** Sentinel behavior. */
 function sentinelAct(state: GameState, enemy: Enemy): void {
   const count = (activationCounters.get(enemy.id) ?? 0) + 1;
   activationCounters.set(enemy.id, count);
@@ -439,8 +415,7 @@ function sentinelAct(state: GameState, enemy: Enemy): void {
   castFrostPulse(state, enemy);
 }
 
-/** All 8 adjacent tiles, instant (melee-range, no telegraph). A no-op if the
- * player isn't actually adjacent this turn. */
+/** Frozen Sweep cast. */
 function castFrozenSweep(state: GameState, enemy: Enemy): void {
   const hitsPlayer = ALL_8.some(([dx, dy]) => enemy.x + dx === state.run.playerX && enemy.y + dy === state.run.playerY);
   if (!hitsPlayer) return;
@@ -451,23 +426,17 @@ function castFrozenSweep(state: GameState, enemy: Enemy): void {
   }
 }
 
-// A very large (not literally infinite) turnsLeft stands in for "doesn't
-// melt" (Mk III Knight's twist) — the fight is always over long before this
-// many turns pass, and expiringTiles has no dedicated "permanent" concept.
+// Ice Barricade durations.
 const ICE_BARRICADE_TURNS = 5;
 const ICE_BARRICADE_PERMANENT_TURNS = 999;
 
-/** Glacial-Knight's Ice-Barricade (Section 6C, Phase 15): a 3-tile wall
- * segment placed just past the player (from the Knight's side), cutting off
- * a retreat lane — an expiringTiles overlay (isWalkableAt already blocks
- * movement through it for free), melting in 5 turns except on the Mk III
- * (F70+) twist, where it doesn't. */
+/** Cast Ice Barricade. */
 function castIceBarricade(state: GameState, enemy: Enemy): void {
   const ddx = state.run.playerX - enemy.x;
   const ddy = state.run.playerY - enemy.y;
   const dx = Math.abs(ddx) >= Math.abs(ddy) ? Math.sign(ddx) || 1 : 0;
   const dy = dx === 0 ? Math.sign(ddy) || 1 : 0;
-  // The 3-tile segment runs perpendicular to the Knight->player axis.
+  // The 3-tile segment runs perpendicular.
   const px = dx === 0 ? 1 : 0;
   const py = dy === 0 ? 1 : 0;
 
@@ -480,7 +449,7 @@ function castIceBarricade(state: GameState, enemy: Enemy): void {
     const tx = centerX + px * i;
     const ty = centerY + py * i;
     if (!inBounds(state, tx, ty)) continue;
-    if (tx === state.run.playerX && ty === state.run.playerY) continue; // never wall the player in
+    if (tx === state.run.playerX && ty === state.run.playerY) continue;
     const existing = state.dungeon.expiringTiles.find((t) => t.x === tx && t.y === ty);
     if (existing) existing.turnsLeft = turns;
     else state.dungeon.expiringTiles.push({ x: tx, y: ty, turnsLeft: turns, tileType: TILE.WALL });
@@ -489,14 +458,7 @@ function castIceBarricade(state: GameState, enemy: Enemy): void {
   playBossTelegraphSfx();
 }
 
-/** Glacial-Knight: high-DEF duelist. Frozen Sweep (every 3rd turn) and
- * Ice-Barricade (every 6th) are checked — and can both fire on the same
- * turn, since 6 is a multiple of 3 and neither should starve the other's
- * GDD-stated frequency — BEFORE the adjacent-bump shortcut every other boss
- * uses; unlike their ranged abilities, Sweep is a melee-range AOE that needs
- * to fire even (especially) when the Knight is standing right next to the
- * player, so bump-first would silently never let it trigger. Below 50% HP,
- * +1 speed while the player is Chilled. */
+/** Knight behavior. */
 function knightAct(state: GameState, enemy: Enemy): void {
   const count = (activationCounters.get(enemy.id) ?? 0) + 1;
   activationCounters.set(enemy.id, count);
@@ -512,26 +474,18 @@ function knightAct(state: GameState, enemy: Enemy): void {
     return;
   }
 
-  // "+1 speed while the player is Chilled" (GDD) is about the PLAYER's
-  // status, layered on top of the Knight's own Chilled-halves-its-speed
-  // baseline (the same global rule actEnemy applies to everything else).
+  // Speed modifications.
   const baseSpeed = enemy.status === 'CHILLED' ? Math.max(1, Math.floor(enemy.speed / 2)) : enemy.speed;
   const enraged = enemy.hp <= enemy.maxHp * 0.5;
   const speed = enraged && state.run.status === 'CHILLED' ? baseSpeed + 1 : baseSpeed;
   chaseStep(state, enemy, speed, true);
 }
 
-// Chrono-Lich (GDD Section 6C): activation counter driving its attack cadence,
-// keyed by enemy id (a single boss today, but keyed the same way as turrets).
+// Chrono-Lich attack cadence timers.
 const bossTimers = new Map<string, number>();
 const TIME_BLAST_WARNING_TURNS = 2;
 
-// Rewind (GDD Section 6C, Phase 16): a one-time self-cast below 25% HP,
-// telegraphed 2 turns ahead like every other cast in this file, but a
-// self-buff rather than a tile-targeted AOE — its countdown lives here
-// (ticked every Tick Phase by tickBossRewind below, regardless of what the
-// boss's own Enemy-Phase turn does) instead of on dungeon.telegraphTiles.
-// `bossRewindUsed` makes it fire at most once per fight.
+// Rewind state.
 const bossRewindPending = new Map<string, number>();
 const bossRewindUsed = new Set<string>();
 const REWIND_WARNING_TURNS = 2;
@@ -543,20 +497,14 @@ function pruneBossTimers(state: GameState): void {
   for (const id of bossRewindUsed) if (!liveIds.has(id)) bossRewindUsed.delete(id);
 }
 
-/** bossArena.ts calls this on every fresh Floor 99 entry — BOSS_ID is a fixed
- * id reused across every attempt (the fight has no per-loop unique id the
- * way Mini-Boss Arenas do), so a prior failed attempt's cadence position and
- * used-up Rewind must not leak into the next one. */
+/** Resets boss state for a new attempt. */
 export function resetChronoLichEncounter(id: string): void {
   bossTimers.delete(id);
   bossRewindPending.delete(id);
   bossRewindUsed.delete(id);
 }
 
-/** Ticks any in-progress Rewind channel (Tick Phase, called from
- * turnController.ts BEFORE tickEnemyStatuses so a stun the boss is under
- * during the resolving turn hasn't already been cleared by the time this
- * checks it — "interrupted if he is Stunned when it resolves", GDD). */
+/** Ticks pending rewind. */
 export function tickBossRewind(state: GameState): void {
   for (const enemy of state.dungeon.enemies) {
     if (enemy.kind !== 'CHRONO_LICH') continue;
@@ -579,8 +527,7 @@ export function tickBossRewind(state: GameState): void {
   }
 }
 
-/** Marks the player's tile and its 4 neighbors; turnController.ts's Tick Phase
- * detonates them (Stun on hit) after 2 turns of warning. */
+/** Cast Time Blast. */
 function castTimeBlast(state: GameState, enemy: Enemy): void {
   const targets = [
     { x: state.run.playerX, y: state.run.playerY },
@@ -593,17 +540,14 @@ function castTimeBlast(state: GameState, enemy: Enemy): void {
       y: t.y,
       turnsUntil: TIME_BLAST_WARNING_TURNS,
       payload: 'stun',
-      sourceAttack: enemy.attack, // unused by the 'stun' payload, kept for a uniform shape
+      sourceAttack: enemy.attack,
     });
   }
   logLine(state, `${ENEMY_NAME[enemy.kind]} channels a Time-Blast!`);
   playBossTelegraphSfx();
 }
 
-/** Summons one `kind` adjacent to `enemy` (Chrono-Lich's Bone-Grunt
- * reinforcements, Phase 14; Storm-Caller's Volt-Hound/Frost-Sentinel pack,
- * Phase 15) — generalized from a Bone-Grunt-only helper since both callers
- * share the exact same "place one ally in a free ortho-adjacent tile" shape. */
+/** Summons an ally enemy. */
 function summonAlly(state: GameState, enemy: Enemy, kind: EnemyKind, message: string): void {
   for (const [dx, dy] of shuffled(ORTHO)) {
     const nx = enemy.x + dx;
@@ -619,12 +563,7 @@ function summonAlly(state: GameState, enemy: Enemy, kind: EnemyKind, message: st
   }
 }
 
-/** Chrono-Lich: bump-attacks when adjacent, otherwise cycles between chasing,
- * a telegraphed Time-Blast, and summoning Grunt reinforcements. Fun & Feel
- * #3: below 50% HP the pattern tightens (an "enrage" phase, since the fight
- * would otherwise run its whole length on one flat cadence), and a small
- * random skip keeps the exact turn-count pattern from being purely
- * memorized loop after loop. */
+/** Chrono-Lich behavior. */
 function bossAct(state: GameState, enemy: Enemy): void {
   const count = (bossTimers.get(enemy.id) ?? 0) + 1;
   bossTimers.set(enemy.id, count);
@@ -635,10 +574,7 @@ function bossAct(state: GameState, enemy: Enemy): void {
     return;
   }
 
-  // Rewind (GDD Section 6C, Phase 16): fires once, the instant HP first drops
-  // below 25% — takes priority over the enrage cadence below since it's a
-  // one-time story beat, not part of the repeating pattern. tickBossRewind
-  // resolves it 2 turns later; the boss keeps acting normally in between.
+  // One-time Rewind cast.
   if (!bossRewindUsed.has(enemy.id) && enemy.hp <= enemy.maxHp * 0.25) {
     bossRewindUsed.add(enemy.id);
     bossRewindPending.set(enemy.id, REWIND_WARNING_TURNS);
@@ -665,22 +601,14 @@ function bossAct(state: GameState, enemy: Enemy): void {
 }
 
 function actEnemy(state: GameState, enemy: Enemy): void {
-  // [Colossal] Elite Affix (Phase 19): acts only every 2nd activation — a
-  // full turn-skip (matches "Speed drops to 1 tile every 2 turns", same
-  // "no fractional-speed system, approximate with a turn skip" reinterpretation
-  // Phase 18's Slow skill used). Gates the WHOLE turn, not just movement, so
-  // it applies uniformly to every kind Colossal can roll on, including the
-  // cadence-based specials (Volt-Turret/Cinder-Shaman/Frost-Sentinel) that
-  // never read the `speed` local below.
+  // Colossal turn skip.
   if (enemy.affix === 'colossal') {
     const count = (colossalTurnCounters.get(enemy.id) ?? 0) + 1;
     colossalTurnCounters.set(enemy.id, count);
     if (count % 2 === 1) return;
   }
 
-  // [Wealthy] Elite Affix (Phase 19): overrides its base kind's AI entirely
-  // — flees toward the Stairs, never attacks. runEnemyPhase below checks
-  // for it reaching the Stairs and despawns it (escaped) after this call.
+  // Wealthy escape behavior.
   if (enemy.affix === 'wealthy') {
     fleeTowardStairs(state, enemy, enemy.speed || 1);
     return;
@@ -690,8 +618,8 @@ function actEnemy(state: GameState, enemy: Enemy): void {
   switch (enemy.kind) {
     case 'BONE_GRUNT':
     case 'TIME_WEAVER':
-    case 'BONE_KNIGHT': // Phase 14: DEF 6 is a stat-only wall, no AI difference from Bone-Grunt.
-    case 'VOLT_HOUND': // Phase 14: speed 2 chase; the 25% Stun-on-hit lives in combat.ts.
+    case 'BONE_KNIGHT':
+    case 'VOLT_HOUND':
       chaseStep(state, enemy, speed, true);
       break;
     case 'EMBER_BAT':
@@ -724,7 +652,7 @@ function actEnemy(state: GameState, enemy: Enemy): void {
   }
 }
 
-/** Runs one Enemy Phase: wake checks, Burn/Stun gating, then each awake enemy's behavior. */
+/** Executes the Enemy Phase. */
 export function runEnemyPhase(state: GameState): void {
   pruneActivationCounters(state);
   pruneBossTimers(state);
@@ -751,19 +679,12 @@ export function runEnemyPhase(state: GameState): void {
     const beforeY = enemy.y;
     actEnemy(state, enemy);
 
-    // [Toxic] Elite Affix (Phase 19): a hazard trail behind every step.
+    // Toxic trail on step.
     if (enemy.affix === 'toxic' && (enemy.x !== beforeX || enemy.y !== beforeY)) {
       placeToxicTrail(state, beforeX, beforeY);
     }
 
-    // [Wealthy] Elite Affix (Phase 19): reaching the Stairs means it
-    // escaped — removed with no reward (killEnemy's guaranteed-Relic branch
-    // only fires on an actual kill), matching "if killed before it
-    // escapes." Reassigns rather than splices, same mutation-safety
-    // reasoning as killEnemy's own `state.dungeon.enemies = ...filter(...)`
-    // — this loop is iterating the array from before any reassignment, so a
-    // fresh array swap here can't skip the next enemy the way an in-place
-    // splice on the same live array would.
+    // Wealthy escape check.
     if (enemy.affix === 'wealthy' && enemy.x === state.dungeon.stairsX && enemy.y === state.dungeon.stairsY) {
       state.dungeon.enemies = state.dungeon.enemies.filter((e) => e.id !== enemy.id);
       logLine(state, `${ENEMY_NAME[enemy.kind]} escapes down the Stairs with its hoard!`);

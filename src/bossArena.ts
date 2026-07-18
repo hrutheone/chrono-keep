@@ -1,6 +1,4 @@
-// Fixed, hand-authored Floor 99 arena for the Chrono-Lich fight. Separate from
-// arenas.ts's Mini-Boss Arenas: no Boss Gate (killEnemy's CHRONO_LICH branch
-// calls triggerVictory directly) and no repeat-appearance scaling.
+// Floor 99 arena for Chrono-Lich fight.
 
 import { createEnemy, scaleEnemyForNgPlus } from './content';
 import { resetChronoLichEncounter } from './enemyAI';
@@ -24,7 +22,7 @@ interface BossFloor {
 function buildArena(): BossFloor {
   const tiles: number[][] = Array.from({ length: N }, () => new Array<number>(N).fill(TILE.VOID));
 
-  // A single square arena, walled on all sides, with 4 corner pillars for cover.
+  // Square arena with 4 corner pillars.
   const rx = 6;
   const ry = 6;
   const rw = 20;
@@ -53,14 +51,12 @@ function buildArena(): BossFloor {
   const spawnY = ry + rh - 2;
 
   const boss = createEnemy('CHRONO_LICH', BOSS_ID, rx + (rw >> 1), ry + 2);
-  boss.awake = true; // No sneaking up on the Chrono-Lich.
+  boss.awake = true;
 
   return { tiles, enemies: [boss], items: [], spawnX, spawnY };
 }
 
-/** Installs the arena into game state. `resetChronoLichEncounter` clears the
- * boss's cadence counter/Rewind flag — BOSS_ID is fixed across attempts, so
- * stale fight state must not leak into a fresh one. */
+/** Installs the boss arena into game state. */
 export function enterBossFloor(state: GameState): void {
   const floor = buildArena();
   resetChronoLichEncounter(BOSS_ID);
@@ -70,7 +66,7 @@ export function enterBossFloor(state: GameState): void {
   state.run.playerY = floor.spawnY;
   state.dungeon.width = N;
   state.dungeon.height = N;
-  // Recall Rune must return to the arena entry point, not the prior floor.
+  // Recall returns to arena entry.
   state.dungeon.spawnX = floor.spawnX;
   state.dungeon.spawnY = floor.spawnY;
   // No Stairs or Cursed Rifts on Floor 99.

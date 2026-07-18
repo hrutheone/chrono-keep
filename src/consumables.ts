@@ -1,7 +1,4 @@
-// Always costs 1 turn to use, in or out of combat — unlike Potions'
-// context-sensitive 0/1-turn rule — unless Alchemist's Belt makes it free.
-// Throwables (Liquid Fire Flask, Shock Grenade) reuse the same "aim along
-// facing" targeting as Cleave/Static Shift rather than a second system.
+// Always costs 1 turn to use, unless Alchemist's Belt makes it free. Throwables aim along facing.
 
 import { applyEnemyStatus, applyPlayerStatus } from './combat';
 import { hasAlchemistsBelt } from './inventory';
@@ -27,8 +24,7 @@ function walkableAt(state: GameState, x: number, y: number): boolean {
   return isWalkableAt(state, x, y);
 }
 
-/** Farthest walkable tile up to `range` along facing — the player's own tile
- * if nothing further is reachable (a wall right in front, say). */
+/** Farthest walkable tile up to `range` along facing. */
 function throwTarget(state: GameState, range: number): { x: number; y: number } {
   const { dx, dy } = FACING_DELTA[state.run.facing];
   let x = state.run.playerX;
@@ -124,8 +120,7 @@ const EFFECTS: Record<string, (state: GameState, item: Consumable) => void> = {
   whetstone: effectWhetstone,
 };
 
-/** Uses the CONSUMABLE at this inventory slot. Returns the resolvePlayerTurn()
- * promise (or a resolved no-op when free) so callers can await resolution. */
+/** Uses the CONSUMABLE at this inventory slot. */
 export function useConsumable(state: GameState, invIndex: number): Promise<void> {
   const item = state.run.inventory[invIndex];
   if (!item || item.kind !== 'CONSUMABLE') return Promise.resolve();

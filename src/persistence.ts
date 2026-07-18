@@ -1,19 +1,15 @@
-// localStorage persistence of the `persistent` block: seed, loopCount,
-// echoes, upgrades, skills, unlockedAnchors, stats. Only "New Game" wipes
-// this and rerolls the seed.
+// localStorage persistence of the `persistent` block.
 
 import type { GameState } from './types';
 
 const SAVE_KEY = 'chrono-keep-save-v1';
 
-/** Old saves may predate `unlockedAnchors` or carry a stale
- * `unlockedShortcuts: string[]` with no meaning in the current structure —
- * dropped; every other field is defaulted so any old save loads cleanly. */
+/** Migrates older save formats to the current structure. */
 function migratePersistent(parsed: Record<string, unknown>): GameState['persistent'] {
   const legacy = parsed as Partial<GameState['persistent']> & { unlockedShortcuts?: unknown };
   const stats = (legacy.stats ?? {}) as Partial<GameState['persistent']['stats']>;
   return {
-    rngSeed: legacy.rngSeed as number, // presence/type checked by the caller
+    rngSeed: legacy.rngSeed as number,
     loopCount: legacy.loopCount ?? 0,
     echoes: legacy.echoes ?? 0,
     maxHpUpgrade: legacy.maxHpUpgrade ?? 0,
@@ -21,8 +17,7 @@ function migratePersistent(parsed: Record<string, unknown>): GameState['persiste
     turnBonusUpgrade: legacy.turnBonusUpgrade ?? 0,
     baseAtkUpgrade: legacy.baseAtkUpgrade ?? 0,
     skills: legacy.skills ?? { dash: 1 },
-    // Old saves predate the persisted Q/E/R/F loadout — default to Dash on Q
-    // if unlocked, otherwise empty.
+    // Default to Dash if unlocked.
     skillLoadout: Array.isArray(legacy.skillLoadout)
       ? legacy.skillLoadout.filter((s): s is string => typeof s === 'string')
       : (legacy.skills?.dash ? ['dash'] : []),
@@ -44,11 +39,11 @@ export function saveGame(state: GameState): void {
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify(state.persistent));
   } catch {
-    // Storage unavailable (private mode, quota) — the run continues unsaved.
+    // Storage unavailable.
   }
 }
 
-/** Returns the saved persistent block, or null if none exists / it's unreadable. */
+/** Returns the saved persistent block, or null if unreadable. */
 export function loadPersistent(): GameState['persistent'] | null {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
@@ -77,23 +72,18 @@ export function clearSave(): void {
   }
 }
 
-// Separate key from SAVE_KEY — `state.run` changes every turn, unlike
-// `persistent`, and this snapshot is disposable/best-effort rather than a
-// migration-guaranteed save. `state.dungeon` isn't included; main.ts rebuilds
-// it deterministically from `run.currentFloor` on resume.
+// Key for best-effort run snapshot. `state.dungeon` is excluded.
 const RUN_SAVE_KEY = 'chrono-keep-run-v1';
 
 export function saveRunSnapshot(state: GameState): void {
   try {
     localStorage.setItem(RUN_SAVE_KEY, JSON.stringify(state.run));
   } catch {
-    // Storage unavailable (private mode, quota) — the run continues unsaved.
+    // Storage unavailable.
   }
 }
 
-/** Returns the saved run snapshot, or null if none exists or it looks stale/
- * corrupt. Caller (main.ts) rebuilds `state.dungeon` for the snapshot's floor
- * before installing it. */
+/** Returns the saved run snapshot, or null if invalid. */
 export function loadRunSnapshot(): GameState['run'] | null {
   try {
     const raw = localStorage.getItem(RUN_SAVE_KEY);
@@ -119,8 +109,7 @@ export function clearRunSnapshot(): void {
   }
 }
 
-// Kept alongside `persistent` rather than inside it — a device/browser
-// preference, not part of the save file's game-progress schema.
+// Device/browser preference, separate from game progress.
 const AUDIO_SETTINGS_KEY = 'chrono-keep-audio-v1';
 
 export interface AudioSettings {

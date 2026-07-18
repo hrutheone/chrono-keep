@@ -1,7 +1,4 @@
-// The Player Move Phase already happened by the time resolvePlayerTurn is
-// called (movement.ts/combat.ts applied it) — this runs Enemy Phase -> Tick
-// Phase -> Check Phase for every turn-costing action. Inventory actions
-// follow their own context-sensitive rule and never go through here.
+// Turn resolution phases.
 
 import { applyEnemyStatus, applyPlayerStatus, computeDamage, consumeHitStopFlag, killEnemy, playerElement } from './combat';
 import { runEnemyPhase, tickBossRewind } from './enemyAI';
@@ -36,8 +33,7 @@ function applyFireHazard(state: GameState): void {
   }
 }
 
-// Frost Hazard deals flat DEF-piercing chip damage each Tick Phase instead of
-// a status effect, so it stays lethal against Chilled/Stun-immune builds.
+// Frost Hazard chip damage.
 const FROST_HAZARD_DAMAGE = 1;
 
 function isFrostHazardAt(state: GameState, x: number, y: number): boolean {
@@ -51,8 +47,7 @@ function applyFrostHazard(state: GameState): void {
     logLine(state, `The frost gnaws at you for ${FROST_HAZARD_DAMAGE}.`);
     notifyFloatingText(state.run.playerX, state.run.playerY, `${FROST_HAZARD_DAMAGE}`, 'damage');
   }
-  // Iterate a snapshot — killEnemy reassigns state.dungeon.enemies to a
-  // filtered copy, which would otherwise invalidate a live for..of over it.
+  // Iterate enemy snapshot.
   for (const enemy of [...state.dungeon.enemies]) {
     if (!isFrostHazardAt(state, enemy.x, enemy.y)) continue;
     enemy.hp -= FROST_HAZARD_DAMAGE;
@@ -61,8 +56,7 @@ function applyFrostHazard(state: GameState): void {
   }
 }
 
-/** Temporary ATK/DEF buffs and Aura's status immunity window, counted down
- * once per Tick Phase and cleared at 0. */
+/** Tick temporary buffs. */
 function tickTempBuffs(state: GameState): void {
   if (state.run.tempAtkBonusTurns > 0) {
     state.run.tempAtkBonusTurns -= 1;
@@ -75,7 +69,7 @@ function tickTempBuffs(state: GameState): void {
   if (state.run.statusImmuneTurns > 0) state.run.statusImmuneTurns -= 1;
 }
 
-/** Restores the enemy's original DEF/Speed once Defuse/Slow's timer runs out. */
+/** Tick enemy overrides. */
 function tickEnemyOverrides(state: GameState): void {
   for (const enemy of state.dungeon.enemies) {
     if (enemy.defuseTurnsLeft !== undefined && enemy.defuseTurnsLeft > 0) {
@@ -112,8 +106,7 @@ function tickExpiringTiles(state: GameState): void {
   state.dungeon.expiringTiles = state.dungeon.expiringTiles.filter((t) => t.turnsLeft > 0);
 }
 
-// The Fire Hazard left on an AOE's center tile burns for `t.hazardTurns`
-// turns if set, or this default otherwise.
+// Default Fire Hazard turns.
 const DEFAULT_FIRE_HAZARD_TURNS = 2;
 
 function detonateTelegraph(state: GameState, t: GameState['dungeon']['telegraphTiles'][number]): void {
@@ -161,8 +154,7 @@ function detonateTelegraph(state: GameState, t: GameState['dungeon']['telegraphT
   }
 }
 
-/** Decrements each telegraphed AOE tile's warning, then detonates whichever
- * hit 0 per their `payload`. */
+/** Tick telegraph tiles. */
 function tickTelegraphTiles(state: GameState): void {
   for (const t of state.dungeon.telegraphTiles) t.turnsUntil -= 1;
   const detonating = state.dungeon.telegraphTiles.filter((t) => t.turnsUntil <= 0);
@@ -182,7 +174,7 @@ function tickPlayerStatus(state: GameState): void {
 }
 
 function tickEnemyStatuses(state: GameState): void {
-  // Enemy Burn damage already applied at Enemy Phase start; here we only count duration down.
+  // Decrement enemy status durations.
   for (const enemy of state.dungeon.enemies) {
     if (enemy.status === 'NONE') continue;
     enemy.statusTurns -= 1;
@@ -191,8 +183,7 @@ function tickEnemyStatuses(state: GameState): void {
 }
 
 function runTickPhase(state: GameState, actionKind: PlayerActionKind): void {
-  // The Hub's turn counter is frozen — no hazards, statuses, or expiring
-  // tiles exist there either, so skipping the whole phase is equivalent.
+  // Skip Tick Phase in Hub.
   if (state.run.currentFloor === HUB_FLOOR) return;
 
   const chilledBeforeTick = state.run.status === 'CHILLED';
@@ -202,23 +193,19 @@ function runTickPhase(state: GameState, actionKind: PlayerActionKind): void {
   tickPlayerStatus(state);
   tickTempBuffs(state);
   tickTrollBlood(state);
-  // Before tickEnemyStatuses: a Rewind resolving this turn must see whether
-  // the boss WAS Stunned during the Enemy Phase that just ran, not a status
-  // tickEnemyStatuses is about to clear in this same Tick Phase.
+  // Handle Boss Rewind before statuses clear.
   tickBossRewind(state);
   tickEnemyStatuses(state);
   tickEnemyOverrides(state);
   tickExpiringTiles(state);
   tickTelegraphTiles(state);
 
-  // +1 Stamina at the end of any turn that didn't spend any — only skills
-  // spend Stamina today, so a skill turn skips regen.
+  // Regenerate Stamina.
   if (actionKind !== 'skill') {
     state.run.currentStamina = Math.min(state.run.maxStamina, state.run.currentStamina + 1);
   }
 
-  // Quicksilver Flask covers Moves/Attacks only, not skills or the
-  // Consumable use that granted the charges.
+  // Handle Quicksilver charges.
   if (state.run.quicksilverCharges > 0 && (actionKind === 'move' || actionKind === 'attack')) {
     state.run.quicksilverCharges -= 1;
     logLine(state, `Quicksilver — this action was free (${state.run.quicksilverCharges} left).`);
@@ -229,14 +216,11 @@ function runTickPhase(state: GameState, actionKind: PlayerActionKind): void {
   state.run.turnsRemaining = Math.max(0, state.run.turnsRemaining - penalty);
 }
 
-/** True once the DEATH screen has been shown for this loss, so a stray extra
- * turn (shouldn't happen once GAME input is gated by currentScreen, but this
- * is the safety net) can't re-trigger it. */
+/** Loss pending flag. */
 let lossPending = false;
 const CRT_WARP_MS = 600;
 
-/** CSS-only warp effect on the #game canvas and HUD bars, kicked off the
- * instant a loss triggers. */
+/** CRT Warp effect. */
 function playCrtWarp(): void {
   document.querySelector('#game')?.classList.add('death-warp');
   document.querySelector('#hud-top')?.classList.add('death-fade');
@@ -249,9 +233,7 @@ function clearCrtWarp(): void {
   document.querySelector('#hud-bottom')?.classList.remove('death-fade');
 }
 
-/** Shattered Hourglass: turns hitting 0 restores 15 and destroys the item
- * instead of triggering the loop reset. Doesn't apply to dying from HP loss,
- * only the turn-timeout case. */
+/** Shattered Hourglass relic. */
 function tryShatteredHourglass(state: GameState): boolean {
   if (state.run.turnsRemaining > 0 || state.run.currentHp <= 0) return false;
   if (state.run.equippedAccessory?.passive !== 'safety_net_15') return false;
@@ -261,8 +243,7 @@ function tryShatteredHourglass(state: GameState): boolean {
   return true;
 }
 
-/** Phoenix Feather: revives at 50% HP on fatal damage, then is destroyed.
- * HP-death-only — doesn't apply to the turn-timeout case. */
+/** Phoenix Feather relic. */
 function tryPhoenixFeather(state: GameState): boolean {
   if (state.run.currentHp > 0) return false;
   if (!state.run.relics.includes('phoenix_feather')) return false;
@@ -274,9 +255,7 @@ function tryPhoenixFeather(state: GameState): boolean {
 }
 
 function runCheckPhase(state: GameState): void {
-  // No loss condition can fire at the Hub: no enemies to deal damage, and the
-  // timer never decrements there (runTickPhase above). Guarded explicitly
-  // too, in case turnsRemaining is ever stale when the player warps in.
+  // Skip Check Phase in Hub.
   if (state.run.currentFloor === HUB_FLOOR) return;
   if (lossPending || (state.run.turnsRemaining > 0 && state.run.currentHp > 0)) return;
   if (tryShatteredHourglass(state)) return;
@@ -295,9 +274,7 @@ function runCheckPhase(state: GameState): void {
   }, CRT_WARP_MS);
 }
 
-/** Keeps unlockedAnchors/upgrades/skills/Echoes (all in `persistent`), drops
- * the run's inventory/equipment, then returns to the Hub. Called from the
- * DEATH screen's Continue action. */
+/** Continue after death. */
 export function continueAfterDeath(state: GameState): void {
   lossPending = false;
   clearCrtWarp();
@@ -311,13 +288,11 @@ export function continueAfterDeath(state: GameState): void {
 
   state.ui.currentScreen = 'GAME';
   saveGame(state);
-  // Write the fresh Hub run immediately so a reload before the next move
-  // resumes straight into the Hub instead of falling through to TITLE.
+  // Save snapshot immediately.
   saveRunSnapshot(state);
 }
 
-// `busy` is checked by movement.ts/skills.ts's keydown handlers so a key
-// mashed during the hit-stop freeze is ignored, not queued mid-turn.
+// Busy flag for hit-stop.
 const HIT_STOP_MS = 100;
 let busy = false;
 export function isTurnBusy(): boolean {
@@ -328,7 +303,7 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Pure CSS, on #game only — never the HUD, so numbers stay readable. */
+/** Trigger screen shake. */
 function triggerScreenShake(): void {
   const el = document.querySelector('#game');
   if (!el) return;
@@ -337,7 +312,7 @@ function triggerScreenShake(): void {
   el.classList.add('screen-shake');
 }
 
-/** Call once per turn-costing player action, after the Player Move Phase has already applied. */
+/** Resolve player turn. */
 export async function resolvePlayerTurn(state: GameState, actionKind: PlayerActionKind): Promise<void> {
   busy = true;
   if (consumeHitStopFlag()) {
@@ -346,12 +321,10 @@ export async function resolvePlayerTurn(state: GameState, actionKind: PlayerActi
   }
   runEnemyPhase(state);
   runTickPhase(state, actionKind);
-  // Heal to full after Enemy/Tick Phase so Cheat Mode covers every HP-loss
-  // source (bump attacks, hazard ticks, telegraph AOE) in one place.
+  // Apply Cheat Mode heal.
   if (state.persistent.cheatModeEnabled) state.run.currentHp = state.run.maxHp;
   runCheckPhase(state);
-  // Snapshot unconditionally (Hub, death, timeout all included) — the read
-  // side's validation decides whether a given snapshot is resumable.
+  // Snapshot unconditionally.
   saveRunSnapshot(state);
   busy = false;
 }

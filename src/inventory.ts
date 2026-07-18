@@ -1,5 +1,4 @@
-// Inventory, equipment & consumables. Pure state logic — src/menus.ts owns
-// the HTML overlay and dispatches into these.
+// Inventory logic.
 
 import { PLAYER_BASE_ATK, PLAYER_BASE_DEF } from './types';
 import type { Accessory, GameState, Item, Weapon } from './types';
@@ -12,10 +11,10 @@ import { notifyFloatingText } from './floatingText';
 // Matches the 5x5 grid in menus.ts/style.css's .inventory-grid.
 export const INVENTORY_CAP = 25;
 
-/** 7-tile taxicab wake radius — only *awake* enemies count. */
+/** 7-tile wake radius. */
 const THREAT_RADIUS = 7;
 
-// +/- DEF accessory passives (Iron Ring, and the Berserker's Cuff/Paladin's Mantle trade-off pair).
+// Accessory passives.
 const DEF_BONUS: Partial<Record<string, number>> = {
   def_plus_2: 2,
   berserker: -2,
@@ -32,13 +31,11 @@ const STAM_BONUS: Partial<Record<string, number>> = {
   max_stam_plus_3: 3,
 };
 
-// Weapon-side DEF/Max HP modifiers while equipped (Bone Club/Defender,
-// Apocalypse) — the weapon equivalent of the accessory maps above, applied
-// the same way in equipWeapon/unequipWeapon below.
+// Weapon modifiers.
 const WEAPON_DEF_BONUS: Partial<Record<string, number>> = { def_minus_1_equipped: -1, def_plus_1_equipped: 1 };
 const WEAPON_HP_BONUS: Partial<Record<string, number>> = { max_hp_minus_10_equipped: -10 };
 
-// Exported for menus.ts's Inventory Stat Block.
+// Inventory Stats.
 export function weaponDefBonus(weapon: Weapon | null): number {
   return WEAPON_DEF_BONUS[weapon?.passive ?? ''] ?? 0;
 }
@@ -47,8 +44,7 @@ export function weaponHpBonus(weapon: Weapon | null): number {
   return WEAPON_HP_BONUS[weapon?.passive ?? ''] ?? 0;
 }
 
-// Exported for menus.ts's Inventory Stat Block — same lookups equip/unequip
-// use for live stat math, so the displayed lines can never drift from reality.
+// Live stat maths.
 export function accessoryDefBonus(acc: Accessory | null): number {
   return DEF_BONUS[acc?.passive ?? ''] ?? 0;
 }
@@ -65,8 +61,7 @@ export function accessoryStamBonus(acc: Accessory | null): number {
   return STAM_BONUS[acc?.passive ?? ''] ?? 0;
 }
 
-/** Kindling Pouch/Capacitor Ring/Permafrost Vial: +2 damage for weapons/skills
- * of the matching element. Read by combat.ts/skills.ts. */
+/** Elemental damage bonuses. */
 const ELEMENT_SYNERGY_BONUS: Partial<Record<string, number>> = {
   fire_synergy: 2,
   volt_synergy: 2,
@@ -84,8 +79,7 @@ export function elementSynergyBonus(state: GameState, element: string): number {
   return ELEMENT_SYNERGY_BONUS[passive] ?? 0;
 }
 
-// Giant's Anvil relic: +5 flat ATK — the trade-off (Dash permanently
-// disabled) is enforced in skills.ts's skillStaminaCost instead.
+// Giant's Anvil relic.
 export const GIANTS_ANVIL_ATK = 5;
 
 export function totalAtk(state: GameState): number {
@@ -114,8 +108,7 @@ export function isThreatNearby(state: GameState): boolean {
   );
 }
 
-/** Context-sensitive turn cost: free out of combat, 1 turn near an awake
- * enemy — except the Bone Dagger, always free to swap. */
+/** Context-sensitive turn cost. */
 function chargeInventoryAction(state: GameState, freeAlways: boolean): void {
   if (freeAlways || !isThreatNearby(state)) return;
   spendTurn(state);
@@ -132,16 +125,12 @@ function applyMaxStamDelta(state: GameState, delta: number): void {
   state.run.currentStamina = Math.min(state.run.currentStamina, state.run.maxStamina);
 }
 
-/** Alchemist's Belt: using a Potion or Tactical Consumable costs 0 Turns,
- * even mid-combat. */
+/** Alchemist's Belt check. */
 export function hasAlchemistsBelt(state: GameState): boolean {
   return state.run.equippedAccessory?.passive === 'alchemist_belt';
 }
 
-/** Shared tail of a normal (non-Anchor/Time-Shard/Relic) pickup: stacking
- * merge, then the INVENTORY_CAP check, then a push. Pulled out of
- * pickupItemsAt's loop so Golden Scarab's bonus chest item can reuse it.
- * Returns false when the cap blocks the pickup. */
+/** Grant item. */
 function grantItem(state: GameState, x: number, y: number, item: Item, chestLoot: boolean): boolean {
   if (item.kind === 'POTION' || item.kind === 'CONSUMABLE') {
     const stack = state.run.inventory.find((i) => i.name === item.name);
@@ -154,9 +143,7 @@ function grantItem(state: GameState, x: number, y: number, item: Item, chestLoot
   }
   if (state.run.inventory.length >= INVENTORY_CAP) {
     logLine(state, 'Inventory full.');
-    // With nowhere to go — put it back rather than deleting it outright.
-    // Chest contents reroll on every pickup attempt anyway, so a rejected
-    // attempt re-rolling next time isn't a regression.
+    // Return to pool if full.
     state.dungeon.items.push({ item, x, y, chestLoot });
     return false;
   }
@@ -166,11 +153,7 @@ function grantItem(state: GameState, x: number, y: number, item: Item, chestLoot
   return true;
 }
 
-/** Adds every WorldItem standing at (x, y) to the inventory, removing each
- * from the floor. A tile can hold more than one drop. Anchors/Time Shards/
- * Relics are instant effects and never occupy a slot. Chest-loot items are
- * rerolled from gameplay RNG here, at pickup time, so contents vary loop to
- * loop while position stays seeded. */
+/** Pickup items at position. */
 export function pickupItemsAt(state: GameState, x: number, y: number): void {
   for (;;) {
     const idx = state.dungeon.items.findIndex((wi) => wi.x === x && wi.y === y);
@@ -194,8 +177,7 @@ export function pickupItemsAt(state: GameState, x: number, y: number): void {
 
     if (item.kind === 'TIME_SHARD') {
       state.dungeon.items.splice(idx, 1);
-      // Time-Eater's Jaw relic: +8 Turns instead of +5 — an override on the
-      // fixed base value, not a multiplier.
+      // Time-Eater's Jaw relic.
       const gain = state.run.relics.includes('time_eaters_jaw') ? 8 : item.value;
       state.run.turnsRemaining += gain;
       logLine(state, `Time Shard! +${gain} Turns.`);
@@ -208,8 +190,7 @@ export function pickupItemsAt(state: GameState, x: number, y: number): void {
       state.dungeon.items.splice(idx, 1);
       const effect = item.effect!;
       if (state.run.relics.includes(effect)) {
-        // Already held — this Relic doesn't stack with itself; a small
-        // Echo consolation so the pickup still feels like it did something.
+        // Duplicate Relic bonus.
         awardEchoes(state, 10, 'duplicate Relic');
         logLine(state, `Already carrying ${item.name} — +10 Echoes instead.`);
       } else {
@@ -222,14 +203,11 @@ export function pickupItemsAt(state: GameState, x: number, y: number): void {
 
     state.dungeon.items.splice(idx, 1);
     let finalItem = worldItem.chestLoot ? rollChestItem(Math.random, state.run.currentFloor, item.id) : item;
-    // Alchemist's Satchel relic ("Potion drop rates are halved"): a 50%
-    // chance to re-roll a chest's Potion result once, since the pool has no
-    // probability knob to literally halve.
+    // Alchemist's Satchel relic reroll.
     if (worldItem.chestLoot && finalItem.kind === 'POTION' && state.run.relics.includes('alchemists_satchel') && Math.random() < 0.5) {
       finalItem = rollChestItem(Math.random, state.run.currentFloor, `${item.id}-satchel-reroll`);
     }
-    // A chest reroll can land on a RELIC — re-dispatch through the instant-
-    // pickup path above instead of the slot-occupying logic below.
+    // Handle RELIC drop.
     if (finalItem.kind === 'RELIC') {
       state.dungeon.items.push({ item: finalItem, x, y, chestLoot: false });
       continue;
@@ -237,8 +215,7 @@ export function pickupItemsAt(state: GameState, x: number, y: number): void {
 
     if (!grantItem(state, x, y, finalItem, worldItem.chestLoot ?? false)) return;
 
-    // Golden Scarab relic: chests drop a second item — only for actual chest
-    // loot, and only once the primary item found a slot.
+    // Golden Scarab bonus item.
     if (worldItem.chestLoot && state.run.relics.includes('golden_scarab')) {
       const bonus = rollChestItem(Math.random, state.run.currentFloor, `${item.id}-scarab`);
       if (bonus.kind === 'RELIC') state.dungeon.items.push({ item: bonus, x, y, chestLoot: false });
@@ -247,16 +224,14 @@ export function pickupItemsAt(state: GameState, x: number, y: number): void {
   }
 }
 
-/** Melts the inventory item at this slot for good, converting it to Echoes.
- * Same context-sensitive turn cost as an equip/unequip swap. Per-unit value
- * times the full stack — melting a Potion stack of 2 pays out for both. */
+/** Melt inventory item for Echoes. */
 export function meltItem(state: GameState, invIndex: number): void {
   const item = state.run.inventory[invIndex];
   if (!item) return;
   state.run.inventory.splice(invIndex, 1);
   chargeInventoryAction(state, false);
   const units = item.count && item.count > 1 ? item.count : 1;
-  // awardEchoes already logs "+N Echoes (reason)." — no separate "Melted ..." line.
+  // Award echoes.
   awardEchoes(state, itemMeltValue(item) * units, units > 1 ? `melted ${item.name} x${units}` : `melted ${item.name}`);
   playPurchaseSfx();
 }
@@ -328,15 +303,12 @@ export function unequipAccessory(state: GameState): void {
   playUnequipSfx();
 }
 
-/** Consumes one from the POTION stack at this inventory slot, applying its
- * `effect` (heal_flat, heal_percent_max, heal_percent_max_cleanse, or Soma
- * Drop's permanent_max_hp). Only clears the slot once the stack empties. */
+/** Consume potion. */
 export function usePotion(state: GameState, invIndex: number): void {
   const item = state.run.inventory[invIndex];
   if (!item || item.kind !== 'POTION') return;
 
-  // Alchemist's Satchel relic doubles a Potion's HP restore — deliberately
-  // excludes Soma Drop's permanent_max_hp, which isn't a "heal".
+  // Alchemist's Satchel multiplier.
   const satchelMult = state.run.relics.includes('alchemists_satchel') ? 2 : 1;
 
   let healed = 0;

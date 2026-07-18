@@ -1,14 +1,12 @@
 import { createWeapon } from './content';
 import type { GameState } from './types';
 
-// Baseline run stats; per-level upgrades add +5 HP / +2 Stamina / +5 turns.
+// Baseline run stats.
 export const BASE_MAX_HP = 25;
 export const BASE_MAX_STAMINA = 10;
 export const BASE_TURNS = 100;
 
-/** The turn counter is per-floor — this is the value it refills to on every
- * floor entry, so the Turn Bonus upgrade applies to every floor, not once
- * per run. */
+/** Per-floor turn limit. */
 export function floorTurnLimit(state: GameState): number {
   return BASE_TURNS + state.persistent.turnBonusUpgrade * 5;
 }
@@ -19,7 +17,7 @@ function startingWeapon() {
   return createWeapon('RUSTY_SWORD', 'starter-weapon');
 }
 
-/** Fresh save: new seed, Dash unlocked at Level 1, everything else zeroed. */
+/** Fresh save state. */
 export function createNewGameState(): GameState {
   return {
     persistent: {
@@ -107,8 +105,7 @@ export function createNewGameState(): GameState {
   };
 }
 
-/** Rerolls the seed and wipes `persistent`, mutating the existing state
- * object in place so every module's reference to it stays valid. */
+/** Wipes persistent state and mutates the existing state object in place. */
 export function resetToNewGame(state: GameState): void {
   const fresh = createNewGameState();
   state.persistent = fresh.persistent;
@@ -117,16 +114,12 @@ export function resetToNewGame(state: GameState): void {
   state.ui = fresh.ui;
 }
 
-/** A fresh dungeon layout for New Game+; every permanent upgrade/skill/Echo/
- * stat carries over. */
+/** Reroll seed for New Game+. */
 export function rerollSeedKeepProgress(state: GameState): void {
   state.persistent.rngSeed = Math.floor(Math.random() * 2 ** 31);
 }
 
-/** Resets `run` to a fresh loop's starting values from `persistent`'s current
- * upgrades — shared by loop reset (death/timeout), New Game+, and the Hub's
- * Shortcut Gate, all of which keep every permanent upgrade/skill.
- * `startFloor` defaults to 1; the Shortcut Gate passes its warp destination. */
+/** Resets run to a fresh loop's starting values. */
 export function resetRunForNewLoop(state: GameState, startFloor = 1): void {
   state.run.maxHp = BASE_MAX_HP + state.persistent.maxHpUpgrade * 5;
   state.run.currentHp = state.run.maxHp;
@@ -137,7 +130,7 @@ export function resetRunForNewLoop(state: GameState, startFloor = 1): void {
   state.run.inventory = [];
   state.run.equippedWeapon = startingWeapon();
   state.run.equippedAccessory = null;
-  // Copied, not aliased, so run and persistent stay independently mutable.
+  // Copied so run and persistent stay independently mutable.
   state.run.activeSkills = [...state.persistent.skillLoadout];
   state.run.status = 'NONE';
   state.run.statusTurns = 0;
@@ -158,7 +151,7 @@ export function resetRunForNewLoop(state: GameState, startFloor = 1): void {
   state.run.tempDefBonus = 0;
   state.run.tempDefBonusTurns = 0;
   state.run.statusImmuneTurns = 0;
-  // Chronofacts are run-scoped, same lifecycle as inventory/equipment above.
+  // Chronofacts are run-scoped.
   state.run.relics = [];
   state.run.staticGenSteps = 0;
   state.run.staticGenCharged = false;

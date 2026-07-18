@@ -1,7 +1,4 @@
-// Web Audio synthesis foundation (GDD Section 2/9): every sound is generated
-// procedurally with oscillators/noise + a short gain envelope — no external
-// audio files. Phase 5 wires the first Action/Status SFX pass; Phase 6 adds
-// Screens & Music and Progression SFX on top of this same engine.
+// Web Audio synthesis foundation: sounds are generated procedurally with oscillators and noise.
 
 import { saveAudioSettings } from './persistence';
 import { biomeOf } from './content';
@@ -9,10 +6,7 @@ import { HUB_FLOOR } from './hub';
 import { isArenaFloor, miniBossRepeatNumber } from './arenas';
 import type { Element, GameState, StatusEffect } from './types';
 
-// Floor 99 (Chrono-Lich Arena): not imported from bossArena.ts to avoid a
-// cycle (bossArena.ts -> enemyAI.ts -> audio.ts already) — 99 is the GDD's
-// fixed final-floor count, referenced as a literal in a couple of other
-// modules for the same reason.
+// Floor 99: hardcoded to avoid circular dependencies with bossArena.ts.
 const FINAL_BOSS_FLOOR = 99;
 
 let ctx: AudioContext | null = null;
@@ -20,9 +14,7 @@ let master: GainNode | null = null;
 let musicGain: GainNode | null = null;
 let musicFilter: BiquadFilterNode | null = null;
 
-// Master volume/mute (Phase 7): settable/persistable before the AudioContext
-// even exists (autoplay policy) — applied to `master.gain` immediately if
-// unlocked, and re-applied the moment ensureContext() creates it.
+// Master volume and mute: applied when AudioContext is unlocked or created.
 let masterVolume = 0.5;
 let muted = false;
 
@@ -78,9 +70,7 @@ function ensureContext(): AudioContext {
     applyMasterGain();
     master.connect(ctx.destination);
 
-    // Music bus (Section 11 Tactical Muffling): source -> lowpassFilter -> masterGain,
-    // so music (and only music) can be muffled independently of one-shot SFX,
-    // and both still respect master volume/mute (Phase 7).
+    // Music bus: allows independent muffling of music from SFX.
     musicGain = ctx.createGain();
     musicGain.gain.value = 0.5;
     musicFilter = ctx.createBiquadFilter();
@@ -171,8 +161,7 @@ const ELEMENT_TYPE: Record<Element, OscillatorType> = {
   CHRONO: 'sine',
 };
 
-/** Bump-attack clang/whoosh/zap/crackle/chime, per element, with a Weakness crit
- * layer or a Resist mute (GDD Section 9A). */
+/** Elemental attack sound. */
 export function playAttackSfx(element: Element, multiplier: number): void {
   const freq = ELEMENT_FREQ[element];
   const type = ELEMENT_TYPE[element];
@@ -210,11 +199,7 @@ export function playTimeShardSfx(): void {
   tone({ freq: 1500, duration: 0.12, type: 'sine', gain: 0.16, delay: 0.1 });
 }
 
-/** Temporal Anchor pickup (Section 9C: "Extended triumphant fanfare + a deep
- * 'anchor slam' hit... must outclass the normal Anchor chime"). Every Anchor
- * in the 99-floor redesign comes from a Mini-Boss kill, so this — the bigger
- * version — is the only one that still exists; there's no lesser "normal"
- * pickup source left to outclass. */
+/** Temporal Anchor pickup sound. */
 export function playAnchorSfx(): void {
   tone({ freq: 440, duration: 0.15, type: 'triangle', gain: 0.22 });
   tone({ freq: 660, duration: 0.15, type: 'triangle', gain: 0.22, delay: 0.12 });
@@ -235,12 +220,12 @@ export function playUnequipSfx(): void {
   tone({ freq: 200, duration: 0.06, type: 'square', gain: 0.2, delay: 0.05 });
 }
 
-/** Boss telegraph (Section 9D): rising warning tone across the 2-turn Time-Blast warning. */
+/** Rising warning tone for boss telegraphs. */
 export function playBossTelegraphSfx(): void {
   tone({ freq: 200, duration: 0.3, type: 'sawtooth', gain: 0.2, freqEnd: 500 });
 }
 
-/** Shortcut Gate opened (Section 9D): mechanical unlock + door groan. */
+/** Shortcut Gate opened sound. */
 export function playUnlockSfx(): void {
   tone({ freq: 260, duration: 0.05, type: 'square', gain: 0.2 });
   tone({ freq: 90, duration: 0.35, type: 'sawtooth', gain: 0.15, freqEnd: 60, delay: 0.08 });
@@ -289,50 +274,44 @@ export function playStatusApplySfx(status: StatusEffect): void {
   STATUS_APPLY_SFX[status]?.();
 }
 
-/** DEATH: descending "failure" stinger (Section 9C). */
+/** Death sound. */
 export function playDeathSfx(): void {
   tone({ freq: 300, duration: 0.5, type: 'sawtooth', gain: 0.22, freqEnd: 60 });
 }
 
-/** VICTORY: fanfare + stat-reveal chimes (Section 9C). */
+/** Victory sound. */
 export function playVictorySfx(): void {
   [523, 659, 784, 1047].forEach((freq, i) => tone({ freq, duration: 0.3, type: 'square', gain: 0.22, delay: i * 0.1 }));
 }
 
-/** Loop reset (Section 9D): a "rewind" whoosh — a descending sweep read as reverse-played ticks. */
+/** Loop reset rewind sound. */
 export function playLoopResetSfx(): void {
   tone({ freq: 700, duration: 0.4, type: 'triangle', gain: 0.2, freqEnd: 120 });
 }
 
-/** Shortcut Gate warp (Section 9D): a temporal whoosh + arrival chime —
- * distinct from the Loop Reset "rewind" cue (playLoopResetSfx): a warp is
- * empowering (an ascending sweep into a bright landing chime), a loop reset
- * is a failure signal (a descending one). */
+/** Shortcut Gate warp sound. */
 export function playWarpSfx(): void {
   tone({ freq: 200, duration: 0.3, type: 'sawtooth', gain: 0.18, freqEnd: 900 });
   tone({ freq: 900, duration: 0.15, type: 'sine', gain: 0.22, delay: 0.28 });
   tone({ freq: 1200, duration: 0.15, type: 'sine', gain: 0.18, delay: 0.34 });
 }
 
-/** New Game / New Game+ (Section 9D): distinct from a loss-reset — an ascending chime. */
+/** New Game sound. */
 export function playNewGameSfx(): void {
   tone({ freq: 260, duration: 0.15, type: 'triangle', gain: 0.2, freqEnd: 520 });
 }
 
-/** Upgrade Shop purchase (Section 9D / 11): confirm chime + a short rising power chord. */
+/** Upgrade Shop purchase sound. */
 export function playPurchaseSfx(): void {
   [220, 277, 330].forEach((freq, i) => tone({ freq, duration: 0.18, type: 'square', gain: 0.18, delay: i * 0.05 }));
 }
 
-/** Skill unlock/upgrade (Section 9D): a distinct "power up" arpeggio. */
+/** Skill unlock/upgrade sound. */
 export function playSkillUnlockSfx(): void {
   [330, 440, 554, 660].forEach((freq, i) => tone({ freq, duration: 0.12, type: 'triangle', gain: 0.2, delay: i * 0.06 }));
 }
 
-// --- Screens & Music (Section 9C): a Web Audio "lookahead scheduler" ---
-// A short, data-defined note sequence loops seamlessly by scheduling notes
-// slightly ahead of AudioContext.currentTime on a ~25ms poll, rather than
-// triggering oscillators directly off the JS timer (which drifts).
+// Music scheduler: seamlessly loops scheduled notes using a lookahead polling approach.
 
 interface MusicNote {
   freq: number;
@@ -390,9 +369,7 @@ const BOSS_THEME: MusicTrack = {
   ],
 };
 
-/** Floor 99 (Chrono-Lich Arena, Section 9C): "Unique final-boss theme,
- * highest intensity" — deeper base notes, a faster loop, and a sharper
- * high-register accent than the shared Mini-Boss theme above. */
+/** Unique final-boss theme. */
 const FINAL_BOSS_THEME: MusicTrack = {
   loopLength: 2.2,
   notes: [
@@ -405,12 +382,7 @@ const FINAL_BOSS_THEME: MusicTrack = {
   ],
 };
 
-// Per-Biome ambience (Section 9C: "per-Biome timbre variation — waveform/key
-// shift keyed to the Biome's element"). Reuses GAME_THEME's melodic shape,
-// re-keyed by frequency (key shift) and re-voiced by oscillator type
-// (timbre) — the same per-element mappings the Attack SFX already use, so a
-// Biome's ambience and its enemies' hit sounds share one consistent "sound"
-// per element. Mirrors content.ts's enemyPoolForFloor theme cycle exactly.
+// Per-Biome ambience keyed to the biome's element.
 const ELEMENT_KEY_SHIFT: Record<Element, number> = {
   PHYSICAL: 1,
   FIRE: 1.12,
@@ -434,9 +406,7 @@ function gameThemeForElement(element: Element): MusicTrack {
   return { loopLength: GAME_THEME.loopLength, notes: GAME_THEME.notes.map((n) => ({ ...n, freq: n.freq * shift, type })) };
 }
 
-/** Mini-Boss Arena theme (Section 9C: "pitch/tempo may step up with Biome
- * depth"): each empowered repeat (Mk II at F40-60, Mk III at F70-90) shifts
- * the shared BOSS_THEME up in pitch and slightly faster in tempo. */
+/** Boss theme with escalating pitch and tempo based on repeats. */
 function bossThemeForFloor(floor: number): MusicTrack {
   const mk = miniBossRepeatNumber(floor);
   if (mk === 0) return BOSS_THEME;
@@ -448,9 +418,7 @@ function bossThemeForFloor(floor: number): MusicTrack {
   };
 }
 
-// A string, not a fixed union: per-Biome/per-Mk tracks are generated on the
-// fly (gameThemeForElement/bossThemeForFloor above), so the set of possible
-// keys isn't enumerable up front the way it was pre-Phase-17.
+// Dynamic track key based on generated theme configurations.
 type TrackKey = string;
 
 let schedulerTimer: number | null = null;
@@ -507,9 +475,7 @@ function stopTrack(): void {
 
 let lastMuffled = false;
 
-/** Section 11 Tactical Muffling: ramps the music-bus low-pass filter between a
- * transparent cutoff and a muffled one over ~200ms whenever the Inventory or
- * Skill Menu opens/closes — a ramp, not a hard switch, so it doesn't click. */
+/** Muffles background music. */
 function setMusicMuffled(muffled: boolean): void {
   if (!ctx || !musicFilter || muffled === lastMuffled) return;
   lastMuffled = muffled;
@@ -518,10 +484,7 @@ function setMusicMuffled(muffled: boolean): void {
   musicFilter.frequency.linearRampToValueAtTime(target, ctx.currentTime + 0.2);
 }
 
-/** Call once per frame: picks TITLE / Hub-GAME / per-Biome-GAME / tense-GAME /
- * Mini-Boss / Floor-99 music off the current screen/floor/turns-remaining,
- * switching tracks only when the resolved key actually changes, and applies
- * Tactical Muffling while a menu is open. */
+/** Updates music track based on game state. */
 export function updateMusicForState(state: GameState): void {
   if (!ctx) return; // Not unlocked yet.
 
@@ -534,9 +497,7 @@ export function updateMusicForState(state: GameState): void {
     desired = 'title';
     desiredTrack = TITLE_THEME;
   } else if (musicScreens && state.run.currentFloor === HUB_FLOOR) {
-    // Hub (Section 9C): "the one place the Anxiety Clock never plays" —
-    // always the calm neutral track, regardless of a possibly-stale
-    // turnsRemaining and independent of any Biome.
+    // Always use the calm neutral track in the Hub.
     desired = 'game_hub';
     desiredTrack = GAME_THEME;
   } else if (musicScreens) {
@@ -566,13 +527,8 @@ export function updateMusicForState(state: GameState): void {
   setMusicMuffled(screen === 'MENU');
 }
 
-// --- The Anxiety Clock (Section 11 Audio #1) ---
-// A continuous background tick, quiet/slow above 20 turns, faster and louder
-// at 20/10/5. Simplified from the GDD's full AudioContext-time lookahead
-// scheduler (that pattern exists to keep a multi-note *melody* from drifting
-// out of sync — see updateMusicForState above) to a self-rescheduling
-// setTimeout: each tick re-reads the live turnsRemaining and re-picks its
-// own next interval, which is enough precision for a single periodic tick.
+// --- The Anxiety Clock ---
+// A continuous background tick that accelerates as remaining turns decrease.
 interface AnxietyThreshold {
   intervalMs: number;
   freq: number;
@@ -610,13 +566,10 @@ function stopAnxietyClock(): void {
   }
 }
 
-/** Call once per frame: runs the Anxiety Clock only during GAME (not menus/
- * screens) and while unmuted; stops cleanly otherwise. */
+/** Updates the Anxiety Clock state. */
 export function updateAnxietyClock(state: GameState): void {
   if (!ctx) return;
-  // Section 9C: the Hub is "the one place the Anxiety Clock never plays" —
-  // guarded on currentFloor rather than relying on turnsRemaining staying
-  // high, in case it's ever stale when the player warps in.
+  // Ensure the clock does not run in the Hub.
   const shouldRun = state.ui.currentScreen === 'GAME' && state.run.currentFloor !== HUB_FLOOR && !muted;
   if (shouldRun) {
     const wasRunning = anxietyStateRef !== null;
@@ -627,10 +580,8 @@ export function updateAnxietyClock(state: GameState): void {
   }
 }
 
-// --- Low-Health Bass Heartbeat (Section 11 Audio #4) ---
-// A slow "thump-thump" bass pulse, looping only while HP < 25% max. The
-// vignette (index.html's #vignette, pure CSS) is toggled by hud.ts off the
-// same threshold — this module only owns the sound half.
+// --- Low-Health Bass Heartbeat ---
+// Loops while HP < 25% max.
 const HEARTBEAT_INTERVAL_MS = 900;
 let heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
 let heartbeatActive = false;
@@ -643,7 +594,7 @@ function scheduleHeartbeat(): void {
   }, HEARTBEAT_INTERVAL_MS);
 }
 
-/** Call once per frame: starts/stops the heartbeat off run.currentHp/maxHp. */
+/** Updates the low health heartbeat sound. */
 export function updateLowHealthHeartbeat(state: GameState): void {
   if (!ctx) return;
   const lowHp = state.ui.currentScreen === 'GAME' && state.run.currentHp / state.run.maxHp < 0.25 && !muted;

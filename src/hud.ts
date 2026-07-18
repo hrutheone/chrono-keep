@@ -1,5 +1,4 @@
-// HTML/CSS HUD overlays layered above the canvas: top bar (turn/HP/Stamina/
-// status), bottom bar (weapon, Q/E/R/F skill slots, last 3 log lines).
+// HTML/CSS HUD overlays layered above the canvas.
 
 import { ENEMY_NAME, eliteAffixName, relicLore, relicName } from './content';
 import { spriteCssStyle } from './assets';
@@ -8,8 +7,7 @@ import type { GameState, StatusEffect } from './types';
 
 const RELIC_ICON_SIZE = 16;
 
-// Smaller than the 7-tile wake radius, so the warning reads as "about to be
-// a problem" rather than "exists somewhere on the floor."
+// Warning radius for nearby elites.
 const ELITE_WARNING_RADIUS = 3;
 
 const STATUS_LABEL: Record<StatusEffect, string> = {
@@ -77,8 +75,7 @@ export function initHud(): void {
     </div>
     <div id="hint-strip" class="hint-strip"></div>`;
 
-  // Delegated on `document` since the tray's children are rebuilt every
-  // updateHud call — tap an icon to show its tooltip, tap elsewhere to dismiss.
+  // Delegated tooltip toggling for rebuilt tray children.
   document.addEventListener('click', (ev) => {
     const target = ev.target as HTMLElement;
     const icon = target.closest<HTMLElement>('.relic-icon');
@@ -123,7 +120,7 @@ export function updateHud(state: GameState): void {
   statusEl.textContent = STATUS_LABEL[run.status];
   statusEl.className = `status-icon status-${run.status.toLowerCase()}`;
 
-  // Horizontally-scrolling icon strip, one per held Chronofact.
+  // Icon strip for held Chronofacts.
   el('relic-tray').innerHTML = run.relics
     .map((effect) => {
       const ref = RELIC_SPRITE_BY_EFFECT[effect] ?? SPRITES.RELIC;
@@ -148,9 +145,7 @@ export function updateHud(state: GameState): void {
     el(elId).textContent = `${label}: ${skillId ? `${skillId} (Lv${state.persistent.skills[skillId] ?? 0})` : '--'}`;
   });
 
-  // On mobile, #hud-bottom sits in normal flex flow (not absolutely
-  // positioned like on desktop), so it can bleed through the menu overlay —
-  // hide the whole bar while a menu is open.
+  // Hide bottom HUD while menu is open to prevent mobile overlay bleed.
   const hideHudBottom = state.ui.currentScreen === 'MENU';
   el('hud-bottom').style.display = hideHudBottom ? 'none' : '';
   el('action-log').innerHTML = state.ui.log

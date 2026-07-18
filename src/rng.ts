@@ -1,7 +1,6 @@
-// Every floor derives from hash(persistent.rngSeed, floorNumber) — the
-// generator must never call Math.random().
+// Seeded PRNG for layout generation.
 
-/** 32-bit avalanche mix. Derives child seeds: per-floor layouts and retry attempts. */
+/** 32-bit avalanche mix. */
 export function hash(seed: number, n: number): number {
   let h = (seed ^ Math.imul(n, 0x9e3779b9)) >>> 0;
   h = Math.imul(h ^ (h >>> 16), 0x21f0aaad);

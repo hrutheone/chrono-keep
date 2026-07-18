@@ -1,5 +1,4 @@
-// Every drawable maps to a {col, row} cell of assets/new-spritesheet.png
-// (16x16 tiles, 49x22). Source rect: sx = col*16, sy = row*16.
+// Spritesheet mapping.
 
 import type { SkillId } from './content';
 import type { StatTrack } from './shop';
@@ -16,9 +15,7 @@ export const SPRITES = {
   // --- Player ---
   PLAYER: { col: 28, row: 0 }, // wide-brim-hat adventurer bust
 
-  // --- Enemies (kinds in types.ts) ---
-  // No per-monster silhouettes on this sheet — picks below are a loose
-  // thematic fit, not literal matches.
+  // --- Enemies ---
   BONE_GRUNT: { col: 29, row: 6 }, // slender bust, arms visible — reads skeletal
   EMBER_BAT: { col: 26, row: 8 }, // small yellow critter (closest warm color to "red")
   VOLT_TURRET: { col: 18, row: 7 }, // same critter in blue — reads electric/squat
@@ -33,7 +30,7 @@ export const SPRITES = {
   STORM_CALLER: { col: 27, row: 3 }, // robed bust, distinct floatier silhouette
   GLACIAL_KNIGHT: { col: 31, row: 6 }, // bust with a slotted armor-plate torso
 
-  // --- Terrain (TILE values in mapgen.ts) ---
+  // --- Terrain ---
   FLOOR: { col: 0, row: 0 }, // dark ground
   WALL: { col: 8, row: 0 }, // dark brick wall block
   DOOR: { col: 11, row: 3 }, // door arch
@@ -45,7 +42,7 @@ export const SPRITES = {
   SHOP_TERMINAL: { col: 0, row: 20 }, // tree brach
   CURSED_RIFT: { col: 13, row: 17 }, // dark red brick pattern — ominous texture
 
-  // --- World-item pickups (Item.kind in types.ts) ---
+  // --- World-item pickups ---
   CHEST: { col: 8, row: 6 }, // brown chest with a latch
   WEAPON: { col: 32, row: 2 }, // diagonal sword
   ACCESSORY: { col: 45, row: 6 }, // gold ring
@@ -53,13 +50,13 @@ export const SPRITES = {
   CONSUMABLE: { col: 39, row: 8 }, // wand/rod shape
   TIME_SHARD: { col: 39, row: 12 }, // hourglass
   ANCHOR: { col: 32, row: 11 }, // golden key ("pins" the Biome)
-  // Fallback only — each Relic has its own icon via RELIC_SPRITE_BY_EFFECT below.
+  // Fallback icon.
   RELIC: { col: 41, row: 3 }, // gold coin
 } as const satisfies Record<string, SpriteRef>;
 
 export type SpriteName = keyof typeof SPRITES;
 
-// One distinct icon per Skill — loose thematic fit, same as everything else here.
+// Skill icons.
 export const SKILL_SPRITE_BY_ID: Record<SkillId, SpriteRef> = {
   dash: { col: 24, row: 12 }, // arrow — forward burst
   cleave: { col: 24, row: 11 }, // slash
@@ -95,7 +92,7 @@ export const STAT_TRACK_SPRITE: Record<StatTrack, SpriteRef> = {
   baseAtkUpgrade: SPRITES.WEAPON,
 };
 
-// One icon per Chronofact effect, keyed by the same `effect` string content.ts uses.
+// Relic icons.
 export const RELIC_SPRITE_BY_EFFECT: Record<string, SpriteRef> = {
   gunpowder_flask: { col: 15, row: 10 }, // orange flame (2nd variant)
   executioners_coin: { col: 41, row: 3 }, // gold coin
@@ -114,8 +111,7 @@ export const RELIC_SPRITE_BY_EFFECT: Record<string, SpriteRef> = {
   time_eaters_jaw: { col: 39, row: 12 }, // hourglass (Time Shard's own cell)
 };
 
-// Keyed by Item.name — one distinct cell per weapon/potion/consumable.
-// Falls back to SPRITES' kind-level generic if a name is ever missing.
+// Item icons.
 export const WEAPON_SPRITE_BY_NAME: Record<string, SpriteRef> = {
   // --- Early game (F1-F20) ---
   'Rusty Sword': { col: 32, row: 2 },

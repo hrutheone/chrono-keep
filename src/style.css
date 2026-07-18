@@ -37,8 +37,7 @@ body {
   image-rendering: crisp-edges;
 }
 
-/* CRT Time-Warp (Section 11): plays once on death/timeout, before the DEATH
- * screen appears. Pure CSS on the canvas element only. */
+/* CRT Time-Warp */
 #game.death-warp {
   animation: crt-warp 0.6s ease-in forwards;
 }
@@ -69,8 +68,7 @@ body {
   opacity: 0;
 }
 
-/* Screen Shake (Section 11 #1): a short random-jitter transform on the
- * canvas only, so HUD numbers stay readable mid-shake. */
+/* Screen Shake */
 #game.screen-shake {
   animation: screen-shake 0.2s ease-out;
 }
@@ -116,8 +114,7 @@ body {
   bottom: 0;
 }
 
-/* Low-Health vignette (Section 11 Audio Juice #4): always present, opacity
- * pulses on below 25% HP. Pure CSS, no canvas changes. */
+/* Low-Health vignette */
 #vignette {
   top: 0;
   bottom: 0;
@@ -239,8 +236,7 @@ body {
   opacity: 0.85;
 }
 
-/* Phase 19 Relic Tray: horizontally-scrolling icon strip, below the HP/
- * Stamina bars in the Top HUD — hidden scrollbar but still swipeable. */
+/* Relic Tray */
 .relic-tray {
   display: flex;
   flex-wrap: nowrap;
@@ -254,9 +250,7 @@ body {
   display: none;
 }
 
-/* Carry-over polish: width/height/background-image/-position/-size come from
- * the inline style attribute (assets.ts's spriteCssStyle) per-icon — this
- * class only supplies the frame around it. */
+
 .relic-icon {
   flex-shrink: 0;
   border: 1px solid var(--color-mid);
@@ -269,8 +263,7 @@ body {
   border-color: var(--color-light);
 }
 
-/* Tap-to-show tooltip (no hover on mobile) — anchored under the Relic Tray,
- * dismissed by tapping anywhere else (hud.ts's document click listener). */
+/* Tooltip */
 .tooltip {
   display: none;
   position: absolute;
@@ -290,8 +283,7 @@ body {
   display: block;
 }
 
-/* Phase 19 Elite Warning banner: just above the Action Log, flashes in when
- * an Elite is within range (hud.ts's ELITE_WARNING_RADIUS). */
+/* Elite Warning banner */
 .elite-warning {
   display: none;
   margin-bottom: 4px;
@@ -315,7 +307,7 @@ body {
   }
 }
 
-/* Inventory & Skill Setting overlays (Phase 3) */
+/* Inventory & Skill Setting overlays */
 #screen-overlay.active {
   pointer-events: auto;
   background: var(--color-bg);
@@ -325,9 +317,7 @@ body {
   font-size: 10px;
 }
 
-/* Capped so wide desktop canvases still render as a narrow vertical card,
- * matching mobile — #screen-overlay.active's flex centering fills the rest
- * with plain background on either side. */
+/* Menu styling */
 .menu {
   width: 100%;
   max-width: 480px;
@@ -343,24 +333,12 @@ body {
   letter-spacing: 0.05em;
 }
 
-/* .unified-menu stays a normal column .menu so the tab row/Close button/hint
- * render as full-width bars (like every other menu). overflow-y:auto is a
- * defensive fallback (matches .upgrade-shop below) so Close/the detail panel
- * stay reachable via scroll even if a tab's content ever runs tall, rather
- * than silently overflowing past the viewport with no way back. */
+
 .unified-menu {
   overflow-y: auto;
 }
 
-/* Every Menu tab (Status/Inventory/Chronofacts/Skill/Bestiary/Settings) is a
- * single full-width column now — the old side-by-side Status+Bag panes
- * (.inventory-panes/.left-pane/.right-pane) went away once Status became its
- * own peer tab instead of Inventory's sidebar. min-height:0 is required for
- * .inventory-grid's own min-height:0/overflow-y:auto below to actually take
- * effect, since a flex child's default min-height:auto refuses to shrink
- * below its content size otherwise, silently growing past this box (the
- * stats/equip panel can genuinely outgrow its flex share on a short
- * mobile-portrait viewport). */
+
 .menu-tab-body {
   flex: 1;
   min-height: 0;
@@ -385,13 +363,7 @@ body {
   padding: 3px 5px;
 }
 
-/* hover: hover / pointer: fine gates this to devices with a real mouse —
- * without it, tapping an .inv-slot leaves a sticky :hover on touch browsers.
- * Selecting a slot grows .item-detail below the grid, which reflows the
- * grid's rows; the sticky hover then lands on whatever button ends up under
- * the same screen coordinate (often the slot directly below, same column)
- * and reads as a second highlighted selection, since :hover and .selected
- * use identical colors. */
+/* Apply hover state only on non-touch devices */
 @media (hover: hover) and (pointer: fine) {
   .menu button:hover:not(:disabled) {
     border-color: var(--color-light);
@@ -414,10 +386,7 @@ body {
   width: 100%;
 }
 
-/* Equipped sign: the Weapon/Accessory slot buttons read as plain bordered
- * buttons like everything else in the menu otherwise — this marks which one
- * is your actual current gear at a glance (only shown when something's
- * actually equipped, never for the "None" state). */
+/* Highlights equipped slots */
 .equip-slot.equipped {
   border-color: var(--color-light);
 }
@@ -442,8 +411,7 @@ body {
   animation: turn-pulse 0.6s ease-in-out infinite alternate;
 }
 
-/* Testing/QA-only toggle (Inventory screen) — dimmed off, a loud red border
- * once active so it never gets left on by accident unnoticed. */
+/* Cheat toggle */
 .cheat-toggle {
   margin-top: 6px;
   opacity: 0.6;
@@ -456,21 +424,7 @@ body {
   border-color: #ff4444;
 }
 
-/* The grid is the one part of the Inventory/Chronofacts/Skill/Bestiary tabs
- * that actually scrolls — min-height:0 + overflow-y:auto clips it to its
- * flex-allocated box instead of the default min-height:auto letting it grow
- * past that box and visually spill into .item-detail below (a real bug on
- * mobile portrait's column layout: a tall grid doesn't fit the short
- * remaining viewport height, and without this it just overflowed the pane's
- * bottom edge and overlapped the detail panel instead of scrolling).
- *
- * Slot Zone redesign: always 5 columns wide (Inventory's 25 slots make a
- * fixed 5x5; Chronofacts/Skill/Bestiary are the same 5-wide grid with as
- * many rows as they need). align-content:start keeps rows pinned to their
- * own aspect-ratio-square height (see .inv-slot below) instead of the
- * default stretch spreading any leftover flex space across rows, which
- * would otherwise un-square a grid with fewer than a full screenful of
- * entries (e.g. Chronofacts early in a run). */
+/* Grid scrolling container */
 .inventory-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -481,12 +435,7 @@ body {
   overflow-y: auto;
 }
 
-/* A slot is a tap-to-select button; selecting shows detail in the fixed
- * .item-detail panel below instead of acting instantly. aspect-ratio keeps
- * it square at any grid width, flex-direction:column stacks icon-over-label.
- * min-width/min-height:0 override the grid item default of min-size:auto,
- * which otherwise refuses to shrink a slot below its .slot-name label's
- * intrinsic size on a short window — overlapping the row below it. */
+
 .inv-slot {
   position: relative;
   aspect-ratio: 1 / 1;
@@ -506,7 +455,7 @@ body {
   opacity: 0.45;
 }
 
-/* 2-line clamp so a long name never grows the square slot. */
+/* 2-line clamp */
 .slot-name {
   font-size: 8px;
   line-height: 1.15;
@@ -521,18 +470,12 @@ body {
   word-break: break-word;
 }
 
-/* Tile-icon Inventory rework: width/height/background-image/-position/-size
- * come from the inline style attribute (assets.ts's spriteCssStyle, same
- * pattern as .relic-icon) — this class only keeps the sprite from stretching
- * to the button's own flex-filled size. */
+
 .inv-slot .item-icon {
   flex-shrink: 0;
 }
 
-/* Phase 18 Inventory Stacking: a small corner badge showing a stacked
- * Potion/Consumable's count — on the grid slot itself, and inline next to
- * the name in the detail panel/equip slots (menus.ts adds `position:
- * relative` only where the badge needs absolute positioning, i.e. the grid). */
+/* Item stack count */
 .inv-slot .item-count {
   position: absolute;
   bottom: 2px;
@@ -560,19 +503,12 @@ body {
   background: var(--color-mid);
 }
 
-/* Equipped Weapon/Accessory lore: only 2 of these ever exist (unlike the
- * 25-slot grid), so always-visible text here doesn't risk the same overflow —
- * hidden on desktop, where hovering the button's `title` already covers it. */
+/* Lore text */
 .equip-lore {
   display: none;
 }
 
-/* Info/Action panel (Slot Zone redesign): a fixed height, identical across
- * all four tabs (Inventory/Chronofacts/Skill/Bestiary) and across selection
- * states (empty placeholder vs. a populated item) — Chronofacts/Bestiary
- * always render an empty .item-detail-actions (no buttons of their own) so
- * switching tabs never shifts the Close button below. flex-shrink:0 keeps
- * .menu-tab-body's flex distribution from squeezing it even so. */
+/* Info panel styling */
 .item-detail {
   height: 132px;
   border: 1px solid var(--color-mid);
@@ -614,20 +550,14 @@ body {
   color: var(--color-light);
 }
 
-/* Inventory Stat Block (GDD Section 8, Phase 16): bright-amber monospace,
- * visually distinct from the muted-midtone lore below it. */
+/* Item detail stat block */
 .item-detail-stat {
   color: var(--color-light);
   font-weight: bold;
   opacity: 1;
 }
 
-/* Bounded height + its own scrollbar: a long lore string (some run 200+
- * characters, or a 3-line Skill effect / Bestiary stat block) used to just
- * grow .item-detail's total height with no cap, pushing the action row
- * further down each time. Now that .item-detail has a fixed height,
- * flex:1/min-height:0 makes this the one part that absorbs it — the
- * description scrolls internally instead of the panel reflowing. */
+/* Lore text area */
 .item-detail-lore {
   color: var(--color-mid);
   opacity: 1;
@@ -638,18 +568,14 @@ body {
   overflow-y: auto;
 }
 
-/* Equipped-slot Stat Block: same treatment, always visible (unlike
- * .equip-lore, which is hover-only on desktop) since the GDD's Stat Block
- * requirement applies to every item, equipped ones included. */
+/* Equipped stat block */
 .equip-stat {
   color: var(--color-light);
   font-weight: bold;
   font-size: 12px;
 }
 
-/* min-height reserves one button-row's worth of space even when empty
- * (Chronofacts/Bestiary render no buttons here) — this is what keeps
- * .item-detail's total height identical whether a tab has actions or not. */
+
 .item-detail-actions {
   display: flex;
   gap: 6px;
@@ -684,8 +610,7 @@ body {
   flex-shrink: 0;
 }
 
-/* Only 4 tracks — always fits one row, so unlike the Skills grid below it
- * shouldn't flex-grow/scroll (that would stretch its slots off-square). */
+
 .shop-stat-grid {
   flex: 0 0 auto;
   overflow: visible;
@@ -721,8 +646,7 @@ body {
   opacity: 0.7;
 }
 
-/* Phase 19 Cursed Rift modal: dark purple/amber, per the GDD's "A Dark
- * Presence Demands a Sacrifice..." styling. */
+/* Cursed Rift modal */
 .cursed-rift-menu {
   background: #12061a;
 }
@@ -773,7 +697,7 @@ body {
   text-align: right;
 }
 
-/* TITLE, DEATH, VICTORY screens (Phase 6) */
+/* Menu screens */
 .title-menu,
 .death-menu,
 .victory-menu {

@@ -1,6 +1,4 @@
-// Skill execution (GDD Sections 6B, 7, 8): Q/E fire the mapped skill toward
-// `run.facing` (self/adjacent skills ignore it), costing Stamina + 1 turn —
-// same Player Move Phase -> resolvePlayerTurn sequence as a move or attack.
+// Skill execution.
 
 import { SKILLS, rollRandomConsumable } from './content';
 import { elementSynergyBonus, pickupItemsAt, totalAtk } from './inventory';
@@ -30,8 +28,7 @@ const ORTHO_DELTA: ReadonlyArray<{ dx: number; dy: number }> = [
   { dx: 0, dy: -1 },
 ];
 
-// Phase 18 (Dark Wave, Ultima): the diagonal-inclusive counterpart to
-// ORTHO_DELTA above.
+// Diagonal-inclusive delta array.
 const ALL_8_DELTA: ReadonlyArray<{ dx: number; dy: number }> = [
   ...ORTHO_DELTA,
   { dx: 1, dy: 1 },
@@ -50,15 +47,10 @@ function enemyAt(state: GameState, x: number, y: number): Enemy | undefined {
   return state.dungeon.enemies.find((e) => e.x === x && e.y === y);
 }
 
-// Ultima (Phase 18): "ALL Stamina" — skillStaminaCost returns the player's
-// current Stamina as the cost (so useSkill's deduction empties the pool),
-// stashing the pre-cast amount here since castUltima runs *after* the
-// deduction and needs to know how much was actually spent for its damage.
+// Track Ultima stamina.
 let ultimaStaminaSpent = 0;
 
-/** Static Shift Lvl 3 (2 Stamina instead of 3), Dragoon Jump Lvl 3 (2 instead
- * of 3), Boots of Haste (Dash 1 instead of 2), and Adrenaline Gland (Section
- * 6D, Phase 8): below 10 HP, all Active Skills cost 0 Stamina. */
+/** Returns stamina cost for a skill. */
 function skillStaminaCost(state: GameState, skillId: string, level: number): number {
   if (state.run.equippedAccessory?.passive === 'adrenaline' && state.run.currentHp < 10) return 0;
   if (skillId === 'ultima') {
@@ -192,7 +184,7 @@ function castIceAegis(state: GameState, level: number): void {
   spawnEffectParticles(state.run.playerX, state.run.playerY, ELEMENT_COLOR.FROST);
 }
 
-// --- Phase 18: the 20-skill roster (Chrono-Keep-Next-Task.md Phase 18) ---
+// --- Active Skills ---
 
 function castBash(state: GameState, level: number): void {
   const { dx, dy } = FACING_DELTA[state.run.facing];
@@ -217,10 +209,7 @@ function castBash(state: GameState, level: number): void {
   }
 }
 
-/** Dragoon Jump: teleport, like Static Shift, but the Stun trap catches
- * whatever's adjacent to the tile you LEFT rather than the one you land on —
- * an offense-from-a-distance flavor distinct from Static Shift's
- * engage-and-stun-on-arrival. */
+/** Dragoon Jump cast. */
 function castDragoonJump(state: GameState, level: number): void {
   const dist = level >= 2 ? 4 : 3;
   const { dx, dy } = FACING_DELTA[state.run.facing];
@@ -274,7 +263,7 @@ function castBlizzardWave(state: GameState, level: number): void {
   playSkillSfx('blizzard_wave');
 }
 
-const METEOR_TELEGRAPH_TURNS = 2; // See AREA_BOMB_TELEGRAPH_TURNS's comment in enemyAI.ts for why 2, not 1.
+const METEOR_TELEGRAPH_TURNS = 2;
 const METEOR_RANGE = 4;
 
 function castMeteor(state: GameState, level: number): void {
@@ -317,7 +306,7 @@ function castChakra(state: GameState, level: number): void {
   logLine(state, `Chakra restores ${heal} HP.`);
   playSkillSfx('chakra');
   spawnEffectParticles(state.run.playerX, state.run.playerY, ELEMENT_COLOR.PHYSICAL);
-  state.run.turnsRemaining += 1; // "0 Turns" — refunds what resolvePlayerTurn is about to spend.
+  state.run.turnsRemaining += 1;
   if (level >= 3) {
     state.run.tempAtkBonus = 2;
     state.run.tempAtkBonusTurns = 3;
@@ -526,7 +515,7 @@ function castHoly(state: GameState, level: number): void {
   const ty = state.run.playerY + dy;
   spawnEffectParticles(tx, ty, ELEMENT_COLOR.FIRE);
   playSkillSfx('holy');
-  spendTurn(state); // The extra Turn beyond the normal 1 resolvePlayerTurn will spend — "costs 2 Turns."
+  spendTurn(state);
   const enemy = enemyAt(state, tx, ty);
   if (!enemy) {
     logLine(state, 'Holy finds no target.');
@@ -559,10 +548,7 @@ function castDefuse(state: GameState, level: number): void {
   logLine(state, `${enemy.kind}'s defenses are stripped!`);
 }
 
-/** Slow doesn't literally track "1 tile per 3 turns" — the engine has no
- * fractional-speed/movement-cooldown system — so it's approximated as
- * briefly stationary (speed 0) instead, restored via the same
- * defuseTurnsLeft-style temp-override pattern as Defuse above. */
+/** Slow cast. */
 function castSlow(state: GameState, level: number): void {
   const targets: Enemy[] = [];
   if (level >= 3) {
@@ -649,9 +635,7 @@ const CASTERS: Record<string, (state: GameState, level: number) => void> = {
   ultima: castUltima,
 };
 
-/** Fires the skill mapped to hotkey Q/E/R/F (0-3, Small Improvements: 2 slots
- * -> 4). Returns the resolvePlayerTurn() promise (or a resolved no-op) so
- * programmatic callers can await full resolution. */
+/** Uses an equipped skill. */
 export function useSkill(state: GameState, slotIndex: 0 | 1 | 2 | 3): Promise<void> {
   if (consumeStunnedAction(state)) return Promise.resolve();
 
@@ -665,9 +649,7 @@ export function useSkill(state: GameState, slotIndex: 0 | 1 | 2 | 3): Promise<vo
     logLine(state, `${SKILLS[skillId]?.name ?? skillId} is locked.`);
     return Promise.resolve();
   }
-  // Giant's Anvil (Phase 19 Relic): "Dash is permanently disabled" — the
-  // trade-off for its +5 ATK (inventory.ts's totalAtk). Gated here, the
-  // earliest point that already turns a disallowed cast into a free no-op.
+  // Dash disable check.
   if (skillId === 'dash' && state.run.relics.includes('giants_anvil')) {
     logLine(state, "Giant's Anvil is too heavy to Dash with.");
     return Promise.resolve();
@@ -684,13 +666,7 @@ export function useSkill(state: GameState, slotIndex: 0 | 1 | 2 | 3): Promise<vo
   }
 
   state.run.braced = false;
-  // Hourglass Shard (Phase 19 Relic): 15% chance the cast costs 0 Stamina
-  // and 0 Turns — the Turns half is pre-compensated the same way individual
-  // skills' own "0 Turns" branches do (e.g. castChakra above), by adding
-  // back what runTickPhase (inside resolvePlayerTurn) is about to subtract.
-  // A skill that's ALREADY a 0-Turn cast by its own design very rarely
-  // double-refunds when this also procs — a harmless small bonus, not worth
-  // extra bookkeeping to prevent for a 15%-chance flavor relic.
+  // Hourglass free cast check.
   const hourglassFree = state.run.relics.includes('hourglass_shard') && Math.random() < 0.15;
   if (hourglassFree) logLine(state, 'Hourglass Shard flickers — this cast is free!');
   else state.run.currentStamina -= cost;
@@ -703,7 +679,7 @@ export function useSkill(state: GameState, slotIndex: 0 | 1 | 2 | 3): Promise<vo
   return resolvePlayerTurn(state, 'skill');
 }
 
-/** Q/E/R/F -> slots 0-3 (Small Improvements). */
+/** Slot mappings. */
 const SLOT_KEYS: Record<string, 0 | 1 | 2 | 3> = { q: 0, e: 1, r: 2, f: 3 };
 
 /** Wires Q/E/R/F to the game state. */

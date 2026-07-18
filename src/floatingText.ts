@@ -1,10 +1,4 @@
-// Floating Combat Text (GDD Section 11 #2): damage numbers and short strings
-// (CRIT!, IMMUNE, +2 TURNS) float up off a sprite and fade. Drawn on canvas
-// with a hand-authored pixel glyph set via fillRect — not ctx.fillText, which
-// would antialias against imageSmoothingEnabled = false's crisp guarantee and
-// be the first external-looking font in a codebase that generates every
-// asset (Section 4).
-
+// Floating Combat Text: drawn via fillRect to avoid antialiasing.
 const FLOAT_MS = 700;
 const RISE_TILES = 0.8;
 
@@ -21,7 +15,7 @@ interface FloatingText {
 const texts: FloatingText[] = [];
 const MAX_TEXTS = 60;
 
-/** Spawns floating text centered over the tile at (x, y) (world/tile space). */
+/** Spawns floating text centered over the tile at (x, y). */
 export function notifyFloatingText(x: number, y: number, text: string, kind: FloatKind = 'damage'): void {
   if (texts.length >= MAX_TEXTS) texts.shift();
   texts.push({ text, x, y, start: performance.now(), kind });
@@ -35,7 +29,7 @@ export interface FloatingTextVisual {
   kind: FloatKind;
 }
 
-/** Resolved render-space position + fade for every live floating text this frame. */
+/** Resolved render-space position + fade for floating text. */
 export function getFloatingTexts(): FloatingTextVisual[] {
   const now = performance.now();
   const out: FloatingTextVisual[] = [];
@@ -51,8 +45,7 @@ export function getFloatingTexts(): FloatingTextVisual[] {
   return out;
 }
 
-// --- 3x5 pixel glyph set: digits, '+', '!', space, and the letters needed
-// for CRIT!, IMMUNE, and TURNS. Same 0/1 fillRect technique as sprites.ts. ---
+// --- 3x5 pixel glyph set ---
 type Glyph = number[][];
 const G: Record<string, Glyph> = {
   '0': [
@@ -215,7 +208,7 @@ export const GLYPH_W = 3;
 export const GLYPH_H = 5;
 export const GLYPH_SPACING = 1;
 
-/** Draws `text` in the pixel glyph font at pixel (px, py), one fillRect per lit pixel. */
+/** Draws `text` in the pixel glyph font at pixel (px, py). */
 export function drawGlyphText(ctx: CanvasRenderingContext2D, text: string, px: number, py: number, color: string): void {
   ctx.fillStyle = color;
   let cursor = px;

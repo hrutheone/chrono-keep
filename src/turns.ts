@@ -11,9 +11,7 @@ export function logLine(state: GameState, line: string): void {
   if (state.ui.log.length > 3) state.ui.log.shift();
 }
 
-/** True from the instant a loss condition is met until continueAfterDeath()
- * resets `run` — blocks further input on GAME during the death animation,
- * before `ui.currentScreen` flips to DEATH. */
+/** Returns true if a loss condition is met. */
 export function isRunOver(state: GameState): boolean {
   return state.run.currentHp <= 0 || state.run.turnsRemaining <= 0;
 }

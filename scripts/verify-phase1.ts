@@ -1,10 +1,4 @@
-// Generator acceptance check (GDD Section 9, run via `npm run verify:phase1`):
-//  1. Determinism — the same seed always produces byte-identical floors.
-//  2. Turn budget — across 100 seeds x 99 floors, spawn -> Stairs is <= 40
-//     walked tiles (verified with an INDEPENDENT BFS, not the
-//     generator's own) and generation never fails.
-//  3. Placement invariants — entity counts, biome enemy mixes, depth-scaled
-//     stats, and chokepoint guards.
+// Generator acceptance check.
 
 import { generateFloor, floorToAscii, PATH_BUDGET, TILE, type GeneratedFloor } from '../src/mapgen';
 import { enterFloor } from '../src/mapgen';
@@ -37,14 +31,7 @@ import { resolvePlayerTurn } from '../src/turnController';
 import { useSkill } from '../src/skills';
 import type { GameState } from '../src/types';
 
-// Phase 16 added resolvePlayerTurn() calls to this harness (Rewind's 2-turn
-// resolution needs real turn advancement) — resolvePlayerTurn's Hit-Stop/CRT
-// Time-Warp paths touch `document` when a stale hit-stop flag (e.g. from a
-// killEnemy() called directly, bypassing the turn pipeline that would
-// otherwise consume it — checkArena/checkChronoLichEntry both do this) is
-// still pending. Same minimal no-op shim scripts/simulate.ts already uses;
-// nothing in any module touches `document`/`window` at import time, so it's
-// safe to install after the imports above run.
+// Shim document/window to prevent browser environment crash.
 (globalThis as unknown as { window: unknown }).window = { addEventListener: () => {} };
 (globalThis as unknown as { document: unknown }).document = { querySelector: () => null };
 
@@ -56,7 +43,7 @@ function fail(label: string, msg: string): void {
   console.error(`FAIL [${label}]: ${msg}`);
 }
 
-// Independent BFS (deliberately not reusing the generator's walkDistances).
+// Independent BFS.
 function walkDist(tiles: number[][], sx: number, sy: number, tx: number, ty: number): number {
   const walkable = (t: number): boolean => t === TILE.FLOOR || t === TILE.DOOR || t === TILE.STAIRS;
   const dist = new Map<number, number>([[sy * N + sx, 0]]);
@@ -79,25 +66,25 @@ function walkDist(tiles: number[][], sx: number, sy: number, tx: number, ty: num
 function checkFloor(label: string, floor: GeneratedFloor, floorNumber: number): number {
   const { tiles, enemies, items } = floor;
 
-  // Turn-budget guarantee, measured independently.
+  // Verify turn-budget.
   const path = walkDist(tiles, floor.spawnX, floor.spawnY, floor.stairsX, floor.stairsY);
   if (path < 0) fail(label, 'stairs unreachable');
   else if (path > PATH_BUDGET) fail(label, `path budget exceeded: ${path} > ${PATH_BUDGET}`);
 
-  // Tile census: exactly one Stairs, no old per-floor Shortcut Gate, nothing else exotic.
+  // Verify tile counts.
   const counts = new Map<number, number>();
   for (const row of tiles) for (const t of row) counts.set(t, (counts.get(t) ?? 0) + 1);
   if (counts.get(TILE.STAIRS) !== 1) fail(label, `expected 1 stairs tile, got ${counts.get(TILE.STAIRS) ?? 0}`);
   if (counts.has(TILE.SHORTCUT_GATE) || counts.has(TILE.BOSS_GATE) || counts.has(TILE.FIRE_HAZARD) || counts.has(TILE.FROST_HAZARD))
     fail(label, 'shortcut gate / boss gate / fire / frost hazard tiles must not appear on procedural floors');
 
-  // Items: no per-floor Anchor chest; 1-2 loot chests.
+  // Verify items.
   const anchors = items.filter((i) => i.item.kind === 'ANCHOR');
   const chests = items.filter((i) => i.item.kind !== 'ANCHOR');
   if (anchors.length !== 0) fail(label, `expected 0 anchor chests, got ${anchors.length}`);
   if (chests.length < 1 || chests.length > 2) fail(label, `expected 1-2 loot chests, got ${chests.length}`);
 
-  // Enemies: 3-6, biome-specific mix, depth-scaled HP/ATK, wheel-derived weaknesses.
+  // Verify enemies.
   const countRange = enemyCountRangeForFloor(floorNumber);
   if (enemies.length < countRange.min || enemies.length > countRange.max)
     fail(label, `expected ${countRange.min}-${countRange.max} enemies, got ${enemies.length}`);
@@ -108,10 +95,7 @@ function checkFloor(label: string, floor: GeneratedFloor, floorNumber: number): 
     const t = BESTIARY[e.kind];
     const expectedHp = Math.round(t.hp * depth);
     const expectedAttack = Math.round(t.attack * depth);
-    // Phase 19: an Elite (e.affix set) deliberately deviates from pure depth
-    // scaling — [Swift]/[Armored]/[Colossal]/[Wealthy] modify HP/ATK/DEF/
-    // Speed at spawn on top of it (content.ts's applyEliteAffixStats).
-    // checkEliteAffixes below verifies that transform directly instead.
+    // Verify Elite Affixes.
     if (!e.affix && (e.hp !== expectedHp || e.maxHp !== expectedHp || e.attack !== expectedAttack || e.defense !== t.defense || e.speed !== t.speed))
       fail(
         label,
@@ -123,7 +107,7 @@ function checkFloor(label: string, floor: GeneratedFloor, floorNumber: number): 
   if (floorNumber >= 21 && enemies.filter((e) => e.kind === 'TIME_WEAVER').length < 1)
     fail(label, 'Biome 3+ procedural floors must contain at least one Time-Weaver Elite');
 
-  // Nothing stacked, everything on walkable ground, nothing on the spawn tile.
+  // Verify walkable constraints.
   const solid = (x: number, y: number): boolean =>
     x < 0 || x >= N || y < 0 || y >= N || (tiles[y][x] !== TILE.FLOOR && tiles[y][x] !== TILE.DOOR);
   const taken = new Set<number>([floor.spawnY * N + floor.spawnX]);
@@ -134,7 +118,7 @@ function checkFloor(label: string, floor: GeneratedFloor, floorNumber: number): 
     if (solid(ent.x, ent.y)) fail(label, `entity on non-walkable tile (${ent.x}, ${ent.y})`);
   }
 
-  // At least one chokepoint guard sits in a 1-wide passage.
+  // Verify chokepoints.
   const guarded = enemies.some(
     (e) => (solid(e.x - 1, e.y) && solid(e.x + 1, e.y)) || (solid(e.x, e.y - 1) && solid(e.x, e.y + 1)),
   );
@@ -143,7 +127,7 @@ function checkFloor(label: string, floor: GeneratedFloor, floorNumber: number): 
   return path;
 }
 
-// --- 1. Determinism: identical seeds -> deep-equal floors ---
+// 1. Determinism
 for (const seed of [123456789, 0, 1, 2 ** 31 - 1]) {
   for (const f of [1, 10, 21, 50, 91, 99]) {
     if (JSON.stringify(generateFloor(seed, f)) !== JSON.stringify(generateFloor(seed, f)))
@@ -151,7 +135,7 @@ for (const seed of [123456789, 0, 1, 2 ** 31 - 1]) {
   }
 }
 
-// --- 2. Phase 11 timer refill: every floor entry resets to the upgraded cap ---
+// 2. Timer Refill
 const timerState = createNewGameState();
 timerState.persistent.turnBonusUpgrade = 3;
 timerState.run.turnsRemaining = 1;
@@ -159,7 +143,7 @@ enterFloor(timerState, 37);
 if (timerState.run.turnsRemaining !== floorTurnLimit(timerState))
   fail('timer refill', `expected ${floorTurnLimit(timerState)}, got ${timerState.run.turnsRemaining}`);
 
-// --- 3 & 4. 100 seeds x 99 floors: no failures, budget + invariants hold ---
+// 3 & 4. Constraints verification
 let floorsChecked = 0;
 let worstPath = 0;
 for (let i = 0; i < 100; i++) {
@@ -175,7 +159,7 @@ for (let i = 0; i < 100; i++) {
   }
 }
 
-// --- 5. Phase 13: Hub & Shortcut Gate ---
+// 5. Hub & Shortcuts
 async function checkHub(): Promise<void> {
   const hub = createNewGameState();
   hub.persistent.unlockedAnchors = [21, 11]; // deliberately unsorted, like a real save
@@ -189,8 +173,7 @@ async function checkHub(): Promise<void> {
   if (JSON.stringify(destinations) !== JSON.stringify([1, 11, 21]))
     fail('hub', `gate destinations expected [1, 11, 21], got ${JSON.stringify(destinations)}`);
 
-  // Timer stays frozen across real turn resolution (move + wait), not just
-  // because nothing ticks it down by construction elsewhere.
+  // Verify timer state in Hub.
   const turnsBefore = hub.run.turnsRemaining;
   await resolvePlayerTurn(hub, 'move');
   await resolvePlayerTurn(hub, 'wait');
@@ -199,7 +182,7 @@ async function checkHub(): Promise<void> {
   if (hub.run.currentHp <= 0 || hub.ui.currentScreen === 'DEATH')
     fail('hub', 'the Hub must never trigger a loss condition');
 
-  // Warping to Floor 11 starts a correct fresh run there.
+  // Verify warp mechanics.
   warpToFloor(hub, 11);
   if (hub.run.currentFloor !== 11) fail('hub', `warp expected currentFloor 11, got ${hub.run.currentFloor}`);
   if (hub.run.startFloor !== 11) fail('hub', `warp expected startFloor 11, got ${hub.run.startFloor}`);
@@ -213,7 +196,7 @@ async function checkHub(): Promise<void> {
 }
 await checkHub();
 
-// --- 6. Phase 15: Mini-Boss Arenas & Temporal Anchors ---
+// 6. Mini-Boss Arenas & Anchors
 function checkArena(floor: number): void {
   const state = createNewGameState();
   enterArenaFloor(state, floor);
@@ -232,8 +215,7 @@ function checkArena(floor: number): void {
   const echoesBefore = state.persistent.echoes;
   const anchorsBefore = state.persistent.unlockedAnchors.length;
 
-  // State-transition check, not a damage-math one — kill directly rather than
-  // simulating the full attack/HP-depletion pipeline.
+  // Verify boss death triggers.
   killEnemy(state, boss, 'bump');
 
   if (state.dungeon.enemies.length !== 0) fail(label, 'boss must be removed from dungeon.enemies on death');
@@ -252,7 +234,7 @@ function checkArena(floor: number): void {
   if (JSON.stringify(dropKinds) !== JSON.stringify(expectedKinds))
     fail(label, `expected drops ${JSON.stringify(expectedKinds)}, got ${JSON.stringify(dropKinds)}`);
 
-  // Picking up the Anchor unlocks the next Biome start + another +25 Echoes.
+  // Verify Anchor pickup effects.
   pickupItemsAt(state, boss.x, boss.y);
   const expectedNextBiome = Math.min(91, Math.floor(floor / 10) * 10 + 1);
   if (!state.persistent.unlockedAnchors.includes(expectedNextBiome))
@@ -268,7 +250,7 @@ function checkArena(floor: number): void {
 for (const floor of ARENA_FLOORS) checkArena(floor);
 console.log(`${ARENA_FLOORS.length} Mini-Boss Arenas checked (Boss Gate seal/open, guaranteed drops, Anchor unlock, Echo awards).`);
 
-// --- 7. Phase 16: Chrono-Lich at Floor 99 (stats, Rewind, victory) ---
+// 7. Chrono-Lich at Floor 99
 async function checkChronoLichEntry(): Promise<void> {
   const state = createNewGameState();
   enterBossFloor(state);
@@ -285,8 +267,7 @@ async function checkChronoLichEntry(): Promise<void> {
   if (boss.defense !== 8) fail(label, `expected 8 DEF, got ${boss.defense}`);
   if (!boss.awake) fail(label, 'boss must start awake');
 
-  // Killing it must go straight to VICTORY (no Boss Gate — there's no Floor
-  // 100 to seal behind one).
+  // Verify boss death triggers.
   killEnemy(state, boss, 'bump');
   if (state.ui.currentScreen !== 'VICTORY') fail(label, `expected VICTORY screen on kill, got ${state.ui.currentScreen}`);
 }
@@ -297,11 +278,11 @@ async function checkRewindResolves(): Promise<void> {
   enterBossFloor(state);
   const label = 'chrono-lich rewind (resolves)';
   const boss = state.dungeon.enemies[0];
-  boss.hp = 80; // 20% of 400 — below the 25% Rewind trigger
+  boss.hp = 80;
   const turnsBefore = state.run.turnsRemaining;
 
-  await resolvePlayerTurn(state, 'wait'); // Enemy Phase: casts Rewind (pending 2 -> ticks to 1)
-  await resolvePlayerTurn(state, 'wait'); // Tick Phase resolves it (unstunned)
+  await resolvePlayerTurn(state, 'wait'); // Enemy Phase
+  await resolvePlayerTurn(state, 'wait'); // Tick Phase
 
   if (boss.hp !== 140) fail(label, `expected 80 + round(400*0.15)=60 -> 140 HP, got ${boss.hp}`);
   if (state.run.turnsRemaining !== turnsBefore - 2 - 10)
@@ -319,8 +300,8 @@ async function checkRewindInterrupted(): Promise<void> {
 
   await resolvePlayerTurn(state, 'wait'); // casts Rewind
   boss.status = 'STUN';
-  boss.statusTurns = 1; // simulates a player Stun landing before it resolves
-  await resolvePlayerTurn(state, 'wait'); // must cancel, not heal/steal
+  boss.statusTurns = 1; // Stun boss
+  await resolvePlayerTurn(state, 'wait'); // resolve Stun
 
   if (boss.hp !== 80) fail(label, `Stunned resolution must not heal — expected 80 HP, got ${boss.hp}`);
   if (state.run.turnsRemaining !== turnsBefore - 2)
@@ -333,10 +314,9 @@ async function checkChronoLichEncounterResets(): Promise<void> {
   const first = createNewGameState();
   enterBossFloor(first);
   first.dungeon.enemies[0].hp = 80;
-  await resolvePlayerTurn(first, 'wait'); // uses up Rewind (BOSS_ID-keyed module state)
+  await resolvePlayerTurn(first, 'wait'); // casts Rewind
 
-  // A fresh attempt (death + re-entry) reuses the same fixed BOSS_ID — Rewind
-  // must be available again, not permanently spent from the failed attempt.
+  // Verify boss reset on re-entry.
   const second = createNewGameState();
   enterBossFloor(second);
   if (second.dungeon.enemies[0].id !== BOSS_ID) fail(label, `expected fixed id ${BOSS_ID}, got ${second.dungeon.enemies[0].id}`);
@@ -391,20 +371,12 @@ function checkPotionStacking(): void {
 }
 checkPotionStacking();
 
-// A direct `state.run.status = 'BURN'` literal assignment followed by a
-// `!== 'NONE'` comparison in the SAME function sends TS's control-flow
-// analysis down a path where it narrows the field to the literal for the
-// rest of the function and flags the comparison as unreachable — the same
-// issue scripts/simulate.ts hit; a function-call boundary sidesteps it.
 function setBurnForTest(state: GameState): void {
   state.run.status = 'BURN';
   state.run.statusTurns = 3;
 }
 
-/** A fresh state with a full open FLOOR grid (createNewGameState's own
- * `dungeon.tiles` starts empty — fine for checks that never touch tile
- * lookups, but Bash's knockback and similar movement-adjacent mechanics call
- * isWalkableAt, which would otherwise index into an empty array). */
+/** Returns an open floor state for testing. */
 function openFloorState(): GameState {
   const state = createNewGameState();
   state.dungeon.tiles = Array.from({ length: DUNGEON_SIZE }, () => new Array<number>(DUNGEON_SIZE).fill(TILE.FLOOR));
@@ -449,7 +421,7 @@ function checkExecuteWeapon(): void {
   state.run.equippedWeapon = createWeapon('RUNE_AXE', 'w1');
   const enemy = createEnemy('BONE_GRUNT', 'e1', 6, 5);
   enemy.maxHp = 100;
-  enemy.hp = 15; // below the 20% execute threshold
+  enemy.hp = 15;
   state.dungeon.enemies = [enemy];
   playerAttackEnemy(state, enemy);
   if (state.dungeon.enemies.some((e) => e.id === 'e1')) fail(label, 'expected the enemy to be executed (removed) below 20% HP');
@@ -589,10 +561,6 @@ function checkEliteAffixStats(): void {
 }
 checkEliteAffixStats();
 
-// runCheckPhase isn't exported (turnController.ts keeps it module-private);
-// resolvePlayerTurn is the public entry point that calls it, so a real
-// (already-lethal) player turn resolution exercises the exact same path
-// Phoenix Feather's tryPhoenixFeather hooks into.
 async function checkPhoenixFeatherRelic(): Promise<void> {
   const label = 'Phase 19 Phoenix Feather relic';
   const state = openFloorState();
@@ -649,8 +617,7 @@ checkPickRandomUnheldRelic();
 
 console.log('Phase 19 checked: 15-Relic/10-Elite-Affix rosters, Elite stat mods, and a sample of new relic/affix mechanics.');
 
-// Eyeball dump of one floor (@ spawn, $ chest, > stairs,
-// + door, enemies g/b/t/w/W).
+// Eyeball dump of one floor.
 console.log(`\nSample floor (seed ${hash(0xdecafbad, 0)}, floor 1):\n${floorToAscii(generateFloor(hash(0xdecafbad, 0), 1))}\n`);
 
 console.log(`${floorsChecked} floors checked; worst spawn->stairs path = ${worstPath} tiles (budget ${PATH_BUDGET}).`);

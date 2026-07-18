@@ -1,5 +1,4 @@
-// Defeating the Chrono-Lich banks the victory Echo bonus, updates persistent
-// stats, and shows the VICTORY screen.
+// Victory screen logic.
 
 import { awardEchoes } from './echoes';
 import { clearRunSnapshot, saveGame } from './persistence';
@@ -13,8 +12,6 @@ export function triggerVictory(state: GameState): void {
   state.ui.currentScreen = 'VICTORY';
   playVictorySfx();
   saveGame(state);
-  // A run snapshot here would still validate on reload and rebuild the boss
-  // arena, respawning an already-defeated Chrono-Lich — clear it instead so
-  // a reload falls through to TITLE (wins/stats are already banked above).
+  // Clear snapshot to prevent reloading into defeated boss arena.
   clearRunSnapshot();
 }

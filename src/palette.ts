@@ -1,4 +1,4 @@
-// Amber palette, plus entity accent colors so player/enemies pop against amber terrain.
+// Amber palette and entity accent colors.
 
 import type { Element } from './types';
 
@@ -22,7 +22,7 @@ export const COLOR_ENEMY_MID = '#992424';
 /** Hit-flash — briefly overrides an entity's own colors on a damage tick. */
 export const COLOR_FLASH = '#ffffff';
 
-// Elemental VFX accents — cast particles/beams color-coded per element.
+// Elemental VFX accents.
 export const COLOR_FIRE = '#ff8c1a';
 export const COLOR_VOLT = '#fff33d';
 export const COLOR_FROST = '#b3e8ff';

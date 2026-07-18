@@ -1,6 +1,4 @@
-// Render-only animation layer: diffs each frame's entity snapshot against the
-// last one to infer movement/damage, plus two explicit hooks (notifyAttack,
-// notifyDeath) for intent a diff can't recover. Never mutates GameState.
+// Render-only animation layer for visualizing movement, damage, attacks, and deaths.
 
 import { COLOR_ENEMY_LIGHT } from './palette';
 import type { Enemy, GameState } from './types';
@@ -9,9 +7,9 @@ const MOVE_MS = 120;
 const ATTACK_MS = 150;
 const HIT_FLASH_MS = 150;
 const DEATH_MS = 350;
-const IDLE_PERIOD_MS = 1600; // slow breathing cycle
+const IDLE_PERIOD_MS = 1600; // breathing cycle
 const ATTACK_LUNGE = 0.25; // tile-fractions
-const IDLE_BOB_PX = 2; // sine amplitude: +/- canvas pixels at an 8px tile
+const IDLE_BOB_PX = 2; // idle bob amplitude
 
 export const PLAYER_ID = '__player__';
 export type GhostKind = 'PLAYER' | Enemy['kind'];
@@ -100,12 +98,12 @@ export function updateAnimations(state: GameState): void {
   }
 }
 
-/** Attacker lunges toward (dx, dy) briefly. Called by combat.ts — a diff alone can't tell "who attacked whom." */
+/** Attacker lunges toward (dx, dy) briefly. */
 export function notifyAttack(id: string, dx: number, dy: number): void {
   attacks.set(id, { dx, dy, start: performance.now() });
 }
 
-/** Fading corpse/death-flash at (x, y). Called right as an entity is removed from state or the player is reset. */
+/** Fading corpse/death-flash at (x, y). */
 export function notifyDeath(id: string, kind: GhostKind, x: number, y: number, facing?: GameState['run']['facing']): void {
   ghosts.set(id, { kind, x, y, facing, start: performance.now() });
 }
@@ -122,11 +120,9 @@ interface Particle {
 }
 
 const particles: Particle[] = [];
-const PARTICLE_MAX = 200; // hard cap so a chain of kills can't grow this unbounded
+const PARTICLE_MAX = 200; // max particles limit
 
-/** Scatters 10-15 single-pixel particles outward from (x, y) in `color`.
- * `spawnEffectParticles` below is the same primitive under a name that
- * reads right for skill/attack VFX call sites. */
+/** Scatters particles outward from (x, y) in `color`. */
 export function spawnDeathParticles(x: number, y: number, color: string = COLOR_ENEMY_LIGHT): void {
   const now = performance.now();
   const count = 10 + Math.floor(Math.random() * 6);
@@ -171,9 +167,7 @@ export function getParticles(): ParticleVisual[] {
   return out;
 }
 
-// An instant line flash simultaneous with a ranged hit — distinct from
-// dungeon.telegraphTiles, which is a multi-turn advance warning, not a
-// same-instant flash.
+// Instant line flash for ranged hits.
 const BEAM_MS = 180;
 interface Beam {
   fromX: number;
@@ -248,9 +242,7 @@ export function getEntityVisual(id: string, logicalX: number, logicalY: number):
       tileY += pulse.dy * k;
     }
   } else if (moveT >= 1) {
-    // Idle bob only when neither mid-move nor mid-attack: a slow sine
-    // vertical drift so single-frame sprites read as breathing. Each entity
-    // keeps its own random idlePhase so a room never bobs in lockstep.
+    // Idle bob vertical drift for breathing effect.
     const phase = ((now + track.idlePhase) % IDLE_PERIOD_MS) / IDLE_PERIOD_MS;
     tileY += Math.sin(phase * Math.PI * 2) * (IDLE_BOB_PX / 8);
   }
@@ -266,7 +258,7 @@ export interface GhostVisual {
   alpha: number;
 }
 
-/** Fading corpses/death-flashes still worth a frame or two after removal from state. */
+/** Fading corpses/death-flashes. */
 export function getDeathGhosts(): GhostVisual[] {
   const now = performance.now();
   const out: GhostVisual[] = [];

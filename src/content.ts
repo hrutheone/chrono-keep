@@ -1,12 +1,9 @@
-// Game content tables: the Elemental Wheel, bestiary, weapons, and accessories.
-
 import type { Accessory, Consumable, Element, Enemy, Item, Weapon } from './types';
 
 export type EnemyKind = Enemy['kind'];
 type Rng = () => number;
 
 // Elemental Wheel: Fire > Frost > Volt > Physical > Fire. Chrono sits outside it.
-// A monster's weakness is the element that beats its own — never hand-assigned.
 const BEATEN_BY: Record<Element, Element | null> = {
   FROST: 'FIRE',
   VOLT: 'FROST',
@@ -30,26 +27,16 @@ interface EnemyTemplate {
 export const BESTIARY: Record<EnemyKind, EnemyTemplate> = {
   BONE_GRUNT: { hp: 12, attack: 4, defense: 1, speed: 1, element: 'PHYSICAL' },
   EMBER_BAT: { hp: 8, attack: 5, defense: 0, speed: 2, element: 'FIRE' },
-  // DEF kept low: Physical (the common early Rusty Sword) is resisted 0.5x
-  // against Volt per the Elemental Wheel — higher DEF here stalled a
-  // Rusty-Sword-only player to 1 dmg/hit against this enemy.
   VOLT_TURRET: { hp: 25, attack: 6, defense: 1, speed: 0, element: 'VOLT' },
   FROST_WRAITH: { hp: 18, attack: 5, defense: 2, speed: 1, element: 'FROST' },
   TIME_WEAVER: { hp: 40, attack: 8, defense: 4, speed: 1, element: 'CHRONO' },
   CHRONO_LICH: { hp: 400, attack: 16, defense: 8, speed: 1, element: 'CHRONO' },
 
-  // Deep-Biome Regulars: first appear Biome 3+ (Floors 21+), mixed into every
-  // deeper Biome after. DEF/Speed are fixed like every regular
-  // (scaleEnemyForDepth only scales hp/attack).
   BONE_KNIGHT: { hp: 22, attack: 5, defense: 6, speed: 1, element: 'PHYSICAL' },
   CINDER_SHAMAN: { hp: 14, attack: 6, defense: 1, speed: 1, element: 'FIRE' },
   VOLT_HOUND: { hp: 10, attack: 6, defense: 0, speed: 2, element: 'VOLT' },
   FROST_SENTINEL: { hp: 20, attack: 5, defense: 5, speed: 0, element: 'FROST' },
 
-  // Mini-Bosses: fixed Arena floors 10/20/30, exempt from Depth Scaling
-  // (hand-tuned stats) same as the Chrono-Lich. F40-90's empowered repeats
-  // reuse these base stats, scaled at spawn by arenas.ts's
-  // miniBossRepeatMultiplier — never baked in here.
   INFERNO_GOLEM: { hp: 120, attack: 9, defense: 2, speed: 1, element: 'FIRE' },
   STORM_CALLER: { hp: 100, attack: 11, defense: 3, speed: 1, element: 'VOLT' },
   GLACIAL_KNIGHT: { hp: 140, attack: 10, defense: 7, speed: 1, element: 'FROST' },
@@ -71,8 +58,6 @@ export const ENEMY_NAME: Record<EnemyKind, string> = {
   GLACIAL_KNIGHT: 'Glacial-Knight',
 };
 
-// Bestiary lore (Section 6C's "Lore / Origin" column) — shown in the Bestiary
-// tab of the Skill Menu (Fun & Feel #1). Never displayed anywhere before this.
 export const MONSTER_LORE: Record<EnemyKind, string> = {
   BONE_GRUNT:
     'Once your comrades-in-arms, now trapped in a cycle of endless decay and resurrection. They attack blindly, trying to enforce a quarantine that failed lifetimes ago.',
@@ -94,9 +79,6 @@ export const MONSTER_LORE: Record<EnemyKind, string> = {
     "The kennels of the citadel guard, warped into living capacitors. They hunt in pairs, herding prey into each other's arcs.",
   FROST_SENTINEL:
     'Statues of the old kings, animated by the cold between seconds. Their gaze sweeps the halls in four directions at once.',
-  // Mini-Bosses (Phase 15): the GDD's Section 6C table has no Lore/Origin
-  // column for these three (unlike every regular/Elite entry above) —
-  // authored here to match the established voice, not transcribed from spec.
   INFERNO_GOLEM:
     "Forged from the citadel's own furnace core, given a will only by the shattering of the Hourglass. It remembers being nothing but fire and purpose — grind forward, grind forward, grind forward.",
   STORM_CALLER:
@@ -125,24 +107,17 @@ export function createEnemy(kind: EnemyKind, id: string, x: number, y: number): 
   };
 }
 
-// --- 99-Floor Descent structure (GDD Sections 6C & 7) ---
-
 /** Which 10-floor Biome a floor belongs to (1-10). Floor 99 caps Biome 10. */
 export function biomeOf(floorNumber: number): number {
   return Math.min(10, Math.floor((floorNumber - 1) / 10) + 1);
 }
 
-/** Depth Multiplier (Section 6C): +15% compounding every 5 floors, applied to
- * enemy HP and ATK at spawn time. DEF and Speed never scale (armor/mobility
- * stay a readable, fixed property of each kind). */
+/** Depth Multiplier: +15% compounding every 5 floors. */
 export function depthMultiplier(floorNumber: number): number {
   return Math.pow(1.15, Math.floor((floorNumber - 1) / 5));
 }
 
-/** Applies the Depth Multiplier for the floor an enemy spawns on. Regular
- * enemies and Elites only — Mini-Bosses and the Chrono-Lich use hand-tuned
- * stats and are exempt (their floors are fixed, so scaling is baked in).
- * NG+ scaling (scaleEnemyForNgPlus) multiplies ON TOP of this. */
+/** Applies Depth Multiplier to spawned enemies. */
 export function scaleEnemyForDepth(enemy: Enemy, floorNumber: number): void {
   const mult = depthMultiplier(floorNumber);
   if (mult <= 1) return;
@@ -151,12 +126,7 @@ export function scaleEnemyForDepth(enemy: Enemy, floorNumber: number): void {
   enemy.attack = Math.round(enemy.attack * mult);
 }
 
-/** Fun & Feel #8: New Game+ escalation — +10% HP per NG+ cycle, applied as a
- * post-generation pass (mapgen.ts/bossArena.ts, and enemyAI.ts's Grunt
- * summons) rather than inside `createEnemy` itself, so the seeded generator
- * stays a pure function of (rngSeed, floorNumber) — determinism never
- * depends on meta-progression. A no-op at ngPlusLevel 0 (every first
- * playthrough). */
+/** Applies NG+ HP scaling. */
 export function scaleEnemyForNgPlus(enemy: Enemy, ngPlusLevel: number): void {
   if (ngPlusLevel <= 0) return;
   const scaled = Math.round(enemy.hp * (1 + 0.1 * ngPlusLevel));
@@ -164,13 +134,7 @@ export function scaleEnemyForNgPlus(enemy: Enemy, ngPlusLevel: number): void {
   enemy.maxHp = scaled;
 }
 
-/** Echo Magnet (Phase 19 Relic): "+50% Echoes earned, but all enemies gain
- * +20% Max HP" — the trade-off half, applied the same post-generation-pass
- * way as scaleEnemyForNgPlus above and for the identical reason (relics are
- * gameplay-time `run` state; the seeded generator must stay a pure function
- * of (rngSeed, floorNumber) for determinism). Regular procedural-floor
- * enemies only — Mini-Bosses/the Chrono-Lich are hand-tuned and already
- * exempt from Depth/NG+ scaling for the same reason, so this follows suit. */
+/** Applies Echo Magnet HP scaling. */
 export function scaleEnemyForEchoMagnet(enemy: Enemy, active: boolean): void {
   if (!active) return;
   const scaled = Math.round(enemy.hp * 1.2);
@@ -178,11 +142,7 @@ export function scaleEnemyForEchoMagnet(enemy: Enemy, active: boolean): void {
   enemy.maxHp = scaled;
 }
 
-/** Procedural-floor enemy pool for Phase 12's 99-floor descent. Phase 14 adds
- * the deep-biome regulars' AI, so Biome 3+ uses the full roster the GDD
- * specifies (Bone-Knight/Cinder-Shaman/Volt-Hound/Frost-Sentinel alongside
- * the Biome 1-2 kinds and Time-Weaver pressure), with elemental
- * over-representation by Biome theme. */
+/** Procedural-floor enemy pool. */
 export function enemyPoolForFloor(floorNumber: number): EnemyKind[] {
   const biome = biomeOf(floorNumber);
   if (biome === 1) return ['BONE_GRUNT', 'EMBER_BAT'];
@@ -214,23 +174,11 @@ export function enemyCountRangeForFloor(floorNumber: number): { min: number; max
   return { min: 5, max: 6 };
 }
 
-// Weapons (Section 6A). The first 6 are the original Phase 0-6 roster; the
-// remaining 10 are Phase 8's expansion. `lore` is Section 6A's "Lore /
-// Flavor Text" column — see loreForItem() below for how it reaches the UI.
-// Phase 18 Content Expansion: the original 17-weapon roster (sized for the
-// pre-99-floor game) replaced wholesale with a 40-weapon, 3-tier roster —
-// Early (F1-20), Mid (F21-50), Late (F51-99) — per Chrono-Keep-Next-Task.md's
-// Phase 18 spec. A handful of mechanics described there don't map onto an
-// existing game system (enemies have no Stamina stat, e.g.) and were
-// reinterpreted to the closest implementable equivalent; see the passive's
-// comment where that happened.
 const WEAPONS = {
   // --- Early game (F1-F20) ---
   RUSTY_SWORD: { name: 'Rusty Sword', atk: 3, element: 'PHYSICAL', passive: 'none', lore: 'Your service weapon from a timeline long forgotten. It remembers the taste of blood, but its edge has dulled across a thousand failed resets.' },
   BONE_DAGGER: { name: 'Bone Dagger', atk: 2, element: 'PHYSICAL', passive: 'free_swap', lore: 'Carved from the femur of a fallen Watchwarden. It demands so little weight to wield, you can draw it between the ticks of a clock.' },
   MYTHRIL_HAMMER: { name: 'Mythril Hammer', atk: 5, element: 'PHYSICAL', passive: 'heavy_stamina', lore: 'Too heavy for a living arm to swing twice. Yours is not quite living anymore.' },
-  // "10% chance to drain 1 Stamina from the enemy" — enemies have no Stamina
-  // stat in this game, so reinterpreted as the player recovering it instead.
   MAGE_MASHER: { name: 'Mage Masher', atk: 3, element: 'VOLT', passive: 'stamina_leech_10', lore: "A duelist's parrying blade, repurposed. It hums faintly, siphoning static off every failed guard." },
   FLAMETONGUE: { name: 'Flametongue', atk: 3, element: 'FIRE', passive: 'cure_chill_on_attack', lore: 'A campfire given an edge. It never quite stops smoldering.' },
   ICE_LANCE: { name: 'Ice Lance', atk: 4, element: 'FROST', passive: 'pierce_ranged_2', lore: 'A shard of the Undercroft, sharpened. It skewers straight through whatever stands in its way.' },
@@ -282,10 +230,7 @@ export function createWeapon(key: WeaponKey, id: string): Weapon {
   return { id, kind: 'WEAPON', name: w.name, value: 0, atk: w.atk, element: w.element, passive: w.passive };
 }
 
-// Weapon passives that grant a min/max attack range without moving (Section
-// 6A/8): the inverse pair — some weapons can reach past adjacency, others
-// *require* distance. min=max=1 (the default for any weapon not listed)
-// means "adjacent bump-attack only."
+// Weapon attack ranges.
 export interface WeaponRangeProfile {
   min: number;
   max: number;
@@ -300,12 +245,8 @@ export const WEAPON_RANGE: Partial<Record<string, WeaponRangeProfile>> = {
   pierce_ranged_2_lifesteal_3: { min: 1, max: 2 }, // Blood Lance
 };
 
-// Weapon passives that let the Bone Dagger-style free-swap rule apply.
 export const FREE_SWAP_PASSIVES = new Set(['free_swap']);
 
-// Accessories (Section 6D). The first 7 are the original roster; the
-// remaining 12 are Phase 8's expansion. `lore` is Section 6D's "Lore /
-// Flavor Text" column.
 const ACCESSORIES = {
   IRON_RING: {
     name: 'Iron Ring',
@@ -430,21 +371,12 @@ export function createAccessory(key: AccessoryKey, id: string): Accessory {
   return { id, kind: 'ACCESSORY', name: a.name, value: 0, passive: a.passive };
 }
 
-// Potions (Phase 18 Content Expansion: 4 new scaling tiers alongside the
-// original 2). `effect` picks the heal shape usePotion (inventory.ts)
-// applies: heal_flat (a flat HP amount), heal_percent_max (a % of Max HP),
-// heal_percent_max_cleanse (a % of Max HP + clears any Status), or
-// permanent_max_hp (a permanent +Max HP, not a heal at all — Soma Drop).
-// `value` is that effect's one parameter, same convention Consumables use.
-// `melt` is this Potion's Melt-for-Echoes value (inventory.ts's meltItem) —
-// kept distinct from `value` (that's the heal amount/effect parameter) since
-// the two numbers mean completely different things and scale independently.
 const POTIONS = {
   POTION: { name: 'Potion', effect: 'heal_flat', value: 10, lore: 'A murky, lukewarm brew. It tastes like failure, but it works.', melt: 5 },
   MAX_POTION: {
     name: 'Max Potion',
     effect: 'heal_flat',
-    value: 999, // Deliberately absurd — usePotion clamps to maxHp, so this always fully heals.
+    value: 999,
     lore: "Distilled from a Watchwarden's final, desperate moment. It remembers what it means to be whole.",
     melt: 20,
   },
@@ -468,11 +400,6 @@ const POTIONS = {
 
 export type PotionKey = keyof typeof POTIONS;
 
-// Soma Drop's permanent stat change is deliberately slower than every other
-// Potion's context-sensitive 0/1-Turn rule (Section 7) — a flat 3 Turns
-// regardless of context, closer to a Tactical Consumable's cost shape.
-// Alchemist's Belt (Section 6D) still overrides it to free, same as anything
-// else Potion/Consumable it touches.
 export const POTION_FIXED_TURN_COST: Partial<Record<string, number>> = {
   'Soma Drop': 3,
 };
@@ -486,16 +413,6 @@ export function createAnchorItem(id: string): Item {
   return { id, kind: 'ANCHOR', name: 'Temporal Anchor', value: 0 };
 }
 
-// Tactical Consumables (Section 6E, Phase 8): always 1 turn to use, in or out
-// of combat (Alchemist's Belt overrides this to 0). `value` carries the one
-// numeric parameter each effect needs, the same convention Potion/Time Shard
-// already use; secondary parameters (range, AOE, duration) are baked into
-// the implementing code by `effect` ID, same as a Weapon's `passive`. `lore`
-// is Section 6E's "Lore / Flavor Text" column.
-// Same `melt`-vs-`value` split as POTIONS above — `value` is the effect's own
-// parameter (range/turns/charges/Echoes), `melt` is what Melting the item
-// instead of using it pays out. Echo Geode is the one item where those two
-// numbers are deliberately equal: melting it gives exactly what using it would.
 const CONSUMABLES = {
   LIQUID_FIRE_FLASK: {
     name: 'Liquid Fire Flask',
@@ -564,24 +481,11 @@ export function createConsumable(key: ConsumableKey, id: string): Consumable {
 
 const CONSUMABLE_KEYS = Object.keys(CONSUMABLES) as ConsumableKey[];
 
-/** Mug (Phase 18 skill): a uniform-random Consumable, standing in for a
- * pickpocketed item off an enemy that otherwise has no drop table entry. */
 export function rollRandomConsumable(id: string): Consumable {
   const key = CONSUMABLE_KEYS[Math.floor(Math.random() * CONSUMABLE_KEYS.length)];
   return createConsumable(key, id);
 }
 
-// Chronofacts / Relics (Phase 19: infinite-stacking run passives — never
-// equipped, picked up from drops/Elite kills/Cursed Rifts and added straight
-// to `run.relics`). Each has both a registry key (`createRelicItem`'s
-// argument, same convention as every other create* function here) and an
-// `effect` snake_case ID stored on the Item and pushed into `run.relics` —
-// kept as two separate strings, even though it's a 1:1 mapping for every
-// entry, to match the weapon/accessory/potion convention of dispatching on
-// a snake_case `passive`/`effect` string rather than the upper-snake
-// registry key itself. Implementation hooks live in combat.ts, inventory.ts,
-// echoes.ts, turnController.ts, skills.ts, and enemyAI.ts — see each site's
-// own comment for exactly which relic it implements.
 export const RELICS = {
   GUNPOWDER_FLASK: {
     name: 'Gunpowder Flask',
@@ -668,9 +572,7 @@ export function createRelicItem(key: RelicKey, id: string): Item {
   return { id, kind: 'RELIC', name: r.name, value: 0, effect: r.effect };
 }
 
-/** Looks up a relic's display name/lore by its `effect` ID (what `run.relics`
- * stores) — the Relic Tray tooltip and Cursed Rift/kill-reward log lines
- * need this the same way loreForItem needs a display name below. */
+/** Looks up a relic's display name/lore by its `effect` ID. */
 const RELIC_BY_EFFECT: Record<string, { name: string; lore: string }> = {};
 for (const r of Object.values(RELICS)) RELIC_BY_EFFECT[r.effect] = { name: r.name, lore: r.lore };
 export function relicName(effect: string): string {
@@ -682,26 +584,18 @@ export function relicLore(effect: string): string {
 
 const RELIC_EFFECT_KEYS = Object.values(RELICS).map((r) => r.effect);
 
-/** Cursed Rift accept / a killed [Wealthy] Elite: a random relic not already
- * held, or null if every relic is already in `run.relics` (caller falls back
- * to an Echo consolation prize). */
+/** Returns a random unheld relic effect ID, or null if all are held. */
 export function pickRandomUnheldRelic(held: readonly string[]): string | null {
   const available = RELIC_EFFECT_KEYS.filter((e) => !held.includes(e));
   if (available.length === 0) return null;
   return available[Math.floor(Math.random() * available.length)];
 }
 
-/** Builds a RELIC-kind Item straight from an `effect` ID (as returned by
- * pickRandomUnheldRelic) rather than a registry key — the drop-table/reward
- * call sites only ever have the effect string on hand. */
+/** Builds a Relic Item from an effect ID. */
 export function createRelicItemByEffect(effect: string, id: string): Item {
   return { id, kind: 'RELIC', name: relicName(effect), value: 0, effect };
 }
 
-// Chronofacts Detail Screen (Next-Task.md QoL): the Section 8 Stat Block's
-// "Effect: ..." line, for relics specifically — a short mechanical summary
-// (what the relic actually does, per its combat.ts/skills.ts/etc. hook),
-// distinct from relicLore's pure flavor text above it in the detail panel.
 const RELIC_EFFECT_TEXT: Record<string, string> = {
   gunpowder_flask: 'Effect: A Burning kill explodes, hitting nearby enemies for your ATK.',
   executioners_coin: 'Effect: +50% DMG vs. a target below 30% HP.',
@@ -723,14 +617,6 @@ export function relicEffectText(effect: string): string {
   return RELIC_EFFECT_TEXT[effect] ?? '';
 }
 
-// Elite Affixes (Phase 19): mapgen.ts's spawnEnemy rolls a 10% chance for any
-// regular enemy to spawn as an Elite with one of these — a randomized prefix
-// that changes behavior/stats and guarantees a Relic-or-Tier-3-Weapon drop.
-// `color` drives the pulsing aura render.ts draws under the sprite
-// (ctx.shadowBlur/shadowColor); [Blinking]/[Colossal]/[Shielded] skip the
-// aura for their own bespoke treatment (translucency/scale/ring — see
-// render.ts) so `color` is unused for those three but still present for a
-// consistent registry shape.
 export const ELITE_AFFIXES = {
   vampiric: { name: 'Vampiric', color: '#ff3b3b' },
   swift: { name: 'Swift', color: '#3ba7ff' },
@@ -755,13 +641,7 @@ export function eliteAffixColor(affix: string): string {
   return (ELITE_AFFIXES as Record<string, { name: string; color: string }>)[affix]?.color ?? '#ffffff';
 }
 
-/** Applies an Elite's stat modifiers at spawn time (mapgen.ts, after the
- * normal Depth Multiplier). Only 3 of the 10 affixes touch base stats —
- * [Swift] (+1 Speed), [Armored] (+5 DEF), [Colossal] (+300% Max HP, 2x ATK —
- * its Speed penalty is a per-turn AI gate in enemyAI.ts instead, no fixed
- * stat for "moves every 2 turns" to set here) and [Wealthy] (halved HP/ATK,
- * a deliberately weak combatant since its whole threat is escaping, not
- * fighting). [Shielded] additionally needs its own hit-counter initialized. */
+/** Applies Elite stat modifiers. */
 export function applyEliteAffixStats(enemy: Enemy, affix: EliteAffixKey): void {
   if (affix === 'swift') {
     enemy.speed += 1;
@@ -780,55 +660,27 @@ export function applyEliteAffixStats(enemy: Enemy, affix: EliteAffixKey): void {
   }
 }
 
-// Fun & Feel #1: lore is kept out of the runtime Item objects (so it doesn't
-// bloat every save file with static, per-kind text) and looked up by display
-// name instead — names are already unique identifiers throughout this file.
 const LORE_BY_NAME: Record<string, string> = {};
 for (const w of Object.values(WEAPONS)) LORE_BY_NAME[w.name] = w.lore;
 for (const a of Object.values(ACCESSORIES)) LORE_BY_NAME[a.name] = a.lore;
 for (const c of Object.values(CONSUMABLES)) LORE_BY_NAME[c.name] = c.lore;
 for (const p of Object.values(POTIONS)) LORE_BY_NAME[p.name] = p.lore;
 
-/** Flavor text for the Inventory overlay (Section 6's "Lore / Flavor Text"
- * columns) — undefined for items that never had any (Temporal Anchor, Time
- * Shard). */
 export function loreForItem(name: string): string | undefined {
   return LORE_BY_NAME[name];
 }
 
-// Melt-for-Echoes value lookup, same by-display-name pattern as LORE_BY_NAME
-// above — Accessories/Potions/Consumables carry a hand-tuned `melt` field
-// (their `value` field already means something else per-kind). Weapons have
-// no such field: their melt value scales off `atk`, the one number that
-// already tracks a weapon's power/tier, in itemMeltValue below instead.
 const MELT_VALUE_BY_NAME: Record<string, number> = {};
 for (const a of Object.values(ACCESSORIES)) MELT_VALUE_BY_NAME[a.name] = a.melt;
 for (const c of Object.values(CONSUMABLES)) MELT_VALUE_BY_NAME[c.name] = c.melt;
 for (const p of Object.values(POTIONS)) MELT_VALUE_BY_NAME[p.name] = p.melt;
 
-/** Echoes awarded for Melting this inventory item (inventory.ts's meltItem,
- * replacing the old no-payout Drop action). Weapons: 5 base + 2 per ATK, so
- * value tracks the same atk stat that already scales with game progression
- * (Bone Dagger's 2 ATK -> 9 Echoes, Apocalypse's 14 ATK -> 33 Echoes).
- * Accessories/Potions/Consumables: hand-tuned `melt` field on each entry
- * above, looked up by display name. */
 export function itemMeltValue(item: Item): number {
   if (item.kind === 'WEAPON') return 5 + (item as Weapon).atk * 2;
   return MELT_VALUE_BY_NAME[item.name] ?? 5;
 }
 
-// Inventory Stat Block (GDD Section 8, Phase 16): human-readable text for
-// each weapon/accessory passive ID, keyed the same way WEAPON_RANGE/
-// FREE_SWAP_PASSIVES are — the machine-readable counterpart to loreForItem's
-// flavor text. Passives with a purely numeric effect (def_plus_2,
-// max_hp_plus_10, max_stam_plus_3, berserker, paladin) have no entry here —
-// menus.ts renders those as their own stat fields (DEF/Max HP/ATK/Max
-// Stamina) via inventory.ts's accessory*Bonus functions instead.
-// Phase 18: rewritten alongside the 40-weapon roster — every ID here is
-// live (referenced by at least one current WEAPONS entry); the pre-Phase-18
-// ones no longer in use (burn_25, pierce_1, ranged_3, exact_range_2, pull_1,
-// blood_magic, chill_50_free_swap, stun_synergy_2x) were dropped along with
-// the weapons that used them.
+// Inventory Stat Block labels.
 export const WEAPON_EFFECT_LABEL: Partial<Record<string, string>> = {
   free_swap: 'Free Weapon Swap',
   heavy_stamina: '-1 Stamina per Hit',
@@ -887,9 +739,7 @@ export const ACCESSORY_EFFECT_LABEL: Partial<Record<string, string>> = {
   alchemist_belt: 'Consumables Cost 0 Turns',
 };
 
-// Consumable effect text (Section 6E): a function of the item's `value` since
-// that's the one field each effect ID parameterizes (range, duration,
-// charges, Echo amount — see the CONSUMABLES table's per-entry comments).
+// Consumable effect text.
 export const CONSUMABLE_EFFECT_TEXT: Partial<Record<string, (value: number) => string>> = {
   throw_fire_hazard: (v) => `Range: ${v} | Effect: Fire Hazard, 4 Turns`,
   throw_shock_grenade: (v) => `Range: ${v} | AOE: 3x3 Stun`,
@@ -901,20 +751,9 @@ export const CONSUMABLE_EFFECT_TEXT: Partial<Record<string, (value: number) => s
   whetstone: () => 'Effect: Next Hit Deals 2x Damage',
 };
 
-// Chest loot pools by Biome (Section 6D drop-source tiers: "Chests",
-// "Chests (Biome 2+)", "Chests (Biome 3+)"). Tiering up with depth is what
-// lets a warp-in player re-gear appropriately for the local Depth Scaling
-// (Section 7, Dynamic Chest Loot). Positions are seeded; contents are
-// rerolled from gameplay RNG at pickup time (inventory.ts).
+// Chest loot pools by Biome.
 type ChestRoll = (id: string) => Item;
 
-// Phase 18: chest pools carry the 40-weapon roster's Early/Mid/Late tiers,
-// mirroring the same F1-20/F21-50/F51-99 grouping the roster itself uses —
-// every weapon is reachable from either a chest tier, a specific enemy's
-// drop table, or a Mini-Boss's guaranteed drop (see ENEMY_DROPS/
-// MINI_BOSS_WEAPON below/in combat.ts); none are chest-exclusive-excluded,
-// Masamune's "Mythic" framing included, since excluding it entirely would
-// make it unobtainable.
 const CHEST_POOL_B1: ChestRoll[] = [
   (id) => createPotion('POTION', id),
   (id) => createPotion('MINOR_POTION', id),
@@ -981,13 +820,7 @@ const CHEST_POOL_B3: ChestRoll[] = [
   (id) => createConsumable('ICE_BARRICADE_SCROLL', id),
   (id) => createConsumable('RECALL_RUNE', id),
   (id) => createConsumable('ECHO_GEODE', id),
-  // Phase 19: a rare chest-loot source for Chronofacts, alongside guaranteed
-  // Elite kills and Cursed Rifts — one slot in Biome 3+'s ~35-entry pool
-  // keeps it meaningfully rarer than any single weapon/accessory. Picked
-  // fully at random here (this static table has no access to `state.run.
-  // relics` to prefer an unheld one) — inventory.ts's pickupItemsAt is what
-  // converts an already-held roll into an Echo consolation at pickup time,
-  // the same place every other Relic source's duplicate gets caught too.
+  // Rare chest-loot source for Chronofacts.
   (id) => createRelicItemByEffect(RELIC_EFFECT_KEYS[Math.floor(Math.random() * RELIC_EFFECT_KEYS.length)], id),
 ];
 
@@ -997,11 +830,7 @@ export function rollChestItem(rng: () => number, floorNumber: number, id: string
   return pool[Math.floor(rng() * pool.length)](id);
 }
 
-// Skills (Section 6B). Levels/upgrades are purchased with Echoes in Phase 5's
-// Upgrade Shop; only stamina cost and identity matter for the Phase 3 menu.
-// Phase 18 Content Expansion adds 20 more alongside the original 5 (additive,
-// not a replacement — none of the 20 share a name/id with the originals, and
-// Dash in particular is too load-bearing for traversal to drop).
+// Skills.
 export const SKILLS: Record<string, { name: string; element: Element; stamina: number }> = {
   dash: { name: 'Dash', element: 'PHYSICAL', stamina: 2 },
   cleave: { name: 'Cleave', element: 'PHYSICAL', stamina: 3 },
@@ -1032,8 +861,7 @@ export const SKILLS: Record<string, { name: string; element: Element; stamina: n
 
 export type SkillId = keyof typeof SKILLS;
 
-// Fun & Feel #5: Section 6B's Lvl1/Lvl2/Lvl3 columns, verbatim — shown next to
-// the Buy button in the Skill Menu/Upgrade Shop so a purchase is never blind.
+// Skill level effects.
 export const SKILL_LEVEL_EFFECTS: Record<SkillId, readonly [string, string, string]> = {
   dash: ['Move 2 tiles in one turn.', 'Move 3 tiles.', '+1 Turn refunded on use.'],
   cleave: ['Deal 1.2x ATK to 3 front tiles.', 'Deal 1.5x ATK.', 'Inflicts Knockback.'],
@@ -1062,8 +890,7 @@ export const SKILL_LEVEL_EFFECTS: Record<SkillId, readonly [string, string, stri
   ultima: ['Consumes all Stamina; 5x5 AOE for Stamina x2 damage.', 'Stamina x2.5 damage.', 'Stamina x3 damage.'],
 };
 
-// Enemy death drops (Section 6A/6C). Phase 3 only wires the data + roll
-// function; nothing calls this until Phase 4 implements enemy death.
+// Enemy death drops.
 type DropRoll = (id: string) => Item;
 
 const ENEMY_DROPS: Partial<Record<EnemyKind, DropRoll[]>> = {
@@ -1085,21 +912,13 @@ export function rollEnemyDrop(rng: Rng, kind: EnemyKind, id: string): Item | nul
   return table[Math.floor(rng() * table.length)](id);
 }
 
-// Phase 19 Elite Affixes: "guarantees a Relic or Tier-3 Weapon drop on
-// death" — Tier-3 meaning the Late-game (F51-99) roster from the 40-weapon
-// table above, listed directly here since WEAPONS itself has no queryable
-// tier field.
 const LATE_TIER_WEAPON_KEYS: WeaponKey[] = [
   'FIRAGA_EDGE', 'ICE_BRAND', 'BLITZ_WHIP', 'RUNE_AXE', 'EXCALIBUR', 'HOLY_LANCE',
   'ULTIMA_WEAPON', 'RAGNAROK', 'GUNGNIR', 'SAVE_THE_QUEEN', 'BLOOD_LANCE',
   'DEATHBRINGER', 'APOCALYPSE', 'MASAMUNE',
 ];
 
-/** Killing a regular Elite (combat.ts's killEnemy, replacing that kind's
- * normal ENEMY_DROPS roll): 50/50 a random unheld Relic or a random
- * Tier-3 Weapon, falling to the weapon side once every Relic is already
- * held. [Wealthy] is handled separately in killEnemy — its spec is a
- * guaranteed Relic specifically, not this 50/50. */
+/** Rolls regular Elite drop. */
 export function rollEliteDrop(id: string, heldRelics: readonly string[]): Item {
   if (Math.random() < 0.5) {
     const relic = pickRandomUnheldRelic(heldRelics);
@@ -1109,13 +928,8 @@ export function rollEliteDrop(id: string, heldRelics: readonly string[]): Item {
   return createWeapon(key, id);
 }
 
-// Time Shards (Section 6C): 25% drop chance from normal (non-Elite/Boss)
-// enemies, rolled with gameplay RNG (Math.random()), not the seeded generator
-// stream — intentionally non-deterministic across loops.
 export const TIME_SHARD_DROP_CHANCE = 0.25;
 
 export function createTimeShard(id: string): Item {
-  // +5 turns (Section 6C, 99-Floor Descent): worth a real detour against a
-  // per-floor 100-turn counter, where the old +2 was tuned for a shared one.
   return { id, kind: 'TIME_SHARD', name: 'Time Shard', value: 5 };
 }

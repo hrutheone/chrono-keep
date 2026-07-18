@@ -1,12 +1,10 @@
-// Echo Economy (GDD Section 7): earning rules and per-floor bookkeeping
-// (Flawless Floor, first-time-reached bonus). Spending lives in shop.ts.
+// Echo Economy: earning rules and bookkeeping.
 
 import { logLine } from './turns';
 import { saveGame } from './persistence';
 import type { GameState } from './types';
 
-/** Echo Charm: +20% Echoes earned. Echo Magnet (Phase 19 Relic): +50% more
- * on top — the two stack multiplicatively, rounded up once at the end. */
+/** Calculates total echo multiplier. */
 function echoMultiplier(state: GameState): number {
   const charm = state.run.equippedAccessory?.passive === 'echo_bonus_20' ? 1.2 : 1;
   const magnet = state.run.relics.includes('echo_magnet') ? 1.5 : 1;
@@ -22,12 +20,11 @@ export function awardEchoes(state: GameState, amount: number, reason: string): n
   return total;
 }
 
-/** Call right after a floor is installed into state (Phase 1/5 entry point). */
+/** Called when floor is entered. */
 export function onFloorEntered(state: GameState): void {
   state.run.floorDamageTaken = false;
   state.run.floorFirstHitNegated = false;
-  // Recall's mark is floor-relative — a mark from the previous floor points
-  // at coordinates that no longer mean anything once the layout changes.
+  // Clear recall mark on new floor.
   state.run.recallMarkX = null;
   state.run.recallMarkY = null;
   const floor = state.run.currentFloor;
@@ -36,11 +33,7 @@ export function onFloorEntered(state: GameState): void {
     awardEchoes(state, 3, 'floor reached');
   }
 
-  // Cartographer's Lens (Phase 19 Relic): "reveals Stairs and Chest
-  // locations immediately on floor entry" — this game has no fog-of-war to
-  // literally reveal (everything on a floor already renders), so the
-  // closest implementable equivalent is a log callout with distance/
-  // direction, the same information a minimap ping would convey.
+  // Handle Cartographer's Lens relic.
   if (state.run.relics.includes('cartographers_lens')) {
     const distStairs = Math.abs(state.dungeon.stairsX - state.run.playerX) + Math.abs(state.dungeon.stairsY - state.run.playerY);
     logLine(state, `Cartographer's Lens: Stairs are ${distStairs} tiles away.`);
@@ -52,7 +45,7 @@ export function onFloorEntered(state: GameState): void {
   }
 }
 
-/** Call right before leaving a floor via its Stairs (Flawless Floor bonus). */
+/** Called before leaving a floor. */
 export function onFloorCleared(state: GameState): void {
   if (!state.run.floorDamageTaken) awardEchoes(state, 10, 'Flawless Floor');
 }

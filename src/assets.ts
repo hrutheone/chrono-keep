@@ -1,11 +1,9 @@
-// Imported through Vite so the file is fingerprinted and copied on build;
-// main.ts awaits loadSpritesheet() before starting the render loop, so
-// nothing ever calls drawImage against an undecoded image.
+// Spritesheet loading and asset utilities.
 
 import spritesheetUrl from '../assets/new-spritesheet.png';
 import { SHEET_COLS, SHEET_ROWS, type SpriteRef } from './sprites';
 
-/** Pixel size of one spritesheet cell (tightly packed, no margins/spacing). */
+/** Pixel size of one spritesheet cell. */
 export const SPRITE_PX = 16;
 
 export const spritesheet = new Image();
@@ -20,8 +18,7 @@ export function loadSpritesheet(): Promise<void> {
   });
 }
 
-/** Renders one spritesheet cell as a ready-to-inline `style="..."` string
- * (HTML/CSS background-image, not canvas drawImage) for text-driven overlays. */
+/** Renders one spritesheet cell as an inline CSS style. */
 export function spriteCssStyle(ref: SpriteRef, displaySize: number): string {
   const scale = displaySize / SPRITE_PX;
   const sheetW = SHEET_COLS * SPRITE_PX * scale;

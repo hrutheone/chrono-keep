@@ -1,6 +1,4 @@
-// Mini-Boss Arenas: fixed, hand-authored layouts at Floors 10/20/30 and their
-// empowered repeats at 40-90 — never touch mapgen.ts's seeded generator, same
-// as hub.ts. Floor 99's Chrono-Lich arena is separate (bossArena.ts).
+// Mini-Boss Arenas: fixed, hand-authored layouts for boss floors.
 
 import { createEnemy, scaleEnemyForNgPlus } from './content';
 import { TILE } from './mapgen';
@@ -18,22 +16,17 @@ export function isArenaFloor(floor: number): boolean {
 export type MiniBossKind = 'INFERNO_GOLEM' | 'STORM_CALLER' | 'GLACIAL_KNIGHT';
 const CYCLE: readonly MiniBossKind[] = ['INFERNO_GOLEM', 'STORM_CALLER', 'GLACIAL_KNIGHT'];
 
-/** Which archetype guards a given Arena floor: F10/40/70 Inferno-Golem,
- * F20/50/80 Storm-Caller, F30/60/90 Glacial-Knight. */
+/** Which archetype guards a given Arena floor. */
 export function archetypeForFloor(floor: number): MiniBossKind {
   return CYCLE[Math.floor((floor - 10) / 10) % 3];
 }
 
-/** 0 on a boss's first (Mk I, F10/20/30) appearance, 1 for Mk II (F40/50/60),
- * 2 for Mk III (F70/80/90). Exported for enemyAI.ts's Mk-specific ability
- * twists (e.g. Mk II Golem's 5x5 slam). */
+/** Returns the repeat number of the mini-boss based on floor. */
 export function miniBossRepeatNumber(floor: number): number {
   return Math.floor((floor - 10) / 30);
 }
 
-/** Empowered-variant scaling: x2.5 HP / x1.6 ATK per repeat appearance,
- * compounding — a no-op (1x) on a boss's first appearance. Mini-bosses are
- * otherwise exempt from Depth Scaling (base stats live in BESTIARY). */
+/** Empowered-variant scaling multiplier. */
 export function miniBossRepeatMultiplier(floor: number): { hp: number; attack: number } {
   const n = miniBossRepeatNumber(floor);
   return { hp: Math.pow(2.5, n), attack: Math.pow(1.6, n) };
@@ -73,23 +66,20 @@ function buildRoom(): ArenaLayout {
   const bossX = gateX;
   const bossY = ARENA_Y + 4;
 
-  // Excluded from mapgen.ts's WALKABLE set — solid until openBossGate() opens it.
+  // Solid until openBossGate() opens it.
   tiles[gateY][gateX] = TILE.BOSS_GATE;
 
   return { tiles, spawnX, spawnY, bossX, bossY };
 }
 
-/** Inferno-Golem's arena: permanent Fire Hazard strips baked directly into
- * the floor tiles (not `expiringTiles` — these never expire) to constrain
- * kiting lanes. */
+/** Add permanent Fire Hazard strips for Inferno-Golem's arena. */
 function addGolemFeature(layout: ArenaLayout): void {
   for (const y of [ARENA_Y + 7, ARENA_Y + 13]) {
     for (let x = ARENA_X + 1; x < ARENA_X + ARENA_W - 1; x++) layout.tiles[y][x] = TILE.FIRE_HAZARD;
   }
 }
 
-/** Storm-Caller's arena: 4 copper-pylon pillars (plain walls) that block
- * Chain Bolt — cover is the mechanic. */
+/** Add pillar cover for Storm-Caller's arena. */
 function addStormCallerFeature(layout: ArenaLayout): void {
   const pillars: [number, number][] = [
     [ARENA_X + 4, ARENA_Y + 5],
@@ -100,15 +90,13 @@ function addStormCallerFeature(layout: ArenaLayout): void {
   for (const [x, y] of pillars) layout.tiles[y][x] = TILE.WALL;
 }
 
-// Glacial-Knight's arena is an open room with no static feature — its
-// Ice-Barricade wall is a combat-time effect (expiringTiles in enemyAI.ts).
+// Glacial-Knight's arena has no static features.
 const ARENA_FEATURES: Partial<Record<MiniBossKind, (layout: ArenaLayout) => void>> = {
   INFERNO_GOLEM: addGolemFeature,
   STORM_CALLER: addStormCallerFeature,
 };
 
-/** Installs the Arena at `floor` into game state, replacing whatever dungeon
- * was there — never generated from the seeded procedural generator. */
+/** Installs the Arena at `floor` into game state. */
 export function enterArenaFloor(state: GameState, floor: number): void {
   const layout = buildRoom();
   const kind = archetypeForFloor(floor);
@@ -119,7 +107,7 @@ export function enterArenaFloor(state: GameState, floor: number): void {
   boss.hp = Math.round(boss.hp * mult.hp);
   boss.maxHp = boss.hp;
   boss.attack = Math.round(boss.attack * mult.attack);
-  boss.awake = true; // No sneaking up on a mini-boss (matches the Chrono-Lich precedent).
+  boss.awake = true; // No sneaking up on a mini-boss.
   scaleEnemyForNgPlus(boss, state.persistent.ngPlusLevel);
 
   state.run.currentFloor = floor;
@@ -133,7 +121,7 @@ export function enterArenaFloor(state: GameState, floor: number): void {
   state.dungeon.items = [];
   state.dungeon.spawnX = layout.spawnX;
   state.dungeon.spawnY = layout.spawnY;
-  // No Stairs in an Arena — see hub.ts's identical fallback.
+  // No Stairs in an Arena.
   state.dungeon.stairsX = layout.spawnX;
   state.dungeon.stairsY = layout.spawnY;
   state.dungeon.riftX = null;
@@ -142,8 +130,7 @@ export function enterArenaFloor(state: GameState, floor: number): void {
   state.dungeon.telegraphTiles = [];
 }
 
-/** Called from combat.ts's killEnemy mini-boss branch: rewrites the current
- * floor's Boss Gate tile(s) back to Stairs, opening the way down. */
+/** Rewrites the current floor's Boss Gate tile(s) back to Stairs. */
 export function openBossGate(state: GameState): void {
   const { tiles } = state.dungeon;
   for (let y = 0; y < tiles.length; y++) {

@@ -1,8 +1,4 @@
-// Spritesheet tiles, camera, and the per-frame draw of tiles -> world items
-// -> enemies -> player. Strictly game-world — no UI is ever drawn here.
-// Game-world art comes from the full-color spritesheet (assets.ts +
-// sprites.ts); the amber palette is reserved for canvas UI accents (health
-// bars, telegraphs, particles, text).
+// World rendering logic.
 
 import {
   COLOR_BG,
@@ -32,11 +28,9 @@ import type { GhostVisual } from './animation';
 import { drawGlyphText, getFloatingTexts, measureGlyphText, type FloatKind } from './floatingText';
 import type { GameState, Enemy } from './types';
 
-// Matches assets.ts's SPRITE_PX so every draw is a single clean scale
-// instead of a downscale-then-upscale blur.
+// Match assets.ts SPRITE_PX.
 export const TILE_SIZE = 16;
-// renderWorld recomputes these from its viewW/viewH parameters every frame —
-// safe as a module-level `let` since rendering is always synchronous.
+// Recomputed per frame.
 export let VIEWPORT_TILES_W = 30;
 export let VIEWPORT_TILES_H = 20;
 
@@ -48,8 +42,7 @@ const FLOAT_COLOR: Record<FloatKind, string> = {
   turns: COLOR_PLAYER_LIGHT,
 };
 
-/** Draws one spritesheet cell at canvas pixel (dx, dy). flipX mirrors around
- * the tile via translate + scale(-1, 1) — used for LEFT facing. */
+/** Draws spritesheet cell. */
 export function drawTile(
   ctx: CanvasRenderingContext2D,
   col: number,
@@ -72,9 +65,7 @@ export function drawTile(
   }
 }
 
-// Full-color sprites can't be recolored per-pixel, so the white damage-flash
-// renders the cell's silhouette through a tiny offscreen scratch canvas
-// (draw cell, then source-in fill).
+// Damage flash rendering.
 const scratch = document.createElement('canvas');
 scratch.width = SPRITE_PX;
 scratch.height = SPRITE_PX;
@@ -140,9 +131,7 @@ const ENEMY_REFS: Record<Enemy['kind'], SpriteRef> = {
   GLACIAL_KNIGHT: SPRITES.GLACIAL_KNIGHT,
 };
 
-// Mini-Bosses and the Chrono-Lich draw at 2x scale instead of needing
-// dedicated "big" spritesheet art — same cell, anchored to the bottom-center
-// of its tile so it grows upward/outward rather than shifting position.
+// 2x scale enemies.
 const BIG_ENEMY_KINDS = new Set<Enemy['kind']>(['INFERNO_GOLEM', 'STORM_CALLER', 'GLACIAL_KNIGHT', 'CHRONO_LICH']);
 const BIG_TILE_SIZE = TILE_SIZE * 2;
 
@@ -156,8 +145,7 @@ const WORLD_ITEM_REFS: Partial<Record<string, SpriteRef>> = {
   RELIC: SPRITES.RELIC,
 };
 
-// Same per-item lookup menus.ts's Inventory grid uses — a dropped Rusty
-// Sword and a dropped Excalibur read as different icons on the floor.
+// Item icon lookups.
 const WORLD_ITEM_REFS_BY_NAME: Partial<Record<string, Record<string, SpriteRef>>> = {
   WEAPON: WEAPON_SPRITE_BY_NAME,
   ACCESSORY: ACCESSORY_SPRITE_BY_NAME,
@@ -178,7 +166,7 @@ export function computeCamera(state: GameState): { x: number; y: number } {
   };
 }
 
-/** LEFT mirrors the sheet cell; UP/DOWN/RIGHT draw it as-authored. */
+/** Draw player sprite. */
 function drawPlayer(
   ctx: CanvasRenderingContext2D,
   facing: GameState['run']['facing'],
@@ -189,7 +177,7 @@ function drawPlayer(
   drawRef(ctx, SPRITES.PLAYER, px, py, facing === 'LEFT', flash);
 }
 
-/** A 2px enemy health bar, drawn just above the sprite: a dark backdrop row plus a red fill/track row. */
+/** Draw health bar. */
 function drawHealthBar(ctx: CanvasRenderingContext2D, px: number, py: number, hp: number, maxHp: number): void {
   const pct = Math.max(0, hp / maxHp);
   const barY = py - 2;
@@ -237,8 +225,7 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     }
   }
 
-  // Player-created tile mutations are kept off `dungeon.tiles` entirely, so
-  // they need their own overlay draw on top of the base tile underneath.
+  // Overlay expiring tiles.
   for (const t of state.dungeon.expiringTiles) {
     const sx = t.x - cam.x;
     const sy = t.y - cam.y;
@@ -247,8 +234,7 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     if (ref) drawRef(ctx, ref, sx * TILE_SIZE, sy * TILE_SIZE);
   }
 
-  // Color-coded pulse so a Fire/Frost AOE reads distinctly from the
-  // Chrono-Lich's Time-Blast at a glance.
+  // Draw telegraphs.
   if (state.dungeon.telegraphTiles.length > 0) {
     const pulse = 0.35 + 0.25 * Math.sin(performance.now() / 120);
     ctx.globalAlpha = pulse;
@@ -262,7 +248,7 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     ctx.globalAlpha = 1;
   }
 
-  // An instant line flash simultaneous with a ranged hit.
+  // Draw ranged hit beams.
   for (const b of getBeams()) {
     const x1 = (b.fromX - cam.x) * TILE_SIZE + TILE_SIZE / 2;
     const y1 = (b.fromY - cam.y) * TILE_SIZE + TILE_SIZE / 2;
@@ -278,8 +264,7 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     ctx.globalAlpha = 1;
   }
 
-  // A coordinate marker, not a `tiles` grid entry — drawn the same way as a
-  // WorldItem, on top of the ordinary FLOOR tile underneath it.
+  // Draw Cursed Rift.
   if (state.dungeon.riftX !== null && state.dungeon.riftY !== null) {
     const sx = state.dungeon.riftX - cam.x;
     const sy = state.dungeon.riftY - cam.y;
@@ -292,9 +277,7 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     const sx = wi.x - cam.x;
     const sy = wi.y - cam.y;
     if (sx < 0 || sx >= VIEWPORT_TILES_W || sy < 0 || sy >= VIEWPORT_TILES_H) continue;
-    // A chest marks a not-yet-rerolled loot spot (its identity isn't decided
-    // until pickup); a dropped RELIC reads as its own specific icon, matching
-    // the Relic Tray's icon for the same relic once picked up.
+    // Draw items/chests.
     const ref = wi.chestLoot
       ? SPRITES.CHEST
       : wi.item.kind === 'RELIC' && wi.item.effect
@@ -312,9 +295,7 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     const px = Math.round((visual.tileX - cam.x) * TILE_SIZE);
     const py = Math.round((visual.tileY - cam.y) * TILE_SIZE);
 
-    // [Colossal] draws at 1.5x scale, same bottom-center anchor technique as
-    // the Mini-Boss 2x composite — Mini-Bosses never roll an affix, so
-    // `big`/`colossal` can't both be true for one enemy.
+    // Scale logic.
     const colossal = e.affix === 'colossal';
     const big = BIG_ENEMY_KINDS.has(e.kind);
     const size = colossal ? TILE_SIZE * 1.5 : big ? BIG_TILE_SIZE : TILE_SIZE;
@@ -323,9 +304,7 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
 
     if (e.hp < e.maxHp) drawHealthBar(ctx, px, drawPy, e.hp, e.maxHp);
 
-    // [Blinking] renders translucent; every other affix except [Colossal]/
-    // [Shielded] gets a pulsing colored aura via shadowBlur/shadowColor —
-    // save/restore keeps it from leaking into whatever draws next.
+    // Affix rendering.
     ctx.save();
     if (e.affix === 'blinking') {
       ctx.globalAlpha = 0.5;
@@ -336,7 +315,7 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     drawRef(ctx, ENEMY_REFS[e.kind], drawPx, drawPy, false, visual.flashing, size);
     ctx.restore();
 
-    // A ring overlay while hits remain, instead of an aura.
+    // Shielded affix overlay.
     if (e.affix === 'shielded' && e.shieldedHitsLeft) {
       ctx.save();
       ctx.strokeStyle = eliteAffixColor('shielded');

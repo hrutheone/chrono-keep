@@ -1,7 +1,4 @@
-// The Hub: a small, hand-authored Floor 0 (Watchwarden's Post) outside the
-// procedural generator — every loop begins and resets here. Contains the
-// Upgrade Shop terminal and Shortcut Gate (movement.ts opens their overlays
-// when the player steps onto them).
+// Floor 0: starting hub with shop and shortcut gate.
 
 import { enterFloor, TILE } from './mapgen';
 import { DUNGEON_SIZE, floorTurnLimit, resetRunForNewLoop } from './state';
@@ -21,9 +18,7 @@ interface HubLayout {
   spawnY: number;
 }
 
-/** One open, walled room centered in the 32x32 grid — no BFS/turn-budget
- * check needed (it's hand-authored, not procedural), just enough space to
- * fit the terminal and gate a few tiles apart from spawn. */
+/** Centered hub room layout. */
 function buildHub(): HubLayout {
   const tiles: number[][] = Array.from({ length: N }, () => new Array<number>(N).fill(TILE.VOID));
 
@@ -50,9 +45,7 @@ function buildHub(): HubLayout {
   return { tiles, spawnX, spawnY };
 }
 
-/** Installs the Hub into game state — no enemies, no items, and a frozen turn
- * counter: turnController skips tick/check phases while currentFloor ===
- * HUB_FLOOR, so the value set here is just what the HUD displays. */
+/** Installs the Hub into game state. */
 export function enterHub(state: GameState): void {
   const hub = buildHub();
   state.run.currentFloor = HUB_FLOOR;
@@ -64,11 +57,10 @@ export function enterHub(state: GameState): void {
   state.dungeon.tiles = hub.tiles;
   state.dungeon.enemies = [];
   state.dungeon.items = [];
-  // spawnX/Y must always be set on floor entry, even though the Hub has no
-  // Recall Rune to use it.
+  // Required for floor entry.
   state.dungeon.spawnX = hub.spawnX;
   state.dungeon.spawnY = hub.spawnY;
-  // No Stairs in the Hub — set equal to spawn, same harmless-default reasoning.
+  // No stairs in Hub.
   state.dungeon.stairsX = hub.spawnX;
   state.dungeon.stairsY = hub.spawnY;
   state.dungeon.riftX = null;
@@ -77,21 +69,17 @@ export function enterHub(state: GameState): void {
   state.dungeon.telegraphTiles = [];
 }
 
-/** The Shortcut Gate's destination picker contents: Floor 1 plus every
- * permanently unlocked Biome-start Anchor, ascending. */
+/** Valid shortcut destinations. */
 export function gateDestinations(state: GameState): number[] {
   return [1, ...state.persistent.unlockedAnchors].sort((a, b) => a - b);
 }
 
-/** Selecting a Shortcut Gate destination starts a fresh run — starter gear,
- * full HP/Stamina, a full per-floor timer — at that floor. Screen/audio
- * transitions are the caller's job (menus.ts); this stays UI-agnostic. */
+/** Warps to floor and starts fresh run. */
 export function warpToFloor(state: GameState, floor: number): void {
   resetRunForNewLoop(state, floor);
   enterFloor(state, floor);
   onFloorEntered(state);
   saveGame(state);
-  // Write the run immediately so a reload before the first move resumes here
-  // instead of the pre-warp snapshot.
+  // Save immediately to resume here.
   saveRunSnapshot(state);
 }
