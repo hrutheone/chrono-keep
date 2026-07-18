@@ -1,5 +1,4 @@
-// Game content tables transcribed from the GDD: the Elemental Wheel (Section 5)
-// and the bestiary, weapons, and accessories (Section 6).
+// Game content tables: the Elemental Wheel, bestiary, weapons, and accessories.
 
 import type { Accessory, Consumable, Element, Enemy, Item, Weapon } from './types';
 
@@ -20,7 +19,6 @@ export function weaknessOf(element: Element): Element | null {
   return BEATEN_BY[element];
 }
 
-// Bestiary (Section 6C).
 interface EnemyTemplate {
   hp: number;
   attack: number;
@@ -32,37 +30,26 @@ interface EnemyTemplate {
 export const BESTIARY: Record<EnemyKind, EnemyTemplate> = {
   BONE_GRUNT: { hp: 12, attack: 4, defense: 1, speed: 1, element: 'PHYSICAL' },
   EMBER_BAT: { hp: 8, attack: 5, defense: 0, speed: 2, element: 'FIRE' },
-  // DEF 1, not the original 3: Physical (the Rusty Sword starter weapon, by
-  // far the most common early pickup) is resisted 0.5x against Volt per the
-  // Elemental Wheel, so the original DEF 3 meant a Rusty-Sword-only player
-  // dealt max(1, floor((5-3)*0.5))=1 dmg/hit — 25 hits to clear one turret.
-  // Phase 7 simulation data flagged this as a common early-loop stall point.
+  // DEF kept low: Physical (the common early Rusty Sword) is resisted 0.5x
+  // against Volt per the Elemental Wheel — higher DEF here stalled a
+  // Rusty-Sword-only player to 1 dmg/hit against this enemy.
   VOLT_TURRET: { hp: 25, attack: 6, defense: 1, speed: 0, element: 'VOLT' },
   FROST_WRAITH: { hp: 18, attack: 5, defense: 2, speed: 1, element: 'FROST' },
   TIME_WEAVER: { hp: 40, attack: 8, defense: 4, speed: 1, element: 'CHRONO' },
-  // Final Boss (Section 6C, Phase 16): relocated from the pre-99-floor
-  // Floor 4 to Floor 99, re-statted for a full 99-floor loadout (stat-capped
-  // gear, Level 10 tracks) rather than the old 3-floor budget — 400/16/8
-  // verbatim from the GDD's Final Boss table.
   CHRONO_LICH: { hp: 400, attack: 16, defense: 8, speed: 1, element: 'CHRONO' },
 
-  // Deep-Biome Regulars (Section 6C, Phase 14): first appear Biome 3+
-  // (Floors 21+), mixed into every deeper Biome after that. Stats verbatim
-  // from the GDD table — DEF/Speed are fixed like every other regular
+  // Deep-Biome Regulars: first appear Biome 3+ (Floors 21+), mixed into every
+  // deeper Biome after. DEF/Speed are fixed like every regular
   // (scaleEnemyForDepth only scales hp/attack).
   BONE_KNIGHT: { hp: 22, attack: 5, defense: 6, speed: 1, element: 'PHYSICAL' },
   CINDER_SHAMAN: { hp: 14, attack: 6, defense: 1, speed: 1, element: 'FIRE' },
   VOLT_HOUND: { hp: 10, attack: 6, defense: 0, speed: 2, element: 'VOLT' },
   FROST_SENTINEL: { hp: 20, attack: 5, defense: 5, speed: 0, element: 'FROST' },
 
-  // Mini-Bosses (Section 6C, Phase 15): fixed Arena floors 10/20/30, exempt
-  // from Depth Scaling (final, hand-tuned stats) same as the Chrono-Lich.
-  // F40-90's empowered repeats reuse these base stats, scaled at spawn by
-  // arenas.ts's miniBossRepeatMultiplier — never baked in here.
-  // DEF lowered 4 -> 2 (Next-Task.md Balance Fixes): paired with the Base
-  // ATK upgrade track and the 1.5x -> 2.0x weakness multiplier above, this
-  // keeps the Floor 10 wall from mathematically stalling a player who's only
-  // found a low-ATK early weapon.
+  // Mini-Bosses: fixed Arena floors 10/20/30, exempt from Depth Scaling
+  // (hand-tuned stats) same as the Chrono-Lich. F40-90's empowered repeats
+  // reuse these base stats, scaled at spawn by arenas.ts's
+  // miniBossRepeatMultiplier — never baked in here.
   INFERNO_GOLEM: { hp: 120, attack: 9, defense: 2, speed: 1, element: 'FIRE' },
   STORM_CALLER: { hp: 100, attack: 11, defense: 3, speed: 1, element: 'VOLT' },
   GLACIAL_KNIGHT: { hp: 140, attack: 10, defense: 7, speed: 1, element: 'FROST' },

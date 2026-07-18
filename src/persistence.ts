@@ -1,17 +1,14 @@
-// localStorage persistence of the `persistent` block (GDD Section 7, point 9
-// of the Phase 5 plan): seed, loopCount, echoes, upgrades, skills,
-// unlockedAnchors, stats. Only "New Game" wipes this and rerolls the seed.
+// localStorage persistence of the `persistent` block: seed, loopCount,
+// echoes, upgrades, skills, unlockedAnchors, stats. Only "New Game" wipes
+// this and rerolls the seed.
 
 import type { GameState } from './types';
 
 const SAVE_KEY = 'chrono-keep-save-v1';
 
-/** 99-Floor Descent migration (Phase 11): pre-redesign saves stored
- * `unlockedShortcuts: string[]` (per-floor gate IDs) and predate
- * `unlockedAnchors`. Old shortcut IDs have no meaning in the new structure
- * (Anchors are Biome start floors dropped by Mini-Bosses), so they are
- * dropped; echoes/skills/upgrades/stats all carry over. Every field is
- * defaulted so a save from ANY earlier phase loads without corruption. */
+/** Old saves may predate `unlockedAnchors` or carry a stale
+ * `unlockedShortcuts: string[]` with no meaning in the current structure —
+ * dropped; every other field is defaulted so any old save loads cleanly. */
 function migratePersistent(parsed: Record<string, unknown>): GameState['persistent'] {
   const legacy = parsed as Partial<GameState['persistent']> & { unlockedShortcuts?: unknown };
   const stats = (legacy.stats ?? {}) as Partial<GameState['persistent']['stats']>;
@@ -24,9 +21,8 @@ function migratePersistent(parsed: Record<string, unknown>): GameState['persiste
     turnBonusUpgrade: legacy.turnBonusUpgrade ?? 0,
     baseAtkUpgrade: legacy.baseAtkUpgrade ?? 0,
     skills: legacy.skills ?? { dash: 1 },
-    // Small Improvements: pre-existing saves predate the persisted Q/E/R/F
-    // loadout — default to whatever their old `run.activeSkills` would have
-    // been (Dash on Q if unlocked, otherwise empty).
+    // Old saves predate the persisted Q/E/R/F loadout — default to Dash on Q
+    // if unlocked, otherwise empty.
     skillLoadout: Array.isArray(legacy.skillLoadout)
       ? legacy.skillLoadout.filter((s): s is string => typeof s === 'string')
       : (legacy.skills?.dash ? ['dash'] : []),
@@ -81,14 +77,10 @@ export function clearSave(): void {
   }
 }
 
-// Live run persistence (Phase 20: mobile background/reload survival). A
-// second, separate key from SAVE_KEY — `state.run` (HP, inventory, position,
-// current floor) changes every turn, unlike `persistent`, and this snapshot
-// is disposable/best-effort (see loadRunSnapshot's validation) rather than a
-// migration-guaranteed save file, so it's kept out of migratePersistent's
-// contract entirely. `state.dungeon` (tiles/enemies/items) is deliberately
-// NOT included here — main.ts rebuilds it deterministically from
-// `run.currentFloor` on resume instead of serializing enemy/item state.
+// Separate key from SAVE_KEY — `state.run` changes every turn, unlike
+// `persistent`, and this snapshot is disposable/best-effort rather than a
+// migration-guaranteed save. `state.dungeon` isn't included; main.ts rebuilds
+// it deterministically from `run.currentFloor` on resume.
 const RUN_SAVE_KEY = 'chrono-keep-run-v1';
 
 export function saveRunSnapshot(state: GameState): void {
@@ -99,11 +91,9 @@ export function saveRunSnapshot(state: GameState): void {
   }
 }
 
-/** Returns the saved run snapshot, or null if none exists / it looks stale or
- * corrupt (same tolerance migratePersistent has for old/bad persistent saves,
- * just without a field-by-field migration — a resume snapshot this old is
- * simpler to discard than to patch up). Caller (main.ts) is responsible for
- * rebuilding `state.dungeon` for the snapshot's floor before installing it. */
+/** Returns the saved run snapshot, or null if none exists or it looks stale/
+ * corrupt. Caller (main.ts) rebuilds `state.dungeon` for the snapshot's floor
+ * before installing it. */
 export function loadRunSnapshot(): GameState['run'] | null {
   try {
     const raw = localStorage.getItem(RUN_SAVE_KEY);
@@ -129,8 +119,7 @@ export function clearRunSnapshot(): void {
   }
 }
 
-// Master volume/mute (Phase 7, Section 11): a separate small settings blob,
-// alongside `persistent` rather than inside it — it's a device/browser
+// Kept alongside `persistent` rather than inside it — a device/browser
 // preference, not part of the save file's game-progress schema.
 const AUDIO_SETTINGS_KEY = 'chrono-keep-audio-v1';
 

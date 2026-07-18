@@ -1,9 +1,6 @@
-// The Chrono-Lich Arena (GDD Section 6C, Final Boss): a fixed, hand-authored
-// Floor 99 — same "skip the generator, install dungeon/run fields directly"
-// principle as hub.ts/arenas.ts. Kept separate from arenas.ts's Mini-Boss
-// Arenas since there's no Boss Gate here (no Floor 100 to seal behind one —
-// killEnemy's CHRONO_LICH branch calls triggerVictory directly) and no
-// repeat-appearance scaling (the fight only ever happens once).
+// Fixed, hand-authored Floor 99 arena for the Chrono-Lich fight. Separate from
+// arenas.ts's Mini-Boss Arenas: no Boss Gate (killEnemy's CHRONO_LICH branch
+// calls triggerVictory directly) and no repeat-appearance scaling.
 
 import { createEnemy, scaleEnemyForNgPlus } from './content';
 import { resetChronoLichEncounter } from './enemyAI';
@@ -61,11 +58,9 @@ function buildArena(): BossFloor {
   return { tiles, enemies: [boss], items: [], spawnX, spawnY };
 }
 
-/** Generates the arena and installs it into game state, replacing whatever
- * dungeon was there. `resetChronoLichEncounter` clears the boss's cadence
- * counter and one-time Rewind flag — BOSS_ID is a fixed id reused across
- * every Floor 99 attempt (unlike Mini-Boss Arenas' per-loop unique ids), so a
- * prior failed attempt's fight state must not leak into a fresh one. */
+/** Installs the arena into game state. `resetChronoLichEncounter` clears the
+ * boss's cadence counter/Rewind flag — BOSS_ID is fixed across attempts, so
+ * stale fight state must not leak into a fresh one. */
 export function enterBossFloor(state: GameState): void {
   const floor = buildArena();
   resetChronoLichEncounter(BOSS_ID);
@@ -78,10 +73,9 @@ export function enterBossFloor(state: GameState): void {
   // Recall Rune must return to the arena entry point, not the prior floor.
   state.dungeon.spawnX = floor.spawnX;
   state.dungeon.spawnY = floor.spawnY;
-  // Phase 19: no Stairs on Floor 99 — see hub.ts's identical fallback.
+  // No Stairs or Cursed Rifts on Floor 99.
   state.dungeon.stairsX = floor.spawnX;
   state.dungeon.stairsY = floor.spawnY;
-  // Phase 19: no Cursed Rifts on Floor 99.
   state.dungeon.riftX = null;
   state.dungeon.riftY = null;
   state.dungeon.tiles = floor.tiles;

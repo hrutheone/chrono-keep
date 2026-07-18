@@ -1,10 +1,7 @@
-// Deterministic Room & Corridor floor generator for the 99-Floor Descent
-// (GDD Sections 6C, 7 & 9).
-//
+// Deterministic Room & Corridor floor generator for the 99-Floor Descent.
 // Every floor derives from hash(persistent.rngSeed, floorNumber), so a save's
-// dungeon is identical across loops; floors 1-99 are generated lazily (only
-// the current floor is ever materialized). If a layout fails the turn-budget
-// check (spawn -> Stairs <= 40 walked tiles, BFS on geometry only), the floor
+// dungeon is identical across loops; floors are generated lazily. A layout
+// that fails the turn-budget check (spawn -> Stairs <= 40 walked tiles)
 // regenerates from the next derived attempt seed — also deterministic.
 
 import type { Enemy, GameState, WorldItem } from './types';
@@ -34,9 +31,8 @@ export const TILE = {
   BOSS_GATE: 6,
   FIRE_HAZARD: 7,
   SHOP_TERMINAL: 8,
-  // Phase 18: Scourge's expiring-tile hazard (DEF-piercing Frost damage per
-  // turn, mirroring Fire Hazard's shape) — never generator-placed, only
-  // ever laid down by the skill itself via dungeon.expiringTiles.
+  // Scourge's expiring-tile hazard — never generator-placed, only ever laid
+  // down by the skill itself via dungeon.expiringTiles.
   FROST_HAZARD: 9,
 } as const;
 
@@ -47,10 +43,9 @@ const MAX_ATTEMPTS = 50;
 const N = DUNGEON_SIZE;
 
 // Fire/Frost Hazard are walkable (that's the point — standing on one deals
-// its damage). Shortcut Gate and Shop Terminal (Phase 13) only ever appear
-// in the hand-authored Hub (src/hub.ts) and are always walkable there —
-// stepping onto either is what triggers movement.ts's interaction. None of
-// these are ever placed by the procedural generator itself.
+// its damage). Shortcut Gate and Shop Terminal only ever appear in the
+// hand-authored Hub (src/hub.ts); stepping onto either triggers
+// movement.ts's interaction. None of these are generator-placed.
 const WALKABLE = new Set<number>([
   TILE.FLOOR,
   TILE.DOOR,
@@ -67,9 +62,8 @@ export function isWalkable(tile: number): boolean {
 }
 
 /** The tile at (x, y) as it should render/behave *right now* — an active
- * `dungeon.expiringTiles` overlay (Flame Arc's Fire Hazard, Phase 8's
- * Ice-Barricade Scroll) wins over the deterministic `dungeon.tiles` grid
- * underneath it, without ever mutating that grid. */
+ * `dungeon.expiringTiles` overlay wins over the deterministic `dungeon.tiles`
+ * grid underneath it, without ever mutating that grid. */
 export function effectiveTileAt(state: GameState, x: number, y: number): number {
   const overlay = state.dungeon.expiringTiles.find((t) => t.x === x && t.y === y);
   if (overlay) return overlay.tileType;
@@ -97,8 +91,8 @@ export interface GeneratedFloor {
   spawnY: number;
   stairsX: number;
   stairsY: number;
-  // Phase 19: null on most floors (rare). A coordinate, not a `tiles` grid
-  // entry — see types.ts's dungeon.riftX/Y comment for why.
+  // Null on most floors (rare). A coordinate, not a `tiles` grid entry —
+  // see types.ts's dungeon.riftX/Y comment for why.
   riftX: number | null;
   riftY: number | null;
 }
@@ -179,7 +173,7 @@ function shortestPath(tiles: number[][], from: Point, to: Point): Point[] | null
 }
 
 /** Generates a floor from the save seed. Deterministic; throws only if every
- * derived attempt seed fails, which the Phase 1 acceptance check rules out. */
+ * derived attempt seed fails the acceptance check. */
 export function generateFloor(rngSeed: number, floorNumber: number): GeneratedFloor {
   const floorSeed = hash(rngSeed, floorNumber);
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
@@ -327,10 +321,9 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
   const spawnEnemy = (kind: EnemyKind, x: number, y: number): void => {
     const enemy = createEnemy(kind, `f${floorNumber}-enemy-${enemies.length}`, x, y);
     scaleEnemyForDepth(enemy, floorNumber);
-    // Phase 19 Elite Affixes: rolled from the SAME seeded rng stream as
-    // everything else here (not Math.random()) — floor generation must stay
-    // a pure function of (rngSeed, floorNumber) for determinism
-    // (verify-phase1.ts's 9900-floor determinism check covers this).
+    // Rolled from the SAME seeded rng stream as everything else here (not
+    // Math.random()) — floor generation must stay a pure function of
+    // (rngSeed, floorNumber) for determinism.
     if (rng() < ELITE_SPAWN_CHANCE) {
       const affix = pick(rng, ELITE_AFFIX_KEYS);
       enemy.affix = affix;
@@ -353,9 +346,8 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
   while (enemies.length + roomKinds.length < totalEnemies) {
     const kind = pick(rng, pool);
     roomKinds.push(kind);
-    // Volt-Hound pack hunter (Section 6C, Phase 14): "spawns in pairs" — claim
-    // the next budget slot for its pack-mate instead of an independent draw,
-    // as long as the floor's enemy-count budget still has room for it.
+    // Volt-Hound spawns in pairs — claim the next budget slot for its
+    // pack-mate if the floor's enemy-count budget has room.
     if (kind === 'VOLT_HOUND' && enemies.length + roomKinds.length < totalEnemies) roomKinds.push('VOLT_HOUND');
   }
   if (floorNumber >= 21 && roomKinds.length > 0) roomKinds[0] = 'TIME_WEAVER';
@@ -385,11 +377,9 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
     spawnEnemy(kind, pos.x, pos.y);
   }
 
-  // 8. 1-2 loot chests with seed-determined positions.
-  // Fun & Feel #9: when a chokepoint guard exists, the first chest is biased
-  // to sit just past it (farther from spawn than the guard, within 3 tiles)
-  // — sharpening the existing "fight through or go around" tension instead
-  // of scattering every chest fully independently of what's gating it.
+  // 8. 1-2 loot chests. When a chokepoint guard exists, the first chest is
+  // biased to sit just past it (farther from spawn, within 3 tiles) —
+  // sharpens the "fight through or go around" tension.
   const items: WorldItem[] = [];
   const chestCount = randInt(rng, 1, 2);
   const chokeGuards = enemies.filter((e) => chokeCands.some((c) => c.x === e.x && c.y === e.y));
@@ -418,8 +408,7 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
     occupied.add(pos.y * N + pos.x);
     // Contents are placeholder-rolled here (deterministic stream, keeps this
     // function's output self-consistent for the same seed); inventory.ts
-    // rerolls the real contents from Math.random() at pickup time (Section 7
-    // Dynamic Chest Loot) — position stays exactly where generated.
+    // rerolls the real contents from Math.random() at pickup time.
     items.push({
       item: rollChestItem(rng, floorNumber, `f${floorNumber}-chest-${i}`),
       x: pos.x,
@@ -428,9 +417,8 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
     });
   }
 
-  // 9. Cursed Rift (Phase 19): rare, floors 3+ only (a gentle early ramp —
-  // no sacrifice-for-power choices on Floor 1-2). A coordinate sitting on
-  // an ordinary FLOOR tile, not its own tile type — see GeneratedFloor's
+  // 9. Cursed Rift: rare, floors 3+ only. A coordinate sitting on an
+  // ordinary FLOOR tile, not its own tile type — see GeneratedFloor's
   // riftX/Y comment for why. At most one per floor.
   let riftX: number | null = null;
   let riftY: number | null = null;
@@ -486,7 +474,7 @@ export function enterFloor(state: GameState, floorNumber: number): GeneratedFloo
   return floor;
 }
 
-/** Debug view of a generated floor (real rendering arrives in Phase 2). */
+/** Debug ASCII view of a generated floor. */
 export function floorToAscii(floor: GeneratedFloor): string {
   const glyphs = [' ', '.', '#', '+', '>', '%', 'B', '~'];
   const grid = floor.tiles.map((row) => row.map((t) => glyphs[t] ?? '?'));

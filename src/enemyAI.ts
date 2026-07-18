@@ -1,5 +1,5 @@
-// Enemy Phase (GDD Sections 6C & 7): wake radius, per-kind behavior, and the
-// status effects that gate a turn (Burn tick, Stun skip, Chilled half-speed).
+// Enemy Phase: wake radius, per-kind behavior, and the status effects that
+// gate a turn (Burn tick, Stun skip, Chilled half-speed).
 
 import { createEnemy, ENEMY_NAME, scaleEnemyForNgPlus } from './content';
 import type { EnemyKind } from './content';
@@ -27,17 +27,14 @@ const DIAGONAL: ReadonlyArray<readonly [number, number]> = [
 ];
 const ALL_8: ReadonlyArray<readonly [number, number]> = [...ORTHO, ...DIAGONAL];
 
-// Per-id "every Nth activation" cadence counter, pruned each phase. Shared by
-// every enemy whose behavior fires on a fixed cycle rather than every turn —
-// Volt-Turret (every 2nd), Cinder-Shaman (every 3rd), Frost-Sentinel (every
-// 2nd) — since it's the same counting pattern regardless of what it gates.
+// Per-id "every Nth activation" cadence counter, pruned each phase — shared
+// by every enemy whose behavior fires on a fixed cycle rather than every turn.
 const activationCounters = new Map<string, number>();
 
-// [Colossal] Elite Affix (Phase 19): a separate counter from activationCounters
-// above — Colossal can roll on a kind (Volt-Turret, Cinder-Shaman, Frost-
-// Sentinel) that already uses activationCounters for its own cadence, and
-// sharing one counter between "does this turn even happen" and "is this the
-// turn my ability fires" would corrupt both.
+// Separate from activationCounters above: the Colossal affix can roll on a
+// kind that already uses that counter for its own cadence, and sharing one
+// counter between "does this turn happen" and "does my ability fire" would
+// corrupt both.
 const colossalTurnCounters = new Map<string, number>();
 
 function pruneActivationCounters(state: GameState): void {
@@ -69,7 +66,7 @@ function wakeIfNear(state: GameState, enemy: Enemy): void {
   if (dist <= WAKE_RADIUS) {
     enemy.awake = true;
     logLine(state, `${ENEMY_NAME[enemy.kind]} wakes up!`);
-    // Fun & Feel #1: the Bestiary tab only shows what's actually been fought.
+    // Bestiary only shows what's actually been fought.
     if (!state.persistent.bestiaryKnown.includes(enemy.kind)) state.persistent.bestiaryKnown.push(enemy.kind);
   }
 }
@@ -104,9 +101,8 @@ function chaseStep(state: GameState, enemy: Enemy, steps: number, respectWalls: 
   }
 }
 
-/** Cinder-Shaman's kite (Phase 14): the mirror of chaseStep — steps AWAY from
- * the player along the longer axis first, never attacking (fleeing should
- * never accidentally bump into the player) and never stepping onto them. */
+/** The mirror of chaseStep — steps away from the player along the longer
+ * axis first, never attacking and never stepping onto them. */
 function fleeStep(state: GameState, enemy: Enemy, steps: number): void {
   for (let i = 0; i < steps; i++) {
     const ddx = enemy.x - state.run.playerX;
@@ -132,11 +128,9 @@ function fleeStep(state: GameState, enemy: Enemy, steps: number): void {
   }
 }
 
-/** [Wealthy] Elite Affix (Phase 19): flees toward the floor's Stairs instead
- * of engaging the player at all — the mirror of chaseStep, but the target is
- * `dungeon.stairsX/Y` instead of the player's position, and it never
- * attacks (matches fleeStep's "fleeing should never bump into anyone" rule,
- * here extended to bumping the player too, not just avoiding them). */
+/** Wealthy affix: flees toward the floor's Stairs instead of engaging the
+ * player — the mirror of chaseStep, targeting `dungeon.stairsX/Y`, never
+ * attacking. */
 function fleeTowardStairs(state: GameState, enemy: Enemy, steps: number): void {
   for (let i = 0; i < steps; i++) {
     const ddx = state.dungeon.stairsX - enemy.x;
@@ -162,11 +156,9 @@ function fleeTowardStairs(state: GameState, enemy: Enemy, steps: number): void {
   }
 }
 
-/** [Toxic] Elite Affix (Phase 19) support: leaves a short-lived Frost-Hazard-
- * type expiring tile (1 direct DEF-piercing HP per turn standing on it — see
- * turnController.ts's applyFrostHazard) at the tile it just stepped off of,
- * reusing the mechanic Scourge's skill hazard already implements rather than
- * inventing a distinct "Poison" tile type/damage path for one Elite affix. */
+/** Toxic affix: leaves a short-lived Frost-Hazard-type expiring tile (1
+ * direct DEF-piercing HP per turn standing on it — see turnController.ts's
+ * applyFrostHazard) at the tile it just stepped off of. */
 function placeToxicTrail(state: GameState, x: number, y: number): void {
   const existing = state.dungeon.expiringTiles.find((t) => t.x === x && t.y === y);
   if (existing) existing.turnsLeft = 2;
@@ -228,14 +220,11 @@ function turretAct(state: GameState, enemy: Enemy): void {
   if (hit) enemyAttackPlayer(state, enemy);
 }
 
-// Telegraphed fire AOE, centered on the player's CURRENT tile (GDD's spelled-
-// out "after a 1-turn telegraph, it detonates" wording — Cinder-Shaman's
-// firebomb, Phase 14, and Inferno-Golem's Magma Slam, Phase 15, are the same
-// mechanic at different radius/damage/hazard-duration). Turns is 2, not 1:
-// tickTelegraphTiles decrements a freshly-cast entry in the SAME
-// resolvePlayerTurn call that created it (see Chrono-Lich's identically-
-// shaped TIME_BLAST_WARNING_TURNS below), so turnsUntil=1 would detonate
-// with zero visible warning — 2 gives exactly one real turn to react.
+// Telegraphed fire AOE centered on the player's current tile — shared by
+// Cinder-Shaman's firebomb and Inferno-Golem's Magma Slam. 2, not 1: a
+// freshly-cast entry gets decremented once already in the same
+// resolvePlayerTurn call that created it, so turnsUntil=1 would detonate
+// with zero visible warning.
 const AREA_BOMB_TELEGRAPH_TURNS = 2;
 
 interface AreaBombOptions {
@@ -277,9 +266,7 @@ function castFirebomb(state: GameState, enemy: Enemy): void {
   });
 }
 
-/** Inferno-Golem's Magma Slam (Section 6C, Phase 15): 1.5x ATK, a 3-turn Fire
- * Hazard on the center tile — Mk II+ (F40+) widens it to a 5x5 per the GDD's
- * "Mk II Golem's slam is 5x5" twist. */
+/** 1.5x ATK, a 3-turn Fire Hazard on the center tile; Mk II+ widens it to a 5x5. */
 function castMagmaSlam(state: GameState, enemy: Enemy): void {
   const radius = miniBossRepeatNumber(state.run.currentFloor) >= 1 ? 2 : 1;
   castAreaBomb(state, enemy, {
@@ -290,13 +277,8 @@ function castMagmaSlam(state: GameState, enemy: Enemy): void {
   });
 }
 
-/** Inferno-Golem: slow relentless chaser; every 5th turn (every 4th below
- * 50% HP) unleashes Magma Slam instead of moving — same adjacent-bump-first
- * shape as the Chrono-Lich's bossAct below. Balance nerf (first player
- * feedback on this fight): was every 4th/3rd — too little room between
- * casts for a normal melee/ranged exchange, especially once enraged, when
- * a player fighting at range could barely land 2 clean actions before the
- * next telegraph went up. */
+/** Slow relentless chaser; every 5th turn (every 4th below 50% HP) unleashes
+ * Magma Slam instead of moving. */
 function golemAct(state: GameState, enemy: Enemy): void {
   const count = (activationCounters.get(enemy.id) ?? 0) + 1;
   activationCounters.set(enemy.id, count);
@@ -316,11 +298,8 @@ function golemAct(state: GameState, enemy: Enemy): void {
   chaseStep(state, enemy, enemy.speed, true);
 }
 
-/** Cinder-Shaman: kites to keep 4-6 tiles from the player (fleeing below 4,
- * closing in past 6 so it isn't stranded off-screen after waking), lobbing
- * its telegraphed firebomb every 3rd activation regardless of exact range —
- * the GDD's behavior text ties the bomb to a turn cadence, not a distance
- * check, unlike Volt-Turret's line shot. */
+/** Kites to keep 4-6 tiles from the player, lobbing its telegraphed firebomb
+ * every 3rd activation regardless of exact range. */
 function shamanAct(state: GameState, enemy: Enemy): void {
   const count = (activationCounters.get(enemy.id) ?? 0) + 1;
   activationCounters.set(enemy.id, count);
@@ -333,13 +312,10 @@ function shamanAct(state: GameState, enemy: Enemy): void {
   if (count % 3 === 0) castFirebomb(state, enemy);
 }
 
-/** Storm-Caller's Chain Bolt (Section 6C, Phase 15): a 4-tile Volt line that
- * forks 90° once off the first wall it hits. Aims along whichever axis has
- * the larger offset to the player (chaseStep's own tie-break), forks toward
- * the player's remaining offset on the perpendicular axis, then keeps
- * traveling until it either hits the player, runs out of its 4-tile budget,
- * or hits a second wall. Draws as one or two `notifyBeam` segments (Skill/
- * Attack VFX) — the fork point splits them when a fork actually happens. */
+/** A 4-tile Volt line that forks 90° once off the first wall it hits. Aims
+ * along whichever axis has the larger offset to the player, forks toward the
+ * remaining offset on the perpendicular axis, then keeps traveling until it
+ * hits the player, runs out of budget, or hits a second wall. */
 function castChainBolt(state: GameState, enemy: Enemy, stunChance: number): void {
   const ddx = state.run.playerX - enemy.x;
   const ddy = state.run.playerY - enemy.y;
@@ -400,13 +376,9 @@ function castChainBolt(state: GameState, enemy: Enemy, stunChance: number): void
   }
 }
 
-/** Storm-Caller: keeps mid-range (reusing Cinder-Shaman's 4-6 tile band — the
- * GDD only says "mid-range" for this one, no exact figure, so this is a
- * design call, not a spec transcription). Every 3rd turn: Chain Bolt (+25%
- * Stun below 50% HP). Every 5th turn: summons a pack-mate, capped at 2 alive
- * — Volt-Hound on its Mk I (F20) appearance, Frost-Sentinel from Mk II (F50)
- * onward per the GDD's "Mk II Storm-Caller summons Frost-Sentinels" twist
- * (kept for Mk III too — once introduced, no reason to revert it). */
+/** Keeps mid-range (4-6 tiles). Every 3rd turn: Chain Bolt (+25% Stun below
+ * 50% HP). Every 5th turn: summons a pack-mate, capped at 2 alive — Volt-
+ * Hound early, Frost-Sentinel from Mk II onward. */
 function callerAct(state: GameState, enemy: Enemy): void {
   const count = (activationCounters.get(enemy.id) ?? 0) + 1;
   activationCounters.set(enemy.id, count);
@@ -436,12 +408,8 @@ function callerAct(state: GameState, enemy: Enemy): void {
   else if (dist > 6) chaseStep(state, enemy, enemy.speed, true);
 }
 
-// Frost-Sentinel's cross pulse (Section 6C, Phase 14): same 1-turn telegraph
-// treatment as the firebomb above — the GDD doesn't spell one out for this
-// enemy, but firing a 12-tile AOE with zero warning read as an unfair
-// "gotcha" in testing, and the Bestiary-facing acceptance bar for this phase
-// wants every new AOE to read clearly before it lands. 2, not 1 — see
-// AREA_BOMB_TELEGRAPH_TURNS's comment for why.
+// Same 1-turn-warning telegraph treatment as the firebomb above — see
+// AREA_BOMB_TELEGRAPH_TURNS's comment for why it's 2, not 1.
 const FROST_PULSE_TELEGRAPH_TURNS = 2;
 
 function castFrostPulse(state: GameState, enemy: Enemy): void {
@@ -471,10 +439,8 @@ function sentinelAct(state: GameState, enemy: Enemy): void {
   castFrostPulse(state, enemy);
 }
 
-/** Glacial-Knight's Frozen Sweep (Section 6C, Phase 15): all 8 adjacent
- * tiles, instant (the GDD doesn't call out a telegraph for this one, unlike
- * Magma Slam/Chain Bolt — it's melee-range, a warning wouldn't add much
- * reactable space). A no-op if the player isn't actually adjacent this turn. */
+/** All 8 adjacent tiles, instant (melee-range, no telegraph). A no-op if the
+ * player isn't actually adjacent this turn. */
 function castFrozenSweep(state: GameState, enemy: Enemy): void {
   const hitsPlayer = ALL_8.some(([dx, dy]) => enemy.x + dx === state.run.playerX && enemy.y + dy === state.run.playerY);
   if (!hitsPlayer) return;

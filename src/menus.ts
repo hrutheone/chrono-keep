@@ -1,10 +1,8 @@
-// Inventory, Skill Setting, Upgrade Shop & Help screens (GDD Section 8): HTML
-// overlays in #screen-overlay. Opening/browsing is always free; src/inventory.ts
-// and src/shop.ts own the turn-cost/spend rules for actions dispatched here.
-//
-// The overlay is only re-rendered on screen transitions and right after a
-// menu action — never on a per-frame timer — so DOM nodes (and their click
-// listeners/focus) stay stable between user interactions.
+// Inventory, Skill, Upgrade Shop & Help screens: HTML overlays in
+// #screen-overlay. Opening/browsing is always free; src/inventory.ts and
+// src/shop.ts own the turn-cost/spend rules for actions dispatched here.
+// Re-rendered only on screen transitions and right after a menu action —
+// never on a per-frame timer — so DOM nodes stay stable between interactions.
 
 import {
   ACCESSORY_EFFECT_LABEL,
@@ -105,28 +103,19 @@ function iconStyleForSkill(skillId: string, size: number): string {
 
 let lastScreen: GameState['ui']['currentScreen'] | null = null;
 
-// Unified Menu (Status/Inventory/Chronofacts/Skill/Bestiary/Settings&Help):
-// one flat top-level tab row replacing the old separate INVENTORY/SKILL_MENU/
-// HELP screens (each of which had grown its own internal sub-tabs).
 export type MenuTabId = 'status' | 'inventory' | 'chronofacts' | 'skill' | 'bestiary' | 'settings';
 let menuTab: MenuTabId = 'status';
 
-// Mobile Inventory rework: tapping a grid slot SELECTS it (shows its lore in
-// a dedicated detail panel with explicit Use/Drop buttons) instead of
-// instantly equipping/using/dropping on tap — a stray tap on a crowded touch
-// grid no longer costs the player gear or a consumable. Reset whenever the
-// Menu is (re)entered, in render() below.
+// Tapping a grid slot selects it (shows detail with explicit action
+// buttons) instead of acting instantly — a stray tap can't cost the player
+// gear or a consumable. Reset whenever the Menu is (re)entered, in render().
 let selectedInvIndex: number | null = null;
 
-// Relic Detail Screen (Next-Task.md QoL): the Chronofacts tab, listing
-// `run.relics` — same tap-to-select-then-see-detail shape as the Bag grid
-// above, since relics have no Use/Melt action of their own. Reset alongside
-// selectedInvIndex whenever the Menu is (re)entered.
+// Chronofacts tab: same tap-to-select-then-see-detail shape as the Bag grid,
+// but relics have no Use/Melt action of their own.
 let selectedRelicEffect: string | null = null;
 
-// Skill/Bestiary tab grids (Menu redesign): same tap-to-select-then-see-
-// detail shape as the Bag/Chronofacts grids above. Reset alongside
-// selectedInvIndex/selectedRelicEffect whenever the Menu is (re)entered.
+// Skill/Bestiary tab grids: same tap-to-select-then-see-detail shape.
 let selectedSkillId: string | null = null;
 let selectedBestiaryKind: EnemyKind | null = null;
 
@@ -135,10 +124,9 @@ let selectedBestiaryKind: EnemyKind | null = null;
 let selectedStatTrack: StatTrack | null = null;
 let selectedShopSkillId: string | null = null;
 
-// Fun & Feel #6: replaces window.confirm()'s native dialog with a styled
-// overlay. `returnScreen` is captured at call time so Cancel goes back to
-// wherever the confirmation was triggered from (TITLE, GAME, UPGRADE_SHOP,
-// VICTORY all call into this).
+// A styled overlay standing in for window.confirm(). `returnScreen` is
+// captured at call time so Cancel goes back to wherever the confirmation
+// was triggered from.
 interface PendingConfirm {
   message: string;
   onConfirm: () => void;
@@ -152,8 +140,8 @@ export function showConfirm(state: GameState, message: string, onConfirm: () => 
 }
 
 /** Answers the current confirm overlay programmatically — for callers with no
- * real DOM to click Proceed/Cancel on (Phase 7's `scripts/simulate.ts`
- * harness). A no-op if nothing is pending. */
+ * real DOM to click Proceed/Cancel on (e.g. `scripts/simulate.ts`). A no-op
+ * if nothing is pending. */
 export function answerPendingConfirm(state: GameState, accept: boolean): void {
   if (!pendingConfirm) return;
   const confirmed = pendingConfirm;
@@ -191,17 +179,15 @@ function assignSkill(state: GameState, skillId: string, slot: SkillSlot): void {
   saveGame(state);
 }
 
-/** New Game (TITLE, Upgrade Shop, VICTORY's full reset): rerolls the seed and
- * wipes `persistent`; confirmed since it's destructive to any saved progress.
- * Phase 13: lands in the Hub, same as Continue — the Shortcut Gate there is
- * what actually starts the run. */
+/** Rerolls the seed and wipes `persistent`; confirmed since it's destructive
+ * to any saved progress. Lands in the Hub — the Shortcut Gate there is what
+ * actually starts the run. */
 function startNewGame(state: GameState): void {
   showConfirm(state, 'Start a New Game? This rerolls the dungeon and wipes all permanent progress.', () => {
     clearSave();
-    // Phase 20: a stale run snapshot points at floor layouts generated from
-    // the OLD (about-to-be-discarded) rngSeed — cleared rather than
-    // overwritten so a reload before the next move can't resume into a
-    // dungeon that no longer matches the fresh seed just rolled below.
+    // A stale run snapshot points at floor layouts from the OLD seed —
+    // cleared rather than overwritten so a reload before the next move
+    // can't resume into a dungeon that doesn't match the fresh seed below.
     clearRunSnapshot();
     resetToNewGame(state);
     enterHub(state);
@@ -211,26 +197,19 @@ function startNewGame(state: GameState): void {
   });
 }
 
-/** TITLE's Continue: resumes the loaded save at the Hub (Phase 13) — `run` is
- * already a fresh loop's worth of state (only `persistent` is ever saved),
- * so this just needs to place the player back at the Watchwarden's Post. */
+/** Resumes the loaded save at the Hub — `run` is already a fresh loop's
+ * worth of state (only `persistent` is ever saved). */
 function continueSave(state: GameState): void {
   enterHub(state);
   state.ui.currentScreen = 'GAME';
   saveGame(state);
-  // Phase 20: reaching TITLE at all means boot found no resumable run
-  // snapshot — write one now so a background/reload right after clicking
-  // Continue (before the first move) still resumes into GAME instead of
-  // falling back to TITLE a second time.
+  // Reaching TITLE means boot found no resumable run snapshot — write one
+  // now so a reload right after Continue still resumes into GAME.
   saveRunSnapshot(state);
 }
 
-/** VICTORY's New Game+ (Section 7): a fresh dungeon, every permanent upgrade
- * kept, enemies scaled up a notch for the next cycle (Fun & Feel #8,
- * `scaleEnemyForNgPlus`), and — per the GDD's Victory Flow — `unlockedAnchors`
- * wiped so re-anchoring the fresh dungeon's Biomes is the NG+ challenge.
- * Phase 16: lands in the Hub like every other loop start/reset, replacing
- * the old direct-to-shop flow. */
+/** A fresh dungeon, every permanent upgrade kept, enemies scaled up a notch,
+ * and `unlockedAnchors` wiped so re-anchoring is the NG+ challenge. */
 function startNewGamePlus(state: GameState): void {
   state.persistent.ngPlusLevel += 1;
   state.persistent.unlockedAnchors = [];
@@ -240,16 +219,14 @@ function startNewGamePlus(state: GameState): void {
   state.ui.currentScreen = 'GAME';
   playNewGameSfx();
   saveGame(state);
-  // Phase 20: write the fresh (new-seed) run immediately, replacing whatever
-  // pre-NG+ snapshot was on disk — otherwise a reload before the first move
-  // would resume that stale run on top of a dungeon generated from the new
-  // seed it doesn't match.
+  // Write the fresh (new-seed) run immediately, replacing any pre-NG+
+  // snapshot — otherwise a reload before the first move would resume a
+  // stale run on top of a dungeon generated from a seed it doesn't match.
   saveRunSnapshot(state);
 }
 
-/** Shortcut Gate destination click (Phase 13): warps into a fresh run at the
- * chosen floor and returns straight to GAME — no shop stop, matching the
- * GDD's "Warping starts a fresh run... with starter gear" wording. */
+/** Warps into a fresh run at the chosen floor and returns straight to
+ * GAME — no shop stop. */
 function warpFromGate(state: GameState, floor: number): void {
   warpToFloor(state, floor);
   state.ui.currentScreen = 'GAME';
@@ -271,12 +248,9 @@ function signed(n: number): string {
   return `${n > 0 ? '+' : ''}${n}`;
 }
 
-/** Inventory Stat Block (GDD Section 8, Phase 16): a pipe-separated,
- * machine-readable line — stats first, Element, then Effect, the GDD's fixed
- * field order — shown above an item's lore. Weapons/accessories append a
- * (▲/▼) comparison marker against whatever's currently equipped in that
- * slot, skipped when the item under inspection IS the equipped one (nothing
- * to compare against) or nothing's equipped there yet. */
+/** A pipe-separated stat line (stats, then Element, then Effect) shown above
+ * an item's lore. Weapons/accessories append a (▲/▼) comparison marker
+ * against whatever's currently equipped in that slot. */
 function statBlockForItem(state: GameState, item: Item): string | null {
   const { run } = state;
 

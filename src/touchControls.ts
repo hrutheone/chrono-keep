@@ -1,9 +1,6 @@
-// Virtual on-screen D-Pad/action buttons for mobile portrait play (index.html's
-// #touch-controls, shown only under style.css's mobile media query). Rather than
-// duplicating movement/skill/menu gating logic, every button dispatches the same
-// synthetic keydown event the existing WASD/Space/Q/E/I listeners in
-// movement.ts/skills.ts/menus.ts already consume — touch and keyboard input are
-// guaranteed to behave identically because they run through one code path.
+// Virtual D-Pad/action buttons for mobile. Each button dispatches the same
+// synthetic keydown the WASD/Space/Q/E/I listeners already consume, so touch
+// and keyboard input run through one code path.
 
 const BUTTON_KEYS: Record<string, string> = {
   'move-up': 'w',
@@ -15,26 +12,21 @@ const BUTTON_KEYS: Record<string, string> = {
   'skill-e': 'e',
   'skill-r': 'r',
   'skill-f': 'f',
-  // Combined Menu button (Next-Task.md QoL): the old separate INV/SKL/?
-  // buttons collapsed into one, reusing the 'i' keydown path — opens the
-  // unified Menu straight to its Inventory tab (or closes it if already
-  // there); the Menu's own tab row reaches every other section from there.
+  // Opens the unified Menu on its Inventory tab (or closes it if already
+  // open); the Menu's own tab row reaches every other section from there.
   'open-menu': 'i',
 };
 
-// Move buttons get press-and-hold (Hold D-Pad to Move Constantly): a real
-// keydown/keyup pair so movement.ts's DAS timer can drive the repeat, the
-// same as a held physical key. Every other button (brace, skills, menu
-// opens) stays single-fire — holding those has no meaning.
+// Move buttons fire a real keydown/keyup pair so movement.ts's DAS timer can
+// drive repeat-on-hold; every other button stays single-fire.
 const MOVE_KEYS = new Set(['move-up', 'move-down', 'move-left', 'move-right']);
 
 function fireKey(key: string, type: 'keydown' | 'keyup' = 'keydown'): void {
   window.dispatchEvent(new KeyboardEvent(type, { key }));
 }
 
-/** Wires touchstart (primary — preventDefault stops the browser from zooming,
- * selecting text, or scrolling while the D-Pad is mashed) and click (fallback
- * for mouse/trackpad, e.g. testing a narrow desktop window) on every
+/** Wires touchstart (preventDefault stops zoom/selection/scroll while
+ * mashing the D-Pad) and click (mouse/trackpad fallback) on every
  * [data-touch-key] button to its mapped keyboard key. */
 export function installTouchControls(): void {
   const root = document.querySelector<HTMLElement>('#touch-controls');

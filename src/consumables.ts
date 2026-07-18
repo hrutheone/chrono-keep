@@ -1,9 +1,7 @@
-// Tactical Consumables (GDD Section 6E, Phase 8): always 1 turn to use, in or
-// out of combat — unlike Potions' context-sensitive 0/1-turn rule — unless
-// Alchemist's Belt makes both categories free (Section 6D/7). Throwables
-// (Liquid Fire Flask, Shock Grenade) reuse Section 8's "aim along facing"
-// directional Skill Targeting Logic rather than building a second targeting
-// system, same as Cleave/Static Shift.
+// Always costs 1 turn to use, in or out of combat — unlike Potions'
+// context-sensitive 0/1-turn rule — unless Alchemist's Belt makes it free.
+// Throwables (Liquid Fire Flask, Shock Grenade) reuse the same "aim along
+// facing" targeting as Cleave/Static Shift rather than a second system.
 
 import { applyEnemyStatus, applyPlayerStatus } from './combat';
 import { hasAlchemistsBelt } from './inventory';
@@ -126,10 +124,8 @@ const EFFECTS: Record<string, (state: GameState, item: Consumable) => void> = {
   whetstone: effectWhetstone,
 };
 
-/** Uses the CONSUMABLE at this inventory slot: always 1 turn (Section 6E/7),
- * in or out of combat, unless Alchemist's Belt makes it free. Returns the
- * resolvePlayerTurn() promise (or a resolved no-op when free) so
- * programmatic callers can await full resolution. */
+/** Uses the CONSUMABLE at this inventory slot. Returns the resolvePlayerTurn()
+ * promise (or a resolved no-op when free) so callers can await resolution. */
 export function useConsumable(state: GameState, invIndex: number): Promise<void> {
   const item = state.run.inventory[invIndex];
   if (!item || item.kind !== 'CONSUMABLE') return Promise.resolve();
@@ -137,8 +133,7 @@ export function useConsumable(state: GameState, invIndex: number): Promise<void>
   const effect = EFFECTS[consumable.effect];
   if (!effect) return Promise.resolve();
 
-  // Phase 18 Inventory Stacking: decrement in place; only clear the slot
-  // once the stack empties.
+  // Decrement in place; only clear the slot once the stack empties.
   const remaining = (consumable.count ?? 1) - 1;
   if (remaining > 0) consumable.count = remaining;
   else state.run.inventory.splice(invIndex, 1);

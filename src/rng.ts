@@ -1,6 +1,5 @@
-// Deterministic RNG (GDD Section 7). Dungeon layout is sacredly deterministic:
-// every floor derives from hash(persistent.rngSeed, floorNumber), and nothing
-// in the generator may ever call Math.random().
+// Every floor derives from hash(persistent.rngSeed, floorNumber) — the
+// generator must never call Math.random().
 
 /** 32-bit avalanche mix. Derives child seeds: per-floor layouts and retry attempts. */
 export function hash(seed: number, n: number): number {

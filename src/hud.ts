@@ -1,18 +1,15 @@
-// Main Game HUD (GDD Section 8): HTML/CSS overlays layered above the canvas.
-// Top bar: turn counter, HP bar, Stamina bar, status icon.
-// Bottom bar: equipped weapon, Q/E skill slots, last 3 log lines.
+// HTML/CSS HUD overlays layered above the canvas: top bar (turn/HP/Stamina/
+// status), bottom bar (weapon, Q/E/R/F skill slots, last 3 log lines).
 
 import { ENEMY_NAME, eliteAffixName, relicLore, relicName } from './content';
 import { spriteCssStyle } from './assets';
 import { RELIC_SPRITE_BY_EFFECT, SPRITES } from './sprites';
 import type { GameState, StatusEffect } from './types';
 
-// Relic Tray icon display size (Section 8: "16x16 icons upscaled via CSS").
 const RELIC_ICON_SIZE = 16;
 
-// Phase 19 Elite Warning banner: enemies within this taxicab radius of the
-// player trigger it — deliberately smaller than the 7-tile wake radius, so
-// it reads as "one's about to be a problem," not "one exists somewhere."
+// Smaller than the 7-tile wake radius, so the warning reads as "about to be
+// a problem" rather than "exists somewhere on the floor."
 const ELITE_WARNING_RADIUS = 3;
 
 const STATUS_LABEL: Record<StatusEffect, string> = {
@@ -35,8 +32,7 @@ function el(id: string): HTMLElement {
   return document.getElementById(id)!;
 }
 
-/** Section 8's Quick Controls Help hint strip: the 3-4 keys most relevant to
- * the current screen, always visible in the HUD bottom bar. */
+/** The 3-4 keys most relevant to the current screen, always visible in the HUD. */
 const HINT_STRIP: Record<GameState['ui']['currentScreen'], string> = {
   TITLE: 'Enter: Start',
   GAME: 'WASD Move · Space Brace · Q/E Skill · I Inv · K Skills · ? Help',
@@ -81,9 +77,8 @@ export function initHud(): void {
     </div>
     <div id="hint-strip" class="hint-strip"></div>`;
 
-  // Relic Tray tooltip (Phase 19, Section 8): tap an icon to show it (no
-  // hover on mobile), tap anywhere else to dismiss — delegated on `document`
-  // since the tray's own children are rebuilt every updateHud call.
+  // Delegated on `document` since the tray's children are rebuilt every
+  // updateHud call — tap an icon to show its tooltip, tap elsewhere to dismiss.
   document.addEventListener('click', (ev) => {
     const target = ev.target as HTMLElement;
     const icon = target.closest<HTMLElement>('.relic-icon');
@@ -128,12 +123,7 @@ export function updateHud(state: GameState): void {
   statusEl.textContent = STATUS_LABEL[run.status];
   statusEl.className = `status-icon status-${run.status.toLowerCase()}`;
 
-  // Relic Tray (Phase 19, Section 8): horizontally-scrolling icon strip, one
-  // per held Chronofact. Carry-over polish: real pixel-art icons pulled from
-  // the spritesheet via assets.ts's spriteCssStyle (a background-position/
-  // -size CSS pattern this codebase didn't have before — every other
-  // Section 8 overlay is text-driven), one per relic (RELIC_SPRITE_BY_EFFECT),
-  // instead of the original 2-letter text-glyph stand-in.
+  // Horizontally-scrolling icon strip, one per held Chronofact.
   el('relic-tray').innerHTML = run.relics
     .map((effect) => {
       const ref = RELIC_SPRITE_BY_EFFECT[effect] ?? SPRITES.RELIC;
@@ -141,8 +131,6 @@ export function updateHud(state: GameState): void {
     })
     .join('');
 
-  // Elite Warning banner (Phase 19, Section 8): the nearest awake Elite
-  // within range, if any — flashes in above the Action Log.
   const eliteWarning = el('elite-warning');
   const nearbyElite = state.dungeon.enemies.find(
     (e) => e.awake && e.affix && Math.abs(e.x - run.playerX) + Math.abs(e.y - run.playerY) <= ELITE_WARNING_RADIUS,
@@ -160,12 +148,9 @@ export function updateHud(state: GameState): void {
     el(elId).textContent = `${label}: ${skillId ? `${skillId} (Lv${state.persistent.skills[skillId] ?? 0})` : '--'}`;
   });
 
-  // The unified Menu is a full-screen overlay; on mobile's portrait layout
-  // #hud-bottom sits in normal flex flow (not absolutely positioned under
-  // the overlay like on desktop), so its action log/hint strip can visually
-  // bleed through the menu's dashed/low-opacity slots. Hide the whole bar
-  // rather than just the log — it's redundant once a menu covers the screen
-  // anyway.
+  // On mobile, #hud-bottom sits in normal flex flow (not absolutely
+  // positioned like on desktop), so it can bleed through the menu overlay —
+  // hide the whole bar while a menu is open.
   const hideHudBottom = state.ui.currentScreen === 'MENU';
   el('hud-bottom').style.display = hideHudBottom ? 'none' : '';
   el('action-log').innerHTML = state.ui.log

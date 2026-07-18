@@ -1,5 +1,5 @@
-// Inventory, equipment & consumables (GDD Sections 3, 6, 7). Pure state
-// logic — src/menus.ts owns the HTML overlay and dispatches into these.
+// Inventory, equipment & consumables. Pure state logic — src/menus.ts owns
+// the HTML overlay and dispatches into these.
 
 import { PLAYER_BASE_ATK, PLAYER_BASE_DEF } from './types';
 import type { Accessory, GameState, Item, Weapon } from './types';
@@ -9,18 +9,13 @@ import { awardEchoes } from './echoes';
 import { playAnchorSfx, playEquipSfx, playPickupSfx, playPotionSfx, playPurchaseSfx, playTimeShardSfx, playUnequipSfx, playUnlockSfx } from './audio';
 import { notifyFloatingText } from './floatingText';
 
-// Raised 10 -> 20 alongside Phase 18's 40-weapon/25-skill roster — a
-// 10-slot cap (halved further by Inventory Stacking merging Potions/
-// Consumables into one slot each) was cramped against a much bigger item
-// pool to actually be carrying loot from. Raised again 20 -> 25 to back a
-// 5x5 grid (menus.ts/style.css's .inventory-grid).
+// Matches the 5x5 grid in menus.ts/style.css's .inventory-grid.
 export const INVENTORY_CAP = 25;
 
-/** 7-tile taxicab wake radius (GDD Section 7): only *awake* enemies count. */
+/** 7-tile taxicab wake radius — only *awake* enemies count. */
 const THREAT_RADIUS = 7;
 
-// Section 6D: +/- DEF accessory passives (Iron Ring, and Phase 8's
-// Berserker's Cuff/Paladin's Mantle trade-off pair).
+// +/- DEF accessory passives (Iron Ring, and the Berserker's Cuff/Paladin's Mantle trade-off pair).
 const DEF_BONUS: Partial<Record<string, number>> = {
   def_plus_2: 2,
   berserker: -2,
@@ -37,14 +32,13 @@ const STAM_BONUS: Partial<Record<string, number>> = {
   max_stam_plus_3: 3,
 };
 
-// Phase 18: weapon-side DEF/Max HP modifiers while equipped (Bone Club/
-// Defender, Apocalypse) — the weapon equivalent of the accessory maps above,
-// applied the same way in equipWeapon/unequipWeapon below.
+// Weapon-side DEF/Max HP modifiers while equipped (Bone Club/Defender,
+// Apocalypse) — the weapon equivalent of the accessory maps above, applied
+// the same way in equipWeapon/unequipWeapon below.
 const WEAPON_DEF_BONUS: Partial<Record<string, number>> = { def_minus_1_equipped: -1, def_plus_1_equipped: 1 };
 const WEAPON_HP_BONUS: Partial<Record<string, number>> = { max_hp_minus_10_equipped: -10 };
 
-// Exported for menus.ts's Inventory Stat Block, same reasoning as the
-// accessory bonus functions above.
+// Exported for menus.ts's Inventory Stat Block.
 export function weaponDefBonus(weapon: Weapon | null): number {
   return WEAPON_DEF_BONUS[weapon?.passive ?? ''] ?? 0;
 }
@@ -53,10 +47,8 @@ export function weaponHpBonus(weapon: Weapon | null): number {
   return WEAPON_HP_BONUS[weapon?.passive ?? ''] ?? 0;
 }
 
-// Exported for menus.ts's Inventory Stat Block (Phase 16): the same
-// per-passive numeric lookups equip/unequip use for the live stat math,
-// reused so the displayed DEF/Max HP/ATK/Max Stamina lines can never drift
-// from what equipping the item actually does.
+// Exported for menus.ts's Inventory Stat Block — same lookups equip/unequip
+// use for live stat math, so the displayed lines can never drift from reality.
 export function accessoryDefBonus(acc: Accessory | null): number {
   return DEF_BONUS[acc?.passive ?? ''] ?? 0;
 }
@@ -73,8 +65,8 @@ export function accessoryStamBonus(acc: Accessory | null): number {
   return STAM_BONUS[acc?.passive ?? ''] ?? 0;
 }
 
-/** Kindling Pouch/Capacitor Ring/Permafrost Vial (Section 6D): +2 damage for
- * weapons/skills of the matching element. Read by combat.ts/skills.ts. */
+/** Kindling Pouch/Capacitor Ring/Permafrost Vial: +2 damage for weapons/skills
+ * of the matching element. Read by combat.ts/skills.ts. */
 const ELEMENT_SYNERGY_BONUS: Partial<Record<string, number>> = {
   fire_synergy: 2,
   volt_synergy: 2,
@@ -92,9 +84,8 @@ export function elementSynergyBonus(state: GameState, element: string): number {
   return ELEMENT_SYNERGY_BONUS[passive] ?? 0;
 }
 
-// Giant's Anvil (Phase 19 Relic): +5 flat ATK — the trade-off (Dash
-// permanently disabled) is enforced in skills.ts's skillStaminaCost instead,
-// the only place that already gates whether a skill can be cast at all.
+// Giant's Anvil relic: +5 flat ATK — the trade-off (Dash permanently
+// disabled) is enforced in skills.ts's skillStaminaCost instead.
 export const GIANTS_ANVIL_ATK = 5;
 
 export function totalAtk(state: GameState): number {
@@ -141,19 +132,16 @@ function applyMaxStamDelta(state: GameState, delta: number): void {
   state.run.currentStamina = Math.min(state.run.currentStamina, state.run.maxStamina);
 }
 
-/** Alchemist's Belt (Section 6D, Phase 8): using a Potion or Tactical
- * Consumable costs 0 Turns, even mid-combat — overrides both turn-cost rules
- * from Section 6E/7 at once. */
+/** Alchemist's Belt: using a Potion or Tactical Consumable costs 0 Turns,
+ * even mid-combat. */
 export function hasAlchemistsBelt(state: GameState): boolean {
   return state.run.equippedAccessory?.passive === 'alchemist_belt';
 }
 
-/** Shared tail of a normal (non-Anchor/Time-Shard/Relic) pickup: Inventory
- * Stacking merge, then the INVENTORY_CAP check, then a straight push. Pulled
- * out of pickupItemsAt's loop so Golden Scarab's bonus chest item (Phase 19)
- * can reuse the exact same rules a primary pickup gets, instead of a
- * duplicated near-copy. Returns false (caller should stop granting more —
- * the floor return-to-tile already happened) when the cap blocks it. */
+/** Shared tail of a normal (non-Anchor/Time-Shard/Relic) pickup: stacking
+ * merge, then the INVENTORY_CAP check, then a push. Pulled out of
+ * pickupItemsAt's loop so Golden Scarab's bonus chest item can reuse it.
+ * Returns false when the cap blocks the pickup. */
 function grantItem(state: GameState, x: number, y: number, item: Item, chestLoot: boolean): boolean {
   if (item.kind === 'POTION' || item.kind === 'CONSUMABLE') {
     const stack = state.run.inventory.find((i) => i.name === item.name);
@@ -167,9 +155,8 @@ function grantItem(state: GameState, x: number, y: number, item: Item, chestLoot
   if (state.run.inventory.length >= INVENTORY_CAP) {
     logLine(state, 'Inventory full.');
     // With nowhere to go — put it back rather than deleting it outright.
-    // Chest contents reroll on every pickup attempt by design (Dynamic Chest
-    // Loot, Section 7), so a rejected attempt re-rolling next time isn't a
-    // regression from the original tiles' own random-per-attempt contract.
+    // Chest contents reroll on every pickup attempt anyway, so a rejected
+    // attempt re-rolling next time isn't a regression.
     state.dungeon.items.push({ item, x, y, chestLoot });
     return false;
   }
@@ -179,11 +166,11 @@ function grantItem(state: GameState, x: number, y: number, item: Item, chestLoot
   return true;
 }
 
-/** Adds every WorldItem standing at (x, y) to the inventory, removing each from the floor.
- * A tile can hold more than one drop (e.g. a kill's item plus a separately-rolled Time Shard).
- * Anchors, Time Shards, and Relics are instant effects and never occupy a slot (Section 7,
- * Phase 19). Chest-loot items (Section 7 Dynamic Chest Loot) are rerolled from gameplay RNG
- * here, at pickup time, so contents vary loop to loop while position stays seeded. */
+/** Adds every WorldItem standing at (x, y) to the inventory, removing each
+ * from the floor. A tile can hold more than one drop. Anchors/Time Shards/
+ * Relics are instant effects and never occupy a slot. Chest-loot items are
+ * rerolled from gameplay RNG here, at pickup time, so contents vary loop to
+ * loop while position stays seeded. */
 export function pickupItemsAt(state: GameState, x: number, y: number): void {
   for (;;) {
     const idx = state.dungeon.items.findIndex((wi) => wi.x === x && wi.y === y);
@@ -197,9 +184,6 @@ export function pickupItemsAt(state: GameState, x: number, y: number): void {
       if (!state.persistent.unlockedAnchors.includes(nextBiomeStart)) {
         state.persistent.unlockedAnchors.push(nextBiomeStart);
         state.persistent.unlockedAnchors.sort((a, b) => a - b);
-        // "New Biome anchored" (Section 9D) is its own row, distinct from the
-        // pickup fanfare below — only fires the once-per-Biome-per-save this
-        // guard already exists to detect, not on a hypothetical re-pickup.
         playUnlockSfx();
       }
       awardEchoes(state, 25, 'Anchor collected');
@@ -210,9 +194,8 @@ export function pickupItemsAt(state: GameState, x: number, y: number): void {
 
     if (item.kind === 'TIME_SHARD') {
       state.dungeon.items.splice(idx, 1);
-      // Time-Eater's Jaw (Phase 19 Relic): +8 Turns instead of +5 — an
-      // override on the fixed base value, not a multiplier (matches the
-      // Relic's stated "grants +8 instead of +5" wording exactly).
+      // Time-Eater's Jaw relic: +8 Turns instead of +5 — an override on the
+      // fixed base value, not a multiplier.
       const gain = state.run.relics.includes('time_eaters_jaw') ? 8 : item.value;
       state.run.turnsRemaining += gain;
       logLine(state, `Time Shard! +${gain} Turns.`);
@@ -239,16 +222,14 @@ export function pickupItemsAt(state: GameState, x: number, y: number): void {
 
     state.dungeon.items.splice(idx, 1);
     let finalItem = worldItem.chestLoot ? rollChestItem(Math.random, state.run.currentFloor, item.id) : item;
-    // Alchemist's Satchel (Phase 19 Relic): "Potion drop rates are halved" —
-    // reinterpreted as a 50% chance to re-roll a chest's Potion result once
-    // (rollChestItem's pool is flat/equal-weight per entry, no probability
-    // knob to literally halve), landing on whatever else the pool gives.
+    // Alchemist's Satchel relic ("Potion drop rates are halved"): a 50%
+    // chance to re-roll a chest's Potion result once, since the pool has no
+    // probability knob to literally halve.
     if (worldItem.chestLoot && finalItem.kind === 'POTION' && state.run.relics.includes('alchemists_satchel') && Math.random() < 0.5) {
       finalItem = rollChestItem(Math.random, state.run.currentFloor, `${item.id}-satchel-reroll`);
     }
-    // A chest reroll can land on a RELIC (Phase 19's CHEST_POOL_B3 entry) —
-    // re-dispatch through the same instant-pickup path above instead of
-    // falling into the slot-occupying logic below, which RELIC never uses.
+    // A chest reroll can land on a RELIC — re-dispatch through the instant-
+    // pickup path above instead of the slot-occupying logic below.
     if (finalItem.kind === 'RELIC') {
       state.dungeon.items.push({ item: finalItem, x, y, chestLoot: false });
       continue;
@@ -256,10 +237,8 @@ export function pickupItemsAt(state: GameState, x: number, y: number): void {
 
     if (!grantItem(state, x, y, finalItem, worldItem.chestLoot ?? false)) return;
 
-    // Golden Scarab (Phase 19 Relic): chests drop a second item. Only for
-    // actual chest loot (not a plain floor/enemy drop) and only once the
-    // primary item successfully found a slot — a full inventory shouldn't
-    // roll (and potentially waste) a bonus on top of the rejected primary.
+    // Golden Scarab relic: chests drop a second item — only for actual chest
+    // loot, and only once the primary item found a slot.
     if (worldItem.chestLoot && state.run.relics.includes('golden_scarab')) {
       const bonus = rollChestItem(Math.random, state.run.currentFloor, `${item.id}-scarab`);
       if (bonus.kind === 'RELIC') state.dungeon.items.push({ item: bonus, x, y, chestLoot: false });
@@ -268,22 +247,16 @@ export function pickupItemsAt(state: GameState, x: number, y: number): void {
   }
 }
 
-/** Melts the inventory item at this slot for good, converting it to Echoes —
- * Small Improvements: the only way to clear out a duplicate/unwanted pickup
- * once the 25-slot cap is in reach, now with a payout instead of just
- * vanishing. Same context-sensitive turn cost an equip/unequip swap (or the
- * old Drop action) used. Per-unit value (content.ts's itemMeltValue) times
- * the full stack — melting a Potion stack of 2 pays out for both, same as
- * Drop used to clear both at once. */
+/** Melts the inventory item at this slot for good, converting it to Echoes.
+ * Same context-sensitive turn cost as an equip/unequip swap. Per-unit value
+ * times the full stack — melting a Potion stack of 2 pays out for both. */
 export function meltItem(state: GameState, invIndex: number): void {
   const item = state.run.inventory[invIndex];
   if (!item) return;
   state.run.inventory.splice(invIndex, 1);
   chargeInventoryAction(state, false);
   const units = item.count && item.count > 1 ? item.count : 1;
-  // awardEchoes already logs "+N Echoes (reason)." (and saves) — no separate
-  // "Melted ..." line, same single-log-line convention every other Echo
-  // source (kills, Flawless Floor, Anchor pickup) already follows.
+  // awardEchoes already logs "+N Echoes (reason)." — no separate "Melted ..." line.
   awardEchoes(state, itemMeltValue(item) * units, units > 1 ? `melted ${item.name} x${units}` : `melted ${item.name}`);
   playPurchaseSfx();
 }
@@ -355,18 +328,15 @@ export function unequipAccessory(state: GameState): void {
   playUnequipSfx();
 }
 
-/** Consumes the POTION at this inventory slot, healing by its value (capped at maxHp). */
 /** Consumes one from the POTION stack at this inventory slot, applying its
- * `effect` (Phase 18: heal_flat, heal_percent_max, heal_percent_max_cleanse,
- * or Soma Drop's permanent_max_hp). Only clears the slot once the stack
- * (Phase 18 Inventory Stacking) empties. */
+ * `effect` (heal_flat, heal_percent_max, heal_percent_max_cleanse, or Soma
+ * Drop's permanent_max_hp). Only clears the slot once the stack empties. */
 export function usePotion(state: GameState, invIndex: number): void {
   const item = state.run.inventory[invIndex];
   if (!item || item.kind !== 'POTION') return;
 
-  // Alchemist's Satchel (Phase 19 Relic): doubles a Potion's HP restore —
-  // deliberately excludes Soma Drop's permanent_max_hp below, which isn't a
-  // "heal" in the relic's sense.
+  // Alchemist's Satchel relic doubles a Potion's HP restore — deliberately
+  // excludes Soma Drop's permanent_max_hp, which isn't a "heal".
   const satchelMult = state.run.relics.includes('alchemists_satchel') ? 2 : 1;
 
   let healed = 0;

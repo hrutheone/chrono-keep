@@ -1,6 +1,6 @@
-// Player movement, bump-combat entry point, and input (GDD Sections 7 & 8).
-// A move/attack/wait here is the Player Move Phase; resolvePlayerTurn runs
-// the rest (Enemy -> Tick -> Check) for every turn-costing action.
+// Player movement, bump-combat entry point, and input. A move/attack/wait
+// here is the Player Move Phase; resolvePlayerTurn runs the rest
+// (Enemy -> Tick -> Check) for every turn-costing action.
 
 import { findRangedTarget, playerAttackEnemy, weaponBlockedAtRange } from './combat';
 import { pickupItemsAt } from './inventory';
@@ -18,19 +18,13 @@ import type { GameState } from './types';
 
 type Facing = GameState['run']['facing'];
 
-// Arena Threshold Warning (GDD Section 7), verbatim.
 const ARENA_THRESHOLD_WARNING =
   'The temporal density beyond this stair is overwhelming. Something old and hungry guards the descent. Steady yourself — there is no retreat once you cross.';
 
-/** Shared by both branches of tryDescendIfOnStairs below: leaves the current
- * floor (Flawless Floor bonus), installs the next one (procedural, a
- * Mini-Boss Arena, or the Floor 99 Chrono-Lich Arena), and awards the
- * first-visit bonus for it. Sets the screen back to GAME explicitly —
- * required for the confirm-accepted path (showConfirm/answerPendingConfirm
- * only ever restores the screen on *decline*; every onConfirm callback in
- * this codebase is responsible for setting it back itself on accept, e.g.
- * menus.ts's startNewGame) but a harmless no-op for the direct (non-Arena)
- * path, which is already on GAME. */
+/** Leaves the current floor, installs the next one (procedural, a Mini-Boss
+ * Arena, or the Floor 99 Chrono-Lich Arena), and awards its first-visit
+ * bonus. Explicitly resets the screen to GAME since showConfirm's
+ * onConfirm callbacks own restoring it themselves on accept. */
 function performDescend(state: GameState, next: number): void {
   onFloorCleared(state);
   if (next === FINAL_BOSS_FLOOR) enterBossFloor(state);
@@ -39,24 +33,18 @@ function performDescend(state: GameState, next: number): void {
   onFloorEntered(state);
   logLine(state, next === FINAL_BOSS_FLOOR ? 'You descend into the Chrono-Lich\'s arena.' : `You descend to Floor ${next}.`);
   state.ui.currentScreen = 'GAME';
-  // Phase 20: stepping onto Stairs never costs a turn (this comment's own
-  // header note above), so the per-turn save in turnController.ts's
-  // resolvePlayerTurn never fires here — without this, a background/reload
-  // right after descending (before the next move) would resume the PREVIOUS
-  // floor instead of the one just entered.
+  // Stepping onto Stairs never costs a turn, so resolvePlayerTurn's own save
+  // never fires here — without this, a reload right after descending would
+  // resume the previous floor instead of the one just entered.
   saveRunSnapshot(state);
 }
 
-/** Descends to the next floor if the player is standing on Stairs (Section 7).
- * Shared by move, Dash, and Static Shift. A next-floor that's a Mini-Boss
- * Arena (Phase 15) or the Floor 99 Chrono-Lich Arena (Phase 16) shows the
- * Arena Threshold Warning confirm first — GDD Section 7 places it on every
- * Arena floor, "10, 20, ... 90, 99" alike. This still short-circuits the
- * caller's normal turn resolution (returns true) either way, since stepping
- * onto the stairs itself never costs a turn; declining just leaves the
- * player exactly where they were. Floor 99's arena has no Stairs tile (no
- * Floor 100 to descend to — killing the Chrono-Lich ends the run via
- * triggerVictory instead), so this never re-fires once there. */
+/** Descends to the next floor if the player is standing on Stairs. Shared by
+ * move, Dash, and Static Shift. A next-floor that's an Arena shows the
+ * threshold warning first; either way this short-circuits the caller's
+ * normal turn resolution since stepping onto Stairs never costs a turn.
+ * Floor 99's arena has no Stairs tile (killing the Chrono-Lich ends the run
+ * via triggerVictory instead), so this never re-fires once there. */
 export function tryDescendIfOnStairs(state: GameState): boolean {
   const tile = state.dungeon.tiles[state.run.playerY][state.run.playerX];
   if (tile !== TILE.STAIRS) return false;
@@ -71,10 +59,9 @@ export function tryDescendIfOnStairs(state: GameState): boolean {
   return true;
 }
 
-/** Stepping onto the Hub's Shop Terminal or Shortcut Gate (GDD Section 7)
- * opens its HTML overlay instead of resolving a normal turn — matching how
- * tryDescendIfOnStairs short-circuits turn resolution on Stairs. Both tiles
- * only ever exist on the hand-authored Hub floor (src/hub.ts). */
+/** Stepping onto the Hub's Shop Terminal or Shortcut Gate opens its HTML
+ * overlay instead of resolving a normal turn. Both tiles only ever exist on
+ * the hand-authored Hub floor (src/hub.ts). */
 function tryHubInteraction(state: GameState): boolean {
   if (state.run.currentFloor !== HUB_FLOOR) return false;
   const tile = state.dungeon.tiles[state.run.playerY][state.run.playerX];
@@ -89,9 +76,8 @@ function tryHubInteraction(state: GameState): boolean {
   return false;
 }
 
-/** Stepping onto a procedural floor's Cursed Rift (Phase 19) opens its
- * sacrifice-pact modal — same "free to open, no turn cost until the player
- * actually answers" shape as the Hub tiles above. A coordinate check, not a
+/** Stepping onto a procedural floor's Cursed Rift opens its sacrifice-pact
+ * modal, free to open like the Hub tiles above. A coordinate check, not a
  * tile-type check — see types.ts's dungeon.riftX/Y comment for why. */
 function tryRiftInteraction(state: GameState): boolean {
   if (state.dungeon.riftX === null) return false;
@@ -111,8 +97,8 @@ const DIRECTIONS: Record<string, { dx: number; dy: number; facing: Facing }> = {
   d: { dx: 1, dy: 0, facing: 'RIGHT' },
 };
 
-/** A Stunned player skips this action entirely; the turn still advances. Exported
- * so skills.ts (another player-action entry point) can share the same check. */
+/** A Stunned player skips this action entirely; the turn still advances.
+ * Exported so skills.ts can share the same check. */
 export function consumeStunnedAction(state: GameState): boolean {
   if (state.run.status !== 'STUN') return false;
   state.run.braced = false;
@@ -121,9 +107,9 @@ export function consumeStunnedAction(state: GameState): boolean {
   return true;
 }
 
-/** Attempts one tile of movement, or a bump-attack if an enemy occupies the target tile.
- * Returns the resolvePlayerTurn() promise (or a resolved no-op) so programmatic
- * callers — the Phase 7 simulation harness — can await a turn's full resolution;
+/** Attempts one tile of movement, or a bump-attack if an enemy occupies the
+ * target tile. Returns the resolvePlayerTurn() promise (or a resolved
+ * no-op) so programmatic callers can await a turn's full resolution;
  * keyboard input simply doesn't await it. */
 export function tryMove(state: GameState, dx: number, dy: number, facing: Facing): Promise<void> {
   state.run.facing = facing;
@@ -136,9 +122,8 @@ export function tryMove(state: GameState, dx: number, dy: number, facing: Facing
 
   const enemy = state.dungeon.enemies.find((e) => e.x === nx && e.y === ny);
   if (enemy) {
-    // Min-range weapons (Ashwood Bow, Static Whip — Section 6A/8) can't
-    // connect at adjacency; the attempt still resolves a turn (a "whiff"),
-    // matching a real combat risk for standing too close with one equipped.
+    // Min-range weapons can't connect at adjacency; the attempt still
+    // resolves a turn (a "whiff") rather than being a free no-op.
     if (weaponBlockedAtRange(state, 1)) {
       logLine(state, `${state.run.equippedWeapon!.name} can't hit at this range!`);
       playBlockedSfx();
@@ -148,8 +133,7 @@ export function tryMove(state: GameState, dx: number, dy: number, facing: Facing
     return resolvePlayerTurn(state, 'attack');
   }
 
-  // No adjacent enemy — a ranged weapon (Frost Wand/Volt Spear's line reach,
-  // Ashwood Bow/Static Whip's min-range) may still find a target further
+  // No adjacent enemy — a ranged weapon may still find a target further
   // along this direction, attacking without moving.
   const rangedTarget = findRangedTarget(state, dx, dy);
   if (rangedTarget) {
@@ -158,9 +142,9 @@ export function tryMove(state: GameState, dx: number, dy: number, facing: Facing
   }
 
   if (!isWalkableAt(state, nx, ny)) {
-    // Vanish (Phase 18 skill): the next move ignores collision entirely —
-    // consumed here rather than in skills.ts since this is the only place
-    // that actually knows a move was blocked.
+    // Vanish's next-move-ignores-collision charge is consumed here rather
+    // than in skills.ts since this is the only place that knows a move was
+    // actually blocked.
     if (state.run.vanishCharges > 0) {
       state.run.vanishCharges -= 1;
       logLine(state, 'You phase through the wall.');
@@ -175,8 +159,8 @@ export function tryMove(state: GameState, dx: number, dy: number, facing: Facing
   logLine(state, `You move ${facing.toLowerCase()}.`);
   playMoveSfx();
 
-  // Static Generator (Phase 19 Relic): every 3 steps taken, the next attack
-  // auto-Stuns — combat.ts's playerAttackEnemy consumes staticGenCharged.
+  // Static Generator: every 3 steps taken, the next attack auto-Stuns —
+  // combat.ts's playerAttackEnemy consumes staticGenCharged.
   if (state.run.relics.includes('static_generator')) {
     state.run.staticGenSteps += 1;
     if (state.run.staticGenSteps >= 3) {
@@ -194,7 +178,7 @@ export function tryMove(state: GameState, dx: number, dy: number, facing: Facing
   return resolvePlayerTurn(state, 'move');
 }
 
-/** Space: Brace (GDD Section 7/8) — +1 DEF until the start of the player's next turn. */
+/** Space: Brace — +1 DEF until the start of the player's next turn. */
 export function passTurn(state: GameState): Promise<void> {
   if (consumeStunnedAction(state)) return Promise.resolve();
   state.run.braced = true;
@@ -202,14 +186,10 @@ export function passTurn(state: GameState): Promise<void> {
   return resolvePlayerTurn(state, 'wait');
 }
 
-// Hold-to-Move (Delayed Auto-Shift, Tetris-style): an initial instant move,
-// then a 300ms delay before repeating every 120ms while the key stays down.
-// Each repeat tick re-checks eligibility (screen/run-over/hit-stop) rather
-// than cancelling the timer on an ineligible tick — a key held through a
-// hit-stop freeze (e.g. stepping into a fire hazard) pauses instead of
-// queuing extra moves, then resumes once the freeze clears, matching the
-// "safety catch" the DAS spec calls for. Keyed by the lowercased key string
-// so held direction keys track independently.
+// Delayed Auto-Shift: an initial instant move, then repeats while held. Each
+// repeat tick re-checks eligibility rather than cancelling the timer on an
+// ineligible tick, so a key held through a hit-stop freeze pauses instead of
+// queuing extra moves.
 const DAS_DELAY_MS = 300;
 const DAS_REPEAT_MS = 120;
 const dasTimers = new Map<string, { timeout: number; interval: number | null }>();
@@ -245,8 +225,8 @@ export function installInput(state: GameState): void {
     const dir = DIRECTIONS[key];
     if (!dir) return;
     ev.preventDefault();
-    // Ignore the OS's own key-repeat keydowns (and a stray re-press of an
-    // already-armed key) — the DAS timer below drives every repeat itself.
+    // Ignore OS key-repeat and a stray re-press of an already-armed key —
+    // the DAS timer below drives every repeat itself.
     if (ev.repeat || dasTimers.has(key)) return;
     if (!canMoveNow(state)) return;
 

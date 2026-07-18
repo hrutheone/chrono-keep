@@ -1,8 +1,7 @@
-// Turn Controller (GDD Section 7): Player Move Phase already happened by the
-// time resolvePlayerTurn is called (movement.ts/combat.ts applied it) — this
-// runs Enemy Phase -> Tick Phase -> Check Phase for every turn-costing action.
-// Inventory actions follow Phase 3's separate context-sensitive rule and
-// never go through here.
+// The Player Move Phase already happened by the time resolvePlayerTurn is
+// called (movement.ts/combat.ts applied it) — this runs Enemy Phase -> Tick
+// Phase -> Check Phase for every turn-costing action. Inventory actions
+// follow their own context-sensitive rule and never go through here.
 
 import { applyEnemyStatus, applyPlayerStatus, computeDamage, consumeHitStopFlag, killEnemy, playerElement } from './combat';
 import { runEnemyPhase, tickBossRewind } from './enemyAI';
@@ -37,10 +36,8 @@ function applyFireHazard(state: GameState): void {
   }
 }
 
-// Phase 18 (Scourge skill): Frost Hazard, the direct-damage counterpart to
-// Fire Hazard's Burn-status one — deals flat DEF-piercing chip damage each
-// Tick Phase instead of applying a status effect, so it stays lethal even
-// against Chilled/Stun-immune builds.
+// Frost Hazard deals flat DEF-piercing chip damage each Tick Phase instead of
+// a status effect, so it stays lethal against Chilled/Stun-immune builds.
 const FROST_HAZARD_DAMAGE = 1;
 
 function isFrostHazardAt(state: GameState, x: number, y: number): boolean {
@@ -64,9 +61,8 @@ function applyFrostHazard(state: GameState): void {
   }
 }
 
-/** Phase 18 (Chakra Lv3/Provoke): temporary ATK/DEF buffs and Aura's status
- * immunity window, all counted down once per Tick Phase and cleared at 0 —
- * the same shape as tickPlayerStatus's statusTurns countdown. */
+/** Temporary ATK/DEF buffs and Aura's status immunity window, counted down
+ * once per Tick Phase and cleared at 0. */
 function tickTempBuffs(state: GameState): void {
   if (state.run.tempAtkBonusTurns > 0) {
     state.run.tempAtkBonusTurns -= 1;
@@ -79,8 +75,7 @@ function tickTempBuffs(state: GameState): void {
   if (state.run.statusImmuneTurns > 0) state.run.statusImmuneTurns -= 1;
 }
 
-/** Phase 18 (Defuse/Slow skills): restores the enemy's original DEF/Speed
- * once the temporary override's timer runs out. */
+/** Restores the enemy's original DEF/Speed once Defuse/Slow's timer runs out. */
 function tickEnemyOverrides(state: GameState): void {
   for (const enemy of state.dungeon.enemies) {
     if (enemy.defuseTurnsLeft !== undefined && enemy.defuseTurnsLeft > 0) {
@@ -100,8 +95,7 @@ function tickEnemyOverrides(state: GameState): void {
   }
 }
 
-/** Troll Blood (Phase 19 Relic): auto-restores 1 HP every 10 real dungeon
- * turns (Hub excluded, same as every other Tick-Phase-gated counter here). */
+/** Troll Blood: auto-restores 1 HP every 10 dungeon turns (Hub excluded). */
 function tickTrollBlood(state: GameState): void {
   if (!state.run.relics.includes('troll_blood')) return;
   state.run.trollBloodCounter += 1;
@@ -118,10 +112,8 @@ function tickExpiringTiles(state: GameState): void {
   state.dungeon.expiringTiles = state.dungeon.expiringTiles.filter((t) => t.turnsLeft > 0);
 }
 
-// Cinder-Shaman's firebomb (Section 6C, Phase 14) and Inferno-Golem's Magma
-// Slam (Phase 15): the Fire Hazard left on the AOE's center tile burns for
-// `t.hazardTurns` turns if set (Magma Slam: 3), or this default (Cinder-
-// Shaman: 2, same duration Flame Arc Lvl 3 uses in skills.ts) if not.
+// The Fire Hazard left on an AOE's center tile burns for `t.hazardTurns`
+// turns if set, or this default otherwise.
 const DEFAULT_FIRE_HAZARD_TURNS = 2;
 
 function detonateTelegraph(state: GameState, t: GameState['dungeon']['telegraphTiles'][number]): void {
@@ -169,9 +161,8 @@ function detonateTelegraph(state: GameState, t: GameState['dungeon']['telegraphT
   }
 }
 
-/** Telegraphed AOE tiles (Phase 6 Chrono-Lich Time-Blast; Phase 14
- * Cinder-Shaman's firebomb / Frost-Sentinel's cross pulse): decrements each
- * tile's warning, then detonates whichever hit 0 per their `payload`. */
+/** Decrements each telegraphed AOE tile's warning, then detonates whichever
+ * hit 0 per their `payload`. */
 function tickTelegraphTiles(state: GameState): void {
   for (const t of state.dungeon.telegraphTiles) t.turnsUntil -= 1;
   const detonating = state.dungeon.telegraphTiles.filter((t) => t.turnsUntil <= 0);
@@ -200,10 +191,8 @@ function tickEnemyStatuses(state: GameState): void {
 }
 
 function runTickPhase(state: GameState, actionKind: PlayerActionKind): void {
-  // The Hub's turn counter is frozen (GDD Section 7) — no hazards, statuses,
-  // or expiring tiles exist there either, so skipping the whole phase is
-  // equivalent to (and simpler than) ticking everything and zeroing the
-  // final decrement.
+  // The Hub's turn counter is frozen — no hazards, statuses, or expiring
+  // tiles exist there either, so skipping the whole phase is equivalent.
   if (state.run.currentFloor === HUB_FLOOR) return;
 
   const chilledBeforeTick = state.run.status === 'CHILLED';
@@ -222,16 +211,14 @@ function runTickPhase(state: GameState, actionKind: PlayerActionKind): void {
   tickExpiringTiles(state);
   tickTelegraphTiles(state);
 
-  // Section 7: "+1 Stamina at the end of any turn in which no Stamina was
-  // spent." Only skills spend Stamina today, so a skill turn skips regen.
+  // +1 Stamina at the end of any turn that didn't spend any — only skills
+  // spend Stamina today, so a skill turn skips regen.
   if (actionKind !== 'skill') {
     state.run.currentStamina = Math.min(state.run.maxStamina, state.run.currentStamina + 1);
   }
 
-  // Quicksilver Flask (Section 6E): "your next 3 Moves or Attacks" only —
-  // not skills, and not the Tactical Consumable use that grants the charges
-  // (which always costs its own 1 turn per Section 6E/7, unless Alchemist's
-  // Belt makes it free through a separate path).
+  // Quicksilver Flask covers Moves/Attacks only, not skills or the
+  // Consumable use that granted the charges.
   if (state.run.quicksilverCharges > 0 && (actionKind === 'move' || actionKind === 'attack')) {
     state.run.quicksilverCharges -= 1;
     logLine(state, `Quicksilver — this action was free (${state.run.quicksilverCharges} left).`);
@@ -248,8 +235,8 @@ function runTickPhase(state: GameState, actionKind: PlayerActionKind): void {
 let lossPending = false;
 const CRT_WARP_MS = 600;
 
-/** CRT Time-Warp (Section 11): CSS-only, on the #game canvas element and the
- * HUD bars, kicked off the instant a loss triggers. */
+/** CSS-only warp effect on the #game canvas and HUD bars, kicked off the
+ * instant a loss triggers. */
 function playCrtWarp(): void {
   document.querySelector('#game')?.classList.add('death-warp');
   document.querySelector('#hud-top')?.classList.add('death-fade');
@@ -262,14 +249,9 @@ function clearCrtWarp(): void {
   document.querySelector('#hud-bottom')?.classList.remove('death-fade');
 }
 
-/** Check Phase (Section 7): plays the CRT Time-Warp, then shows the DEATH
- * screen once it finishes, preserving the just-ended run's stats (floor,
- * turns) for display. The actual Full Loop Reset happens in
- * continueAfterDeath(), once the player dismisses it. */
-/** Shattered Hourglass (Section 6D, Phase 8): a Check-Phase interception —
- * turns hitting 0 restores 15 and destroys the item instead of triggering
- * the loop reset. Checked before the loss-reset path; doesn't apply to
- * dying from HP loss, only the turn-timeout case. */
+/** Shattered Hourglass: turns hitting 0 restores 15 and destroys the item
+ * instead of triggering the loop reset. Doesn't apply to dying from HP loss,
+ * only the turn-timeout case. */
 function tryShatteredHourglass(state: GameState): boolean {
   if (state.run.turnsRemaining > 0 || state.run.currentHp <= 0) return false;
   if (state.run.equippedAccessory?.passive !== 'safety_net_15') return false;
@@ -279,11 +261,8 @@ function tryShatteredHourglass(state: GameState): boolean {
   return true;
 }
 
-/** Phoenix Feather (Phase 19 Relic): "on fatal damage, revive at 50% HP,
- * then the relic is destroyed" — an HP-death-only save (not the turn-
- * timeout case, which isn't "fatal damage"), one-time-per-run (removed from
- * `run.relics` the instant it fires, so a re-pickup elsewhere in the run
- * would be needed to save a second time). */
+/** Phoenix Feather: revives at 50% HP on fatal damage, then is destroyed.
+ * HP-death-only — doesn't apply to the turn-timeout case. */
 function tryPhoenixFeather(state: GameState): boolean {
   if (state.run.currentHp > 0) return false;
   if (!state.run.relics.includes('phoenix_feather')) return false;
@@ -316,12 +295,9 @@ function runCheckPhase(state: GameState): void {
   }, CRT_WARP_MS);
 }
 
-/** Full Loop Reset (GDD Section 7, Phase 11/13): bank Echoes (already banked
- * live as earned), keep unlockedAnchors/upgrades/skills (all in
- * `persistent`), drop the run's inventory/equipment, then return to the Hub
- * — the Upgrade Shop terminal and Shortcut Gate live there now, not behind
- * an automatic screen transition. Called from the DEATH screen's Continue
- * action. */
+/** Keeps unlockedAnchors/upgrades/skills/Echoes (all in `persistent`), drops
+ * the run's inventory/equipment, then returns to the Hub. Called from the
+ * DEATH screen's Continue action. */
 export function continueAfterDeath(state: GameState): void {
   lossPending = false;
   clearCrtWarp();
@@ -335,17 +311,13 @@ export function continueAfterDeath(state: GameState): void {
 
   state.ui.currentScreen = 'GAME';
   saveGame(state);
-  // Phase 20: write the fresh Hub run immediately — the on-disk snapshot from
-  // right before death fails loadRunSnapshot's currentHp>0 check anyway, but
-  // saving here means a reload before the next move resumes straight back
-  // into the Hub instead of falling through to TITLE for an extra click.
+  // Write the fresh Hub run immediately so a reload before the next move
+  // resumes straight into the Hub instead of falling through to TITLE.
   saveRunSnapshot(state);
 }
 
-// Hit-Stop & Screen Shake (Section 11 #1): the engine's first genuinely async
-// turn-resolution step. `busy` is checked by movement.ts/skills.ts's keydown
-// handlers so a key mashed during the freeze is cleanly ignored, not queued
-// or dropped mid-turn (which could otherwise overlap two Enemy Phases).
+// `busy` is checked by movement.ts/skills.ts's keydown handlers so a key
+// mashed during the hit-stop freeze is ignored, not queued mid-turn.
 const HIT_STOP_MS = 100;
 let busy = false;
 export function isTurnBusy(): boolean {
@@ -356,7 +328,7 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Screen Shake: pure CSS on #game only (never the HUD, so numbers stay readable). */
+/** Pure CSS, on #game only — never the HUD, so numbers stay readable. */
 function triggerScreenShake(): void {
   const el = document.querySelector('#game');
   if (!el) return;
@@ -374,17 +346,12 @@ export async function resolvePlayerTurn(state: GameState, actionKind: PlayerActi
   }
   runEnemyPhase(state);
   runTickPhase(state, actionKind);
-  // Cheat Mode (Inventory toggle, testing/QA only): heal to full before the
-  // Check Phase can evaluate a loss — after Enemy/Tick Phase so it covers
-  // every HP-loss source in one place (bump attacks, Burn/Frost Hazard
-  // ticks, telegraph AOE damage) rather than hooking each individually.
+  // Heal to full after Enemy/Tick Phase so Cheat Mode covers every HP-loss
+  // source (bump attacks, hazard ticks, telegraph AOE) in one place.
   if (state.persistent.cheatModeEnabled) state.run.currentHp = state.run.maxHp;
   runCheckPhase(state);
-  // Phase 20 (mobile background/reload survival): snapshot the live run after
-  // every turn so a discarded/reloaded tab can resume mid-floor instead of
-  // dropping back to TITLE. Saved unconditionally (Hub included, death/
-  // timeout included) — loadRunSnapshot's validation on the read side is what
-  // decides whether a given snapshot is actually resumable.
+  // Snapshot unconditionally (Hub, death, timeout all included) — the read
+  // side's validation decides whether a given snapshot is resumable.
   saveRunSnapshot(state);
   busy = false;
 }

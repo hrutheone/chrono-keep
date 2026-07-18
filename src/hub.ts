@@ -1,9 +1,7 @@
-// The Hub (GDD Section 7: "Biomes, Temporal Anchors & the Hub"), Phase 13.
-// A small, hand-authored Floor 0 (Watchwarden's Post) outside the procedural
-// generator entirely — every loop begins here and every loop reset returns
-// the player here. Contains the Upgrade Shop terminal (movement.ts opens the
-// existing UPGRADE_SHOP overlay when the player steps onto it) and the
-// Shortcut Gate (movement.ts opens menus.ts's destination picker).
+// The Hub: a small, hand-authored Floor 0 (Watchwarden's Post) outside the
+// procedural generator — every loop begins and resets here. Contains the
+// Upgrade Shop terminal and Shortcut Gate (movement.ts opens their overlays
+// when the player steps onto them).
 
 import { enterFloor, TILE } from './mapgen';
 import { DUNGEON_SIZE, floorTurnLimit, resetRunForNewLoop } from './state';
@@ -52,10 +50,9 @@ function buildHub(): HubLayout {
   return { tiles, spawnX, spawnY };
 }
 
-/** Installs the Hub into game state, replacing whatever dungeon was there —
- * no enemies, no items, and (Section 7) a frozen turn counter: turnController's
- * runTickPhase/runCheckPhase both skip entirely while currentFloor === HUB_FLOOR,
- * so the value set here is just what the HUD displays, never decremented. */
+/** Installs the Hub into game state — no enemies, no items, and a frozen turn
+ * counter: turnController skips tick/check phases while currentFloor ===
+ * HUB_FLOOR, so the value set here is just what the HUD displays. */
 export function enterHub(state: GameState): void {
   const hub = buildHub();
   state.run.currentFloor = HUB_FLOOR;
@@ -67,15 +64,13 @@ export function enterHub(state: GameState): void {
   state.dungeon.tiles = hub.tiles;
   state.dungeon.enemies = [];
   state.dungeon.items = [];
-  // Recall Rune safety (Known-good patterns): spawnX/Y must always be set on
-  // floor entry, Hub included, even though nothing in the Hub can use it.
+  // spawnX/Y must always be set on floor entry, even though the Hub has no
+  // Recall Rune to use it.
   state.dungeon.spawnX = hub.spawnX;
   state.dungeon.spawnY = hub.spawnY;
-  // Phase 19: no Stairs in the Hub — set equal to spawn, same "harmless
-  // default where nothing can use it" precedent as spawnX/Y's own comment.
+  // No Stairs in the Hub — set equal to spawn, same harmless-default reasoning.
   state.dungeon.stairsX = hub.spawnX;
   state.dungeon.stairsY = hub.spawnY;
-  // Phase 19: no Cursed Rifts in the Hub.
   state.dungeon.riftX = null;
   state.dungeon.riftY = null;
   state.dungeon.expiringTiles = [];
@@ -88,17 +83,15 @@ export function gateDestinations(state: GameState): number[] {
   return [1, ...state.persistent.unlockedAnchors].sort((a, b) => a - b);
 }
 
-/** Selecting a Shortcut Gate destination (GDD Section 7): starts a fresh run
- * — starter gear, full HP/Stamina, a full per-floor timer — at that floor.
- * Screen/audio transitions are the caller's job (menus.ts), matching how
- * shop.ts/echoes.ts stay UI-agnostic and just persist the resulting state. */
+/** Selecting a Shortcut Gate destination starts a fresh run — starter gear,
+ * full HP/Stamina, a full per-floor timer — at that floor. Screen/audio
+ * transitions are the caller's job (menus.ts); this stays UI-agnostic. */
 export function warpToFloor(state: GameState, floor: number): void {
   resetRunForNewLoop(state, floor);
   enterFloor(state, floor);
   onFloorEntered(state);
   saveGame(state);
-  // Phase 20: write the freshly-warped run immediately — otherwise a reload
-  // before the first move would resume the pre-warp snapshot (still pointing
-  // at the Hub or wherever the player warped from) instead of this floor.
+  // Write the run immediately so a reload before the first move resumes here
+  // instead of the pre-warp snapshot.
   saveRunSnapshot(state);
 }

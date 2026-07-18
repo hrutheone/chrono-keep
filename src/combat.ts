@@ -1,6 +1,5 @@
-// Bumping combat, the Elemental Wheel, and status-effect application
-// (GDD Sections 5 & 7). Turn-phase orchestration lives in turnController.ts;
-// per-enemy movement/targeting lives in enemyAI.ts.
+// Bumping combat, the Elemental Wheel, and status effects. Turn-phase
+// orchestration lives in turnController.ts; enemy movement/targeting in enemyAI.ts.
 
 import {
   ENEMY_NAME,
@@ -27,9 +26,8 @@ import { PLAYER_ID, notifyAttack, notifyDeath, spawnDeathParticles } from './ani
 import { notifyFloatingText } from './floatingText';
 import type { Element, Enemy, GameState, StatusEffect } from './types';
 
-// Hit-Stop (Section 11 #1): set whenever a Weakness hit or a killing blow
-// lands; turnController.ts's resolvePlayerTurn consumes it to freeze for
-// 100ms + Screen Shake before running the Enemy Phase.
+// Set on a Weakness hit or killing blow; turnController.ts consumes it to
+// freeze briefly + screen-shake before the Enemy Phase.
 let hitStopPending = false;
 export function consumeHitStopFlag(): boolean {
   const v = hitStopPending;
@@ -40,9 +38,8 @@ function markHitStop(): void {
   hitStopPending = true;
 }
 
-// Phase 14: the Deep-Biome Regulars are "Regular" tier per the GDD (not
-// Elite), so they belong in this set too — otherwise killing them would
-// silently award 0 Echoes and never drop Time Shards.
+// The Deep-Biome Regulars are Regular tier, not Elite — must be in this set
+// or kills silently award 0 Echoes and never drop Time Shards.
 const NORMAL_ENEMY_KINDS = new Set<Enemy['kind']>([
   'BONE_GRUNT',
   'EMBER_BAT',
@@ -69,8 +66,8 @@ export function computeDamage(atk: number, def: number, attackerEl: Element, def
   return Math.max(1, modified);
 }
 
-/** The player has no fixed element; their equipped weapon's element (Physical if unarmed)
- * stands in for it on both offense and defense, per Section 5's "both directions" rule. */
+/** The player has no fixed element — the equipped weapon's element (Physical
+ * if unarmed) stands in for it on both offense and defense. */
 export function playerElement(state: GameState): Element {
   return state.run.equippedWeapon?.element ?? 'PHYSICAL';
 }
@@ -80,11 +77,10 @@ function randomElement(): Element {
   return ALL_ELEMENTS[Math.floor(Math.random() * ALL_ELEMENTS.length)];
 }
 
-/** Knockback (Glacial Mace, Paradox Staff, Bash): pushes the *defender* away
- * from the player, up to `tiles`, stopping at the first wall/enemy/player.
- * Exported for skills.ts's Bash. */
+/** Pushes the *defender* away from the player up to `tiles`, stopping at the
+ * first wall/enemy/player. Exported for skills.ts's Bash. */
 export function applyKnockback(state: GameState, enemy: Enemy, dx: number, dy: number, tiles: number): void {
-  // [Armored] Elite Affix (Phase 19): Knockback Immunity.
+  // [Armored] affix: immune to Knockback.
   if (enemy.affix === 'armored') return;
   for (let i = 0; i < tiles; i++) {
     const nx = enemy.x + dx;
@@ -100,7 +96,7 @@ export function applyKnockback(state: GameState, enemy: Enemy, dx: number, dy: n
 /** Pull (Tesla Gauntlets): yanks the defender past the player, to the tile on
  * the far side — repositioning them, since they're already adjacent. */
 function applyPull(state: GameState, enemy: Enemy, dx: number, dy: number): void {
-  // [Armored] Elite Affix (Phase 19): Knockback Immunity covers Pull too.
+  // [Armored] affix covers Pull too.
   if (enemy.affix === 'armored') return;
   const nx = state.run.playerX - dx;
   const ny = state.run.playerY - dy;
@@ -111,19 +107,17 @@ function applyPull(state: GameState, enemy: Enemy, dx: number, dy: number): void
   logLine(state, `${ENEMY_NAME[enemy.kind]} is yanked past you!`);
 }
 
-/** Gambler's Dice doubles the Time Shard drop chance (Section 6C/6D). */
+/** Gambler's Dice doubles the Time Shard drop chance. */
 function timeShardChance(state: GameState): number {
   return state.run.equippedAccessory?.passive === 'gamblers_dice' ? TIME_SHARD_DROP_CHANCE * 2 : TIME_SHARD_DROP_CHANCE;
 }
 
-// --- Phase 18 weapon passive parameter maps ---
-// Small per-mechanic lookups (mirroring inventory.ts's DEF_BONUS/HP_BONUS
-// pattern) rather than one long if-chain per weapon — several of the 40
-// weapons share an underlying mechanic at a different amount/chance, so a
-// map keeps `playerAttackEnemy` from re-deriving the same branch 5+ times.
+// --- Weapon passive parameter maps ---
+// Small per-mechanic lookups (mirrors inventory.ts's DEF_BONUS/HP_BONUS) —
+// several weapons share a mechanic at different amounts, so a map avoids
+// repeating the same branch per weapon in playerAttackEnemy.
 
-// "10% chance to drain 1 Stamina from the enemy" (Mage Masher) doesn't map
-// onto this game — enemies have no Stamina stat — so it's reinterpreted as
+// Enemies have no Stamina stat, so Mage Masher's drain is reinterpreted as
 // the player recovering Stamina instead.
 const STAMINA_LEECH_CHANCE: Partial<Record<string, number>> = { stamina_leech_10: 0.1 };
 const SELF_DAMAGE_PER_HIT: Partial<Record<string, number>> = { blood_magic_2: 2 };
@@ -136,34 +130,27 @@ const STUN_VS_CHILLED_CHANCE: Partial<Record<string, number>> = { stun_50_vs_chi
 const EXECUTE_HP_THRESHOLD: Partial<Record<string, number>> = { execute_20_heavy: 0.2 };
 const EXECUTE_CHANCE: Partial<Record<string, number>> = { execute_chance_5: 0.05 };
 const IGNORE_DEF_PCT: Partial<Record<string, number>> = { ignore_def_50: 0.5 };
-// Every weapon passive that damages/hits behind the target, generalized from
-// the original Volt Spear-only 'pierce_1' check.
+// Every weapon passive that also damages whatever's behind the target.
 const PIERCE_PASSIVES = new Set(['pierce_ranged_2', 'pierce_ranged_3_fire_hazard', 'pierce_ranged_2_dash', 'pierce_ranged_2_lifesteal_3']);
 const KNOCKBACK_1_PASSIVES = new Set(['knockback_1', 'ranged_push_3']);
 const HEAVY_STAMINA_PASSIVES = new Set(['heavy_stamina', 'execute_20_heavy']);
 const KILL_TURN_REFUND: Partial<Record<string, number>> = { kill_refund_turn: 1, kill_refund_turns_3: 3 };
-// Mini-Bosses/the Chrono-Lich are exempt from execute/instant-kill weapon
-// passives ("non-boss enemies" per the GDD) — hand-tuned fights, not meant
-// to be skipped by a lucky roll. Listed directly rather than reusing
-// MINI_BOSS_KINDS (declared further down, next to killEnemy) to avoid a
-// temporal-dead-zone ordering issue with this block's earlier position.
+// Mini-Bosses/Chrono-Lich are exempt from execute/instant-kill passives —
+// hand-tuned fights, not meant to be skipped by a lucky roll. Listed
+// directly (not via MINI_BOSS_KINDS below) to avoid a temporal-dead-zone.
 const BOSS_KINDS = new Set<Enemy['kind']>(['INFERNO_GOLEM', 'STORM_CALLER', 'GLACIAL_KNIGHT', 'CHRONO_LICH']);
 
-// --- Phase 19 Chronofact/Elite Affix combat hooks ---
-// Same "small parameter map, checked by string membership" pattern as the
-// weapon-passive maps above — `state.run.relics.includes(...)` reads as a
-// membership check too, so most of these live inline at their call site
-// rather than needing their own map (only relics with a numeric parameter
-// get one, mirroring EXECUTE_HP_THRESHOLD/LIFESTEAL_ON_HIT's shape above).
+// --- Chronofact/Elite Affix combat hooks ---
+// Only relics with a numeric parameter get their own constant here; the
+// rest are checked inline via `state.run.relics.includes(...)`.
 const EXECUTIONERS_COIN_THRESHOLD = 0.3;
 const EXECUTIONERS_COIN_MULT = 1.5;
 const DUELISTS_GLOVE_RADIUS = 5;
 const DUELISTS_GLOVE_MULT = 1.5;
 const BLINKING_DODGE_CHANCE = 0.3;
 
-/** Kotetsu (Phase 18): +1 ATK per consecutive hit on the SAME enemy, reset the
- * instant a different enemy is struck. Module-level like hitStopPending
- * above — there's only ever one active combo, the player's. */
+/** Kotetsu: +1 ATK per consecutive hit on the same enemy, reset the instant a
+ * different enemy is struck. Module-level — only one active combo exists. */
 let comboEnemyId: string | null = null;
 let comboCount = 0;
 function comboBonusDamage(enemy: Enemy): number {
@@ -172,11 +159,9 @@ function comboBonusDamage(enemy: Enemy): number {
   return comboCount - 1;
 }
 
-/** Frost Wand/Volt Spear (existing) and Ashwood Bow/Static Whip (Phase 8) all
- * grant an attack range beyond/instead-of adjacency. Scans (dx, dy) from the
- * player, stopping at the first wall; returns the first enemy found within
- * [min, max] range, or null (including when the equipped weapon has no
- * range profile, i.e. adjacent-only). */
+/** For weapons with an attack range beyond/instead-of adjacency. Scans
+ * (dx, dy) from the player, stopping at the first wall; returns the first
+ * enemy in [min, max] range, or null (incl. adjacent-only weapons). */
 export function findRangedTarget(state: GameState, dx: number, dy: number): Enemy | null {
   const profile = WEAPON_RANGE[state.run.equippedWeapon?.passive ?? ''];
   if (!profile || profile.max <= 1) return null;
@@ -209,24 +194,21 @@ const STATUS_IMMUNITY: Partial<Record<StatusEffect, string>> = {
   STUN: 'stun_immune',
 };
 
-/** `attacker` is optional: only the two direct enemy-inflicted statuses in
- * enemyAttackPlayer below (Frost-Wraith's Chill, Volt-Hound's Stun) have one
- * to give — the other call sites (hazard ticks, telegraphed AOE, skills)
- * have no single "attacker" for Mirror Shield to reflect onto, so they
- * simply don't get the reflect check (same as if the relic weren't held). */
+/** `attacker` is optional — only enemyAttackPlayer's direct hits have one to
+ * give Mirror Shield to reflect onto; other sources (hazards, AOE, skills)
+ * skip the reflect check entirely. */
 export function applyPlayerStatus(state: GameState, status: StatusEffect, turns: number, attacker?: Enemy): void {
   if (state.run.equippedAccessory?.passive === STATUS_IMMUNITY[status]) {
     notifyFloatingText(state.run.playerX, state.run.playerY, 'IMMUNE', 'immune');
     return;
   }
-  // Aura (Phase 18): a temporary blanket immunity window, distinct from any
-  // single accessory's fixed-element immunity above.
+  // Aura: a temporary blanket immunity window, distinct from any single
+  // accessory's fixed-element immunity above.
   if (state.run.statusImmuneTurns > 0) {
     notifyFloatingText(state.run.playerX, state.run.playerY, 'IMMUNE', 'immune');
     return;
   }
-  // Mirror Shield (Phase 19 Relic): Bracing (Wait) reflects any status that
-  // would land on you back onto the attacker instead.
+  // Mirror Shield: Bracing (Wait) reflects any status back onto the attacker.
   if (state.run.braced && attacker && state.run.relics.includes('mirror_shield')) {
     applyEnemyStatus(attacker, status, turns);
     logLine(state, `Mirror Shield reflects it back onto ${ENEMY_NAME[attacker.kind]}!`);
@@ -236,8 +218,8 @@ export function applyPlayerStatus(state: GameState, status: StatusEffect, turns:
   state.run.statusTurns = turns;
   playStatusApplySfx(status);
 
-  // Glass Sword (Phase 18): "breaks permanently if the player is Stunned" —
-  // destroyed outright, not unequipped back into the inventory.
+  // Glass Sword breaks permanently if the player is Stunned — destroyed
+  // outright, not unequipped back into inventory.
   if (status === 'STUN' && state.run.equippedWeapon?.passive === 'glass_cannon') {
     logLine(state, `${state.run.equippedWeapon.name} shatters!`);
     state.run.equippedWeapon = null;
@@ -260,9 +242,8 @@ function randomWalkableTileAwayFrom(state: GameState, x: number, y: number, minD
   return candidates[Math.floor(Math.random() * candidates.length)];
 }
 
-/** [Blinking] Elite Affix (Phase 19): warps the enemy to a random empty
- * orthogonally-adjacent tile instead of taking the hit. Returns false (no
- * open tile to warp to — dodge fizzles, the hit lands normally) if none. */
+/** [Blinking] affix: warps the enemy to a random empty adjacent tile instead
+ * of taking the hit. Returns false (dodge fizzles) if no tile is open. */
 function tryBlinkDodge(state: GameState, enemy: Enemy): boolean {
   if (enemy.affix !== 'blinking' || Math.random() >= BLINKING_DODGE_CHANCE) return false;
   const open = ([[1, 0], [-1, 0], [0, 1], [0, -1]] as const)
@@ -282,7 +263,7 @@ function tryBlinkDodge(state: GameState, enemy: Enemy): boolean {
   return true;
 }
 
-/** [Shielded] Elite Affix (Phase 19): the first 3 hits it takes do nothing. */
+/** [Shielded] affix: the first 3 hits it takes do nothing. */
 function tryShieldBlock(state: GameState, enemy: Enemy): boolean {
   if (!enemy.shieldedHitsLeft) return false;
   enemy.shieldedHitsLeft -= 1;
@@ -291,7 +272,7 @@ function tryShieldBlock(state: GameState, enemy: Enemy): boolean {
   return true;
 }
 
-/** Duelist's Glove (Phase 19 Relic): true if no OTHER awake enemy is within
+/** Duelist's Glove: true if no other awake enemy is within
  * DUELISTS_GLOVE_RADIUS of the defender — a real 1-on-1. */
 function isDuelingAlone(state: GameState, defender: Enemy): boolean {
   return !state.dungeon.enemies.some(
@@ -301,11 +282,9 @@ function isDuelingAlone(state: GameState, defender: Enemy): boolean {
 
 const ELITE_ENEMY_KINDS = new Set<Enemy['kind']>(['TIME_WEAVER']);
 
-// Mini-Bosses (Section 6C, Phase 15): guaranteed drops (themed weapon +
-// Temporal Anchor + 2 Time Shards, all together — not the usual ENEMY_DROPS
-// random-pick table) and a flat +25 Echoes, handled entirely in killEnemy's
-// dedicated branch below rather than the NORMAL_ENEMY_KINDS/ELITE_ENEMY_KINDS
-// paths (neither applies to these).
+// Mini-Bosses: guaranteed drops (themed weapon + Anchor + 2 Time Shards, not
+// the usual ENEMY_DROPS roll) + flat 25 Echoes, handled in killEnemy's own
+// branch below (neither NORMAL_ENEMY_KINDS nor ELITE_ENEMY_KINDS applies).
 const MINI_BOSS_KINDS = new Set<Enemy['kind']>(['INFERNO_GOLEM', 'STORM_CALLER', 'GLACIAL_KNIGHT']);
 const MINI_BOSS_WEAPON: Partial<Record<Enemy['kind'], WeaponKey>> = {
   INFERNO_GOLEM: 'IFRITS_BLADE',
@@ -313,17 +292,16 @@ const MINI_BOSS_WEAPON: Partial<Record<Enemy['kind'], WeaponKey>> = {
   GLACIAL_KNIGHT: 'ICE_BRAND',
 };
 
-/** Killing blow source: Execution Stamina Refund (Section 7) only fires for `'skill'`. */
+/** Killing blow source: the Execution Stamina Refund only fires for `'skill'`. */
 export function killEnemy(state: GameState, enemy: Enemy, source: 'bump' | 'skill' = 'bump'): void {
   markHitStop();
   state.dungeon.enemies = state.dungeon.enemies.filter((e) => e.id !== enemy.id);
   notifyDeath(enemy.id, enemy.kind, enemy.x, enemy.y);
   spawnDeathParticles(enemy.x, enemy.y);
 
-  // Phase 19 Elite Affixes: a regular-kind Elite guarantees a Relic-or-
-  // Tier-3-Weapon in place of its kind's normal ENEMY_DROPS roll. [Wealthy]
-  // is its own case below (guaranteed Relic + 50 Echoes, no normal drop at
-  // all) — checked first so it doesn't also run this branch.
+  // A regular-kind Elite guarantees a Relic-or-Tier-3-Weapon instead of its
+  // kind's normal ENEMY_DROPS roll. [Wealthy] is checked first below since
+  // it replaces this entirely (guaranteed Relic + 50 Echoes, no normal drop).
   if (enemy.affix === 'wealthy') {
     awardEchoes(state, 50, 'Wealthy Elite kill');
     const relic = pickRandomUnheldRelic(state.run.relics);
@@ -343,9 +321,8 @@ export function killEnemy(state: GameState, enemy: Enemy, source: 'bump' | 'skil
     state.dungeon.items.push({ item: createTimeShard(`${enemy.id}-shard`), x: enemy.x, y: enemy.y });
   }
 
-  // Gunpowder Flask (Phase 19 Relic): a Burning death explodes in a 3x3,
-  // dealing your ATK to other nearby enemies (not the player — this is a
-  // combat-only offensive relic).
+  // Gunpowder Flask: a Burning death explodes in a 3x3, dealing your ATK to
+  // nearby enemies (not the player).
   if (enemy.status === 'BURN' && state.run.relics.includes('gunpowder_flask')) {
     const blastAtk = totalAtk(state);
     for (const other of state.dungeon.enemies) {
@@ -358,8 +335,8 @@ export function killEnemy(state: GameState, enemy: Enemy, source: 'bump' | 'skil
     logLine(state, 'Gunpowder Flask detonates the corpse!');
   }
 
-  // [Volatile] Elite Affix (Phase 19): explodes on death, hitting the player
-  // for its own ATK + a Stun if they're within the 3x3 blast.
+  // [Volatile] affix: explodes on death, hitting the player for its own ATK
+  // + a Stun if within the 3x3 blast.
   if (enemy.affix === 'volatile' && Math.abs(state.run.playerX - enemy.x) <= 1 && Math.abs(state.run.playerY - enemy.y) <= 1) {
     const blastDmg = computeDamage(enemy.attack, totalDef(state), enemy.element, playerElement(state));
     state.run.currentHp = Math.max(0, state.run.currentHp - blastDmg);
@@ -390,7 +367,7 @@ export function killEnemy(state: GameState, enemy: Enemy, source: 'bump' | 'skil
     logLine(state, 'Vampire Tooth pulses — +1 HP.');
   }
 
-  // Vampire's Cape (Phase 19 Relic): "bump kills" specifically, not skill kills.
+  // Vampire's Cape: bump kills specifically, not skill kills.
   if (source === 'bump' && state.run.relics.includes('vampires_cape')) {
     state.run.currentHp = Math.min(state.run.maxHp, state.run.currentHp + 1);
     logLine(state, "Vampire's Cape pulses — +1 HP.");
@@ -417,9 +394,8 @@ export function killEnemy(state: GameState, enemy: Enemy, source: 'bump' | 'skil
   logLine(state, `${ENEMY_NAME[enemy.kind]} defeated!`);
 }
 
-/** Shared damage-instance resolver: computes/applies damage, plays SFX/floating
- * text/Hit-Stop, and kills on lethal. `source` decides whether a kill grants
- * the Execution Stamina Refund ('skill') or not ('bump', incl. weapon pierce). */
+/** Computes/applies damage, plays SFX/floating text/Hit-Stop, kills on lethal.
+ * `source` gates whether a kill grants the Execution Stamina Refund. */
 function applyDamageInstance(
   state: GameState,
   enemy: Enemy,
@@ -428,10 +404,9 @@ function applyDamageInstance(
   label: string,
   source: 'bump' | 'skill',
 ): boolean {
-  // Phase 19 Elite Affixes: dodge/block checks apply to every damage
-  // instance, not just the primary target — Pierce/Arc/Chain-Lightning hits
-  // can land on a [Blinking]/[Shielded] Elite standing behind/beside the
-  // main target just as easily as a direct hit can.
+  // Dodge/block checks apply to every damage instance, not just the primary
+  // target — Pierce/Arc/Chain-Lightning can hit a [Blinking]/[Shielded]
+  // Elite standing behind/beside the main target too.
   if (tryBlinkDodge(state, enemy) || tryShieldBlock(state, enemy)) return false;
   const dmg = computeDamage(rawAtk, enemy.defense, element, enemy.element);
   const mult = elementalMultiplier(element, enemy.element);
@@ -460,14 +435,14 @@ function placeFireHazard(state: GameState, x: number, y: number, turns: number):
 }
 
 /** Player bump- or ranged-attacks an enemy: weapon element/procs, elemental
- * wheel, death & drops, plus every Phase 8/18 on-hit/on-kill weapon passive. */
+ * wheel, death & drops, and every on-hit/on-kill weapon passive. */
 export function playerAttackEnemy(state: GameState, enemy: Enemy): void {
   const dx = Math.sign(enemy.x - state.run.playerX);
   const dy = Math.sign(enemy.y - state.run.playerY);
   notifyAttack(PLAYER_ID, dx, dy);
 
-  // Phase 19 Elite Affixes: checked before anything else, including Execute
-  // — a dodged/blocked hit never happened, full stop.
+  // Checked before anything else, including Execute — a dodged/blocked hit
+  // never happened, full stop.
   if (tryBlinkDodge(state, enemy) || tryShieldBlock(state, enemy)) return;
 
   const weapon = state.run.equippedWeapon;
@@ -475,8 +450,8 @@ export function playerAttackEnemy(state: GameState, enemy: Enemy): void {
   const mult = elementalMultiplier(element, enemy.element);
   const atk = totalAtk(state) + elementSynergyBonus(state, element);
 
-  // Execute (Phase 18: Rune Axe's HP-threshold, Deathbringer's flat chance) —
-  // checked before normal damage; exempt from Mini-Bosses/the Chrono-Lich.
+  // Execute (Rune Axe's HP-threshold, Deathbringer's flat chance) — checked
+  // before normal damage; exempt from Mini-Bosses/the Chrono-Lich.
   if (weapon && !BOSS_KINDS.has(enemy.kind)) {
     const execThreshold = EXECUTE_HP_THRESHOLD[weapon.passive];
     const execChance = EXECUTE_CHANCE[weapon.passive];
@@ -505,11 +480,11 @@ export function playerAttackEnemy(state: GameState, enemy: Enemy): void {
     state.run.whetstoneCharge = false;
     logLine(state, 'Whetstone doubles the blow!');
   }
-  // Executioner's Coin (Phase 19 Relic): +50% vs. a target below 30% HP.
+  // Executioner's Coin: +50% vs. a target below 30% HP.
   if (state.run.relics.includes('executioners_coin') && enemy.hp / enemy.maxHp < EXECUTIONERS_COIN_THRESHOLD) {
     dmg = Math.round(dmg * EXECUTIONERS_COIN_MULT);
   }
-  // Duelist's Glove (Phase 19 Relic): +50% in a real 1-on-1.
+  // Duelist's Glove: +50% in a real 1-on-1.
   if (state.run.relics.includes('duelists_glove') && isDuelingAlone(state, enemy)) {
     dmg = Math.round(dmg * DUELISTS_GLOVE_MULT);
   }
@@ -520,17 +495,15 @@ export function playerAttackEnemy(state: GameState, enemy: Enemy): void {
   if (mult > 1) markHitStop();
   notifyFloatingText(enemy.x, enemy.y, mult > 1 ? `${dmg} CRIT!` : `${dmg}`, mult > 1 ? 'crit' : 'damage');
 
-  // Ranged Stamina Tax (Next-Task.md Balance Fixes): any weapon that can
-  // attack from range costs 1 Stamina per basic attack (capped at 0, never
-  // blocks the swing) — limits pure kiting, since running dry also means no
-  // Dash/skills until it regenerates. Same silent-deduction precedent as
-  // HEAVY_STAMINA_PASSIVES below.
+  // Ranged Stamina Tax: any weapon that can attack from range costs 1
+  // Stamina per basic attack (capped at 0) — limits pure kiting, since
+  // running dry blocks Dash/skills too.
   if (WEAPON_RANGE[weapon?.passive ?? '']) {
     state.run.currentStamina = Math.max(0, state.run.currentStamina - 1);
   }
 
-  // Static Generator (Phase 19 Relic): consumes its charge (built up by
-  // movement.ts's step counter) to auto-Stun this hit's target.
+  // Static Generator: consumes its charge (built by movement.ts's step
+  // counter) to auto-Stun this hit's target.
   if (state.run.staticGenCharged) {
     state.run.staticGenCharged = false;
     applyEnemyStatus(enemy, 'STUN', 1);
@@ -575,9 +548,8 @@ export function playerAttackEnemy(state: GameState, enemy: Enemy): void {
     if (isWalkableAt(state, bx, by)) placeFireHazard(state, bx, by, 4);
   }
 
-  // Pierce (generalized from the original Volt Spear-only check): also
-  // damages whatever's directly behind the target, as its own damage
-  // instance (never grants an Execution Refund).
+  // Pierce: also damages whatever's directly behind the target, as its own
+  // damage instance (never grants an Execution Refund).
   if (PIERCE_PASSIVES.has(weapon?.passive ?? '')) {
     const bx = enemy.x + dx;
     const by = enemy.y + dy;
@@ -597,8 +569,8 @@ export function playerAttackEnemy(state: GameState, enemy: Enemy): void {
   }
 
   // Cleave-front (Ifrit's Blade): hits the 2 tiles beyond the primary
-  // target, same line, for an extra 1 Stamina — a bump-only weapon (no
-  // WEAPON_RANGE entry), so counting from the player's own tile is correct.
+  // target for an extra 1 Stamina. Bump-only weapon, so counting from the
+  // player's own tile is correct.
   if (weapon?.passive === 'cleave_3_front' && state.run.currentStamina >= 1) {
     state.run.currentStamina -= 1;
     for (let i = 2; i <= 3; i++) {
@@ -636,8 +608,7 @@ export function playerAttackEnemy(state: GameState, enemy: Enemy): void {
     return;
   }
 
-  // Knockback / Pull (Section 6A/8, generalized Phase 18): repositions the
-  // defender, not the attacker.
+  // Knockback / Pull: repositions the defender, not the attacker.
   if (KNOCKBACK_1_PASSIVES.has(weapon?.passive ?? '')) {
     applyKnockback(state, enemy, dx, dy, 1);
   } else if (weapon?.passive === 'knockback_2_randomize_element') {
@@ -668,10 +639,9 @@ export function playerAttackEnemy(state: GameState, enemy: Enemy): void {
     }
   }
 
-  // Innate Pushback (Next-Task.md Balance Fixes): a weapon that literally
-  // cannot hit adjacent (min range > 1, e.g. Ash Wand/Elven Bow) shoves its
-  // target back on every hit — otherwise a closing enemy permanently jams
-  // the weapon the instant it reaches adjacency.
+  // A weapon that can't hit adjacent (min range > 1, e.g. Ash Wand/Elven Bow)
+  // shoves its target back on every hit — otherwise a closing enemy
+  // permanently jams the weapon once it reaches adjacency.
   const rangeProfile = WEAPON_RANGE[weapon?.passive ?? ''];
   if (rangeProfile && rangeProfile.min > 1) {
     applyKnockback(state, enemy, dx, dy, 1);
@@ -697,8 +667,8 @@ export function playerAttackEnemy(state: GameState, enemy: Enemy): void {
   }
 }
 
-/** Enemy bump-attacks the player: wheel modifier vs. the player's weapon element, status procs.
- * Ice Aegis (Section 6B) blocks the hit entirely while it has charges. */
+/** Enemy bump-attacks the player: wheel modifier vs. the player's weapon
+ * element, status procs. Ice Aegis blocks the hit entirely while charged. */
 export function enemyAttackPlayer(state: GameState, enemy: Enemy): void {
   notifyAttack(enemy.id, Math.sign(state.run.playerX - enemy.x), Math.sign(state.run.playerY - enemy.y));
 
@@ -710,9 +680,8 @@ export function enemyAttackPlayer(state: GameState, enemy: Enemy): void {
     return;
   }
 
-  // Reflect Barrier (Phase 18): blocks the hit and returns 3x the player's
-  // current ATK as damage — checked alongside Ice Aegis, another
-  // charge-based full block, but its own independent charge pool.
+  // Reflect Barrier: blocks the hit and returns 3x the player's current ATK
+  // as damage — its own independent charge pool from Ice Aegis.
   if (state.run.reflectBarrierCharges > 0) {
     state.run.reflectBarrierCharges -= 1;
     const reflectDmg = computeDamage(totalAtk(state) * 3, enemy.defense, playerElement(state), enemy.element);
@@ -724,10 +693,8 @@ export function enemyAttackPlayer(state: GameState, enemy: Enemy): void {
     return;
   }
 
-  // Save the Queen (Phase 18): negates the first instance of HP damage taken
-  // on every floor — a one-shot-per-floor block, checked before Ice Aegis's
-  // charge-based one so a Save the Queen wielder never burns a charge AND
-  // the negation on the same hit (Ice Aegis already returned above if it fired).
+  // Save the Queen: negates the first HP damage taken on every floor —
+  // checked after Ice Aegis so a hit never burns a charge AND the negation.
   if (state.run.equippedWeapon?.passive === 'negate_first_hit_per_floor' && !state.run.floorFirstHitNegated) {
     state.run.floorFirstHitNegated = true;
     logLine(state, `${state.run.equippedWeapon.name} negates ${ENEMY_NAME[enemy.kind]}'s blow!`);
@@ -735,9 +702,8 @@ export function enemyAttackPlayer(state: GameState, enemy: Enemy): void {
     return;
   }
 
-  // [Cursed] Elite Affix (Phase 19): deals no HP damage at all — instead
-  // steals 3 Turns from the floor clock. Checked after every full-block
-  // above (Ice Aegis/Reflect Barrier/Save the Queen can still stop it).
+  // [Cursed] affix: deals no HP damage — steals 3 Turns instead. Checked
+  // after every full-block above (still stoppable by them).
   if (enemy.affix === 'cursed') {
     state.run.turnsRemaining = Math.max(0, state.run.turnsRemaining - 3);
     logLine(state, `${ENEMY_NAME[enemy.kind]} steals 3 Turns from you!`);

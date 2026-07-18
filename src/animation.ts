@@ -1,9 +1,6 @@
-// Lightweight, render-only animation layer (idle/walk/attack/damage/die).
-// Turn resolution mutates GameState in one synchronous jump per action;
-// this module diffs each frame's entity snapshot against the last one to
-// infer movement and damage, and exposes two explicit hooks (notifyAttack,
-// notifyDeath) for events whose intent can't be read back out of a diff.
-// Nothing here ever mutates GameState — render.ts is the only reader.
+// Render-only animation layer: diffs each frame's entity snapshot against the
+// last one to infer movement/damage, plus two explicit hooks (notifyAttack,
+// notifyDeath) for intent a diff can't recover. Never mutates GameState.
 
 import { COLOR_ENEMY_LIGHT } from './palette';
 import type { Enemy, GameState } from './types';
@@ -12,7 +9,7 @@ const MOVE_MS = 120;
 const ATTACK_MS = 150;
 const HIT_FLASH_MS = 150;
 const DEATH_MS = 350;
-const IDLE_PERIOD_MS = 1600; // slow breathing cycle (GDD Section 4)
+const IDLE_PERIOD_MS = 1600; // slow breathing cycle
 const ATTACK_LUNGE = 0.25; // tile-fractions
 const IDLE_BOB_PX = 2; // sine amplitude: +/- canvas pixels at an 8px tile
 
@@ -113,9 +110,7 @@ export function notifyDeath(id: string, kind: GhostKind, x: number, y: number, f
   ghosts.set(id, { kind, x, y, facing, start: performance.now() });
 }
 
-// 1-Bit Pixel Particles (Section 11): a small pooled scatter-and-fade burst,
-// same render-only/diff-free-of-gameplay-state philosophy as the rest of this
-// module. Reuses the existing palette (no new accent colors).
+// Small pooled scatter-and-fade particle burst.
 interface Particle {
   x: number;
   y: number;
@@ -129,11 +124,9 @@ interface Particle {
 const particles: Particle[] = [];
 const PARTICLE_MAX = 200; // hard cap so a chain of kills can't grow this unbounded
 
-/** Scatters 10-15 single-pixel particles outward from (x, y), in `color`
- * (default: the enemy-alarm red, for the original death-burst use). Shared
- * primitive — `spawnDeathParticles` is the death-specific call site,
- * `spawnEffectParticles` (below) the same thing under a name that reads
- * right for skill/attack VFX. */
+/** Scatters 10-15 single-pixel particles outward from (x, y) in `color`.
+ * `spawnEffectParticles` below is the same primitive under a name that
+ * reads right for skill/attack VFX call sites. */
 export function spawnDeathParticles(x: number, y: number, color: string = COLOR_ENEMY_LIGHT): void {
   const now = performance.now();
   const count = 10 + Math.floor(Math.random() * 6);
@@ -152,8 +145,6 @@ export function spawnDeathParticles(x: number, y: number, color: string = COLOR_
   }
 }
 
-/** Skill/Attack VFX: same burst as `spawnDeathParticles`, named for its
- * actual call sites (a skill cast, not a kill). */
 export const spawnEffectParticles = spawnDeathParticles;
 
 export interface ParticleVisual {
@@ -180,9 +171,8 @@ export function getParticles(): ParticleVisual[] {
   return out;
 }
 
-// Beams (Skill/Attack VFX): an instant line flash simultaneous with a ranged
-// hit (Volt-Turret today; Storm-Caller's Chain Bolt next phase) — distinct
-// from dungeon.telegraphTiles, which is a multi-turn advance warning, not a
+// An instant line flash simultaneous with a ranged hit — distinct from
+// dungeon.telegraphTiles, which is a multi-turn advance warning, not a
 // same-instant flash.
 const BEAM_MS = 180;
 interface Beam {
@@ -258,11 +248,9 @@ export function getEntityVisual(id: string, logicalX: number, logicalY: number):
       tileY += pulse.dy * k;
     }
   } else if (moveT >= 1) {
-    // Idle bob only when neither mid-move nor mid-attack: a slow Math.sin()
-    // vertical drift (+/- IDLE_BOB_PX canvas pixels, GDD Section 4) so
-    // single-frame spritesheet cells read as breathing/floating. Each entity
+    // Idle bob only when neither mid-move nor mid-attack: a slow sine
+    // vertical drift so single-frame sprites read as breathing. Each entity
     // keeps its own random idlePhase so a room never bobs in lockstep.
-    // render.ts rounds final pixel positions, keeping the art on whole pixels.
     const phase = ((now + track.idlePhase) % IDLE_PERIOD_MS) / IDLE_PERIOD_MS;
     tileY += Math.sin(phase * Math.PI * 2) * (IDLE_BOB_PX / 8);
   }
