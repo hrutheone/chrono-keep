@@ -410,6 +410,26 @@ body {
   width: 100%;
 }
 
+/* Equipped sign: the Weapon/Accessory slot buttons read as plain bordered
+ * buttons like everything else in the menu otherwise — this marks which one
+ * is your actual current gear at a glance (only shown when something's
+ * actually equipped, never for the "None" state). */
+.equip-slot.equipped {
+  border-color: var(--color-light);
+}
+
+.equipped-badge {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 4px;
+  font-size: 10px;
+  font-weight: bold;
+  letter-spacing: 0.03em;
+  background: var(--color-light);
+  color: var(--color-bg);
+  vertical-align: middle;
+}
+
 .danger-banner {
   color: var(--color-light);
   border: 1px solid var(--color-light);
@@ -562,10 +582,18 @@ body {
   opacity: 1;
 }
 
+/* Bounded height + its own scrollbar: a long lore string (some run 200+
+ * characters) used to just grow .item-detail's total height with no cap,
+ * pushing the Equip/Melt buttons further down each time and shrinking
+ * .inventory-grid above by however much room that took — the buttons'
+ * position/size should stay put regardless of description length, so the
+ * description scrolls internally instead of the whole dialog reflowing. */
 .item-detail-lore {
   color: var(--color-mid);
   opacity: 1;
   font-style: italic;
+  max-height: 4.5em;
+  overflow-y: auto;
 }
 
 /* Equipped-slot Stat Block: same treatment, always visible (unlike

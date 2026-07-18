@@ -404,19 +404,16 @@ function renderStatusTab(state: GameState): string {
       <div class="stat-line">Total DEF: ${totalDef(state)}${run.braced ? ' (Braced)' : ''}</div>
       <div class="stat-line">Status: ${run.status === 'NONE' ? 'Normal' : run.status}</div>
       <div class="equip-slot-wrap">
-        <button class="equip-slot" data-action="unequip-weapon"${weaponLore ? ` title="${weaponLore.replace(/"/g, '&quot;')}"` : ''}>Weapon: ${run.equippedWeapon ? run.equippedWeapon.name : 'None'}</button>
+        <button class="equip-slot${run.equippedWeapon ? ' equipped' : ''}" data-action="unequip-weapon"${weaponLore ? ` title="${weaponLore.replace(/"/g, '&quot;')}"` : ''}>Weapon: ${run.equippedWeapon ? run.equippedWeapon.name : 'None'}${run.equippedWeapon ? ' <span class="equipped-badge">EQUIPPED</span>' : ''}</button>
         ${weaponStat ? `<div class="equip-stat">${weaponStat}</div>` : ''}
         ${weaponLore ? `<div class="equip-lore">${weaponLore}</div>` : ''}
       </div>
       <div class="equip-slot-wrap">
-        <button class="equip-slot" data-action="unequip-accessory"${accessoryLore ? ` title="${accessoryLore.replace(/"/g, '&quot;')}"` : ''}>Accessory: ${run.equippedAccessory ? run.equippedAccessory.name : 'None'}</button>
+        <button class="equip-slot${run.equippedAccessory ? ' equipped' : ''}" data-action="unequip-accessory"${accessoryLore ? ` title="${accessoryLore.replace(/"/g, '&quot;')}"` : ''}>Accessory: ${run.equippedAccessory ? run.equippedAccessory.name : 'None'}${run.equippedAccessory ? ' <span class="equipped-badge">EQUIPPED</span>' : ''}</button>
         ${accessoryStat ? `<div class="equip-stat">${accessoryStat}</div>` : ''}
         ${accessoryLore ? `<div class="equip-lore">${accessoryLore}</div>` : ''}
       </div>
       ${danger ? '<div class="danger-banner">DANGER — actions cost 1 turn</div>' : ''}
-      <button class="cheat-toggle${state.persistent.cheatModeEnabled ? ' active' : ''}" data-action="toggle-cheat-mode">
-        Cheat Mode: ${state.persistent.cheatModeEnabled ? 'ON' : 'OFF'}
-      </button>
     </div>`;
 }
 
@@ -646,8 +643,9 @@ const HELP_ROWS: readonly [string, string, string][] = [
 
 /** Settings & Help tab: real Mute/Volume controls (previously keyboard-only —
  * M / [ / ] in audio.ts's installAudioControls, with no on-screen widget at
- * all) above the existing static keybind table. */
-function renderSettingsTab(): string {
+ * all), the Cheat Mode toggle (moved here from Status — a testing/QA setting,
+ * not a character stat), and the existing static keybind table. */
+function renderSettingsTab(state: GameState): string {
   const rows = HELP_ROWS.map(
     ([key, action, screen]) =>
       `<div class="help-row"><span class="help-key">${key}</span><span class="help-action">${action}</span><span class="help-screen">${screen}</span></div>`,
@@ -662,6 +660,9 @@ function renderSettingsTab(): string {
         <span class="stat-line">Volume: ${isMuted() ? 'Muted' : `${volumePct}%`}</span>
         <button data-action="volume-up">+</button>
       </div>
+      <button class="cheat-toggle${state.persistent.cheatModeEnabled ? ' active' : ''}" data-action="toggle-cheat-mode">
+        Cheat Mode: ${state.persistent.cheatModeEnabled ? 'ON' : 'OFF'}
+      </button>
       <h2>Controls</h2>
       <div class="help-list">${rows}</div>
     </div>`;
@@ -687,7 +688,7 @@ function renderMenu(state: GameState): string {
     : menuTab === 'chronofacts' ? renderChronofactsTab(state)
     : menuTab === 'skill' ? renderSkillsTab(state)
     : menuTab === 'bestiary' ? renderBestiaryTab(state)
-    : renderSettingsTab();
+    : renderSettingsTab(state);
 
   const tabButtons = TAB_DEFS.map(
     ({ id, label }) => `<button class="tab-btn" data-action="menu-tab" data-tab="${id}" ${menuTab === id ? 'disabled' : ''}>${label}</button>`,
