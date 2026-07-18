@@ -11,11 +11,15 @@ import type { Enemy, GameState, WorldItem } from './types';
 import { DUNGEON_SIZE, floorTurnLimit } from './state';
 import { hash, mulberry32 } from './rng';
 import {
+  applyEliteAffixStats,
   createEnemy,
+  ELITE_AFFIX_KEYS,
+  ELITE_SPAWN_CHANCE,
   enemyCountRangeForFloor,
   enemyPoolForFloor,
   rollChestItem,
   scaleEnemyForDepth,
+  scaleEnemyForEchoMagnet,
   scaleEnemyForNgPlus,
   type EnemyKind,
 } from './content';
@@ -30,6 +34,10 @@ export const TILE = {
   BOSS_GATE: 6,
   FIRE_HAZARD: 7,
   SHOP_TERMINAL: 8,
+  // Phase 18: Scourge's expiring-tile hazard (DEF-piercing Frost damage per
+  // turn, mirroring Fire Hazard's shape) — never generator-placed, only
+  // ever laid down by the skill itself via dungeon.expiringTiles.
+  FROST_HAZARD: 9,
 } as const;
 
 /** Turn-budget guarantee: spawn -> Stairs within 40 walked tiles. */
@@ -38,16 +46,17 @@ export const PATH_BUDGET = 40;
 const MAX_ATTEMPTS = 50;
 const N = DUNGEON_SIZE;
 
-// Fire Hazard is walkable (that's the point — standing on it inflicts Burn).
-// Shortcut Gate and Shop Terminal (Phase 13) only ever appear in the
-// hand-authored Hub (src/hub.ts) and are always walkable there — stepping
-// onto either is what triggers movement.ts's interaction. None of these
-// three are ever placed by the procedural generator itself.
+// Fire/Frost Hazard are walkable (that's the point — standing on one deals
+// its damage). Shortcut Gate and Shop Terminal (Phase 13) only ever appear
+// in the hand-authored Hub (src/hub.ts) and are always walkable there —
+// stepping onto either is what triggers movement.ts's interaction. None of
+// these are ever placed by the procedural generator itself.
 const WALKABLE = new Set<number>([
   TILE.FLOOR,
   TILE.DOOR,
   TILE.STAIRS,
   TILE.FIRE_HAZARD,
+  TILE.FROST_HAZARD,
   TILE.SHORTCUT_GATE,
   TILE.SHOP_TERMINAL,
 ]);
@@ -88,6 +97,10 @@ export interface GeneratedFloor {
   spawnY: number;
   stairsX: number;
   stairsY: number;
+  // Phase 19: null on most floors (rare). A coordinate, not a `tiles` grid
+  // entry — see types.ts's dungeon.riftX/Y comment for why.
+  riftX: number | null;
+  riftY: number | null;
 }
 
 type Rng = () => number;
@@ -314,6 +327,15 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
   const spawnEnemy = (kind: EnemyKind, x: number, y: number): void => {
     const enemy = createEnemy(kind, `f${floorNumber}-enemy-${enemies.length}`, x, y);
     scaleEnemyForDepth(enemy, floorNumber);
+    // Phase 19 Elite Affixes: rolled from the SAME seeded rng stream as
+    // everything else here (not Math.random()) — floor generation must stay
+    // a pure function of (rngSeed, floorNumber) for determinism
+    // (verify-phase1.ts's 9900-floor determinism check covers this).
+    if (rng() < ELITE_SPAWN_CHANCE) {
+      const affix = pick(rng, ELITE_AFFIX_KEYS);
+      enemy.affix = affix;
+      applyEliteAffixStats(enemy, affix);
+    }
     enemies.push(enemy);
   };
 
@@ -406,6 +428,23 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
     });
   }
 
+  // 9. Cursed Rift (Phase 19): rare, floors 3+ only (a gentle early ramp —
+  // no sacrifice-for-power choices on Floor 1-2). A coordinate sitting on
+  // an ordinary FLOOR tile, not its own tile type — see GeneratedFloor's
+  // riftX/Y comment for why. At most one per floor.
+  let riftX: number | null = null;
+  let riftY: number | null = null;
+  if (floorNumber >= 3 && rng() < 0.12) {
+    const spots = candidates(
+      (x, y) => tiles[y][x] === TILE.FLOOR && distSpawn[y * N + x] >= 3 && !occupied.has(y * N + x),
+    );
+    if (spots.length > 0) {
+      const pos = pick(rng, spots);
+      riftX = pos.x;
+      riftY = pos.y;
+    }
+  }
+
   return {
     tiles,
     enemies,
@@ -414,6 +453,8 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
     spawnY: spawn.y,
     stairsX: stairs.x,
     stairsY: stairs.y,
+    riftX,
+    riftY,
   };
 }
 
@@ -428,10 +469,18 @@ export function enterFloor(state: GameState, floorNumber: number): GeneratedFloo
   state.dungeon.height = N;
   state.dungeon.tiles = floor.tiles;
   state.dungeon.enemies = floor.enemies;
-  for (const enemy of state.dungeon.enemies) scaleEnemyForNgPlus(enemy, state.persistent.ngPlusLevel);
+  const echoMagnetActive = state.run.relics.includes('echo_magnet');
+  for (const enemy of state.dungeon.enemies) {
+    scaleEnemyForNgPlus(enemy, state.persistent.ngPlusLevel);
+    scaleEnemyForEchoMagnet(enemy, echoMagnetActive);
+  }
   state.dungeon.items = floor.items;
   state.dungeon.spawnX = floor.spawnX;
   state.dungeon.spawnY = floor.spawnY;
+  state.dungeon.stairsX = floor.stairsX;
+  state.dungeon.stairsY = floor.stairsY;
+  state.dungeon.riftX = floor.riftX;
+  state.dungeon.riftY = floor.riftY;
   state.dungeon.expiringTiles = [];
   state.dungeon.telegraphTiles = [];
   return floor;
@@ -453,6 +502,9 @@ export function floorToAscii(floor: GeneratedFloor): string {
     CINDER_SHAMAN: 'C',
     VOLT_HOUND: 'h',
     FROST_SENTINEL: 'S',
+    INFERNO_GOLEM: 'G',
+    STORM_CALLER: 'O',
+    GLACIAL_KNIGHT: 'N',
   };
   for (const e of floor.enemies) grid[e.y][e.x] = enemyGlyphs[e.kind];
   grid[floor.spawnY][floor.spawnX] = '@';

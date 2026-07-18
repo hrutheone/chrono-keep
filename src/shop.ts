@@ -8,22 +8,33 @@ import { saveGame } from './persistence';
 import { playPurchaseSfx, playSkillUnlockSfx } from './audio';
 import type { GameState } from './types';
 
-export type StatTrack = 'maxHpUpgrade' | 'maxStamUpgrade' | 'turnBonusUpgrade';
+export type StatTrack = 'maxHpUpgrade' | 'maxStamUpgrade' | 'turnBonusUpgrade' | 'baseAtkUpgrade';
 
 export const STAT_TRACKS: { track: StatTrack; label: string }[] = [
   { track: 'maxHpUpgrade', label: 'Max HP (+5/lvl)' },
   { track: 'maxStamUpgrade', label: 'Max Stamina (+2/lvl)' },
   { track: 'turnBonusUpgrade', label: 'Turn Bonus (+5/lvl)' },
+  { track: 'baseAtkUpgrade', label: 'Base ATK (+1/lvl)' },
 ];
 
-const STAT_TRACK_COSTS = [10, 20, 35, 55, 80];
+// Phase 17: cap raised from Level 5 to Level 10 (GDD Section 6D) to match
+// the 99-floor stat curve — Levels 6-10 continue the "+40 per level
+// thereafter" rule verbatim from the same GDD line: 80, 120, 160, 200, 240.
+// Base ATK is a distinct, steeper 5-level curve (its own direct damage
+// lever, not a survivability stat) rather than sharing the 10-level array.
+const STAT_TRACK_COSTS: Record<StatTrack, number[]> = {
+  maxHpUpgrade: [10, 20, 35, 55, 80, 120, 160, 200, 240, 280],
+  maxStamUpgrade: [10, 20, 35, 55, 80, 120, 160, 200, 240, 280],
+  turnBonusUpgrade: [10, 20, 35, 55, 80, 120, 160, 200, 240, 280],
+  baseAtkUpgrade: [50, 100, 200, 400, 800],
+};
 const SKILL_COSTS = [15, 25, 40];
-export const MAX_STAT_LEVEL = STAT_TRACK_COSTS.length;
 export const MAX_SKILL_LEVEL = SKILL_COSTS.length;
 
 export function statTrackCost(state: GameState, track: StatTrack): number | null {
   const level = state.persistent[track];
-  return level >= MAX_STAT_LEVEL ? null : STAT_TRACK_COSTS[level];
+  const costs = STAT_TRACK_COSTS[track];
+  return level >= costs.length ? null : costs[level];
 }
 
 export function buyStatUpgrade(state: GameState, track: StatTrack): boolean {

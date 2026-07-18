@@ -4,8 +4,16 @@
 // Screens & Music and Progression SFX on top of this same engine.
 
 import { saveAudioSettings } from './persistence';
+import { biomeOf } from './content';
 import { HUB_FLOOR } from './hub';
+import { isArenaFloor, miniBossRepeatNumber } from './arenas';
 import type { Element, GameState, StatusEffect } from './types';
+
+// Floor 99 (Chrono-Lich Arena): not imported from bossArena.ts to avoid a
+// cycle (bossArena.ts -> enemyAI.ts -> audio.ts already) — 99 is the GDD's
+// fixed final-floor count, referenced as a literal in a couple of other
+// modules for the same reason.
+const FINAL_BOSS_FLOOR = 99;
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
@@ -202,10 +210,19 @@ export function playTimeShardSfx(): void {
   tone({ freq: 1500, duration: 0.12, type: 'sine', gain: 0.16, delay: 0.1 });
 }
 
+/** Temporal Anchor pickup (Section 9C: "Extended triumphant fanfare + a deep
+ * 'anchor slam' hit... must outclass the normal Anchor chime"). Every Anchor
+ * in the 99-floor redesign comes from a Mini-Boss kill, so this — the bigger
+ * version — is the only one that still exists; there's no lesser "normal"
+ * pickup source left to outclass. */
 export function playAnchorSfx(): void {
-  tone({ freq: 440, duration: 0.12, type: 'triangle', gain: 0.22 });
-  tone({ freq: 660, duration: 0.12, type: 'triangle', gain: 0.22, delay: 0.1 });
-  tone({ freq: 880, duration: 0.2, type: 'triangle', gain: 0.24, delay: 0.2 });
+  tone({ freq: 440, duration: 0.15, type: 'triangle', gain: 0.22 });
+  tone({ freq: 660, duration: 0.15, type: 'triangle', gain: 0.22, delay: 0.12 });
+  tone({ freq: 880, duration: 0.15, type: 'triangle', gain: 0.24, delay: 0.24 });
+  tone({ freq: 1108.73, duration: 0.35, type: 'triangle', gain: 0.26, delay: 0.36 });
+  // The "anchor slam" — a deep percussive thud under the fanfare's tail.
+  noiseBurst(0.2, 0.2);
+  tone({ freq: 60, duration: 0.4, type: 'sine', gain: 0.24, freqEnd: 35, delay: 0.36 });
 }
 
 export function playEquipSfx(): void {
@@ -287,6 +304,16 @@ export function playLoopResetSfx(): void {
   tone({ freq: 700, duration: 0.4, type: 'triangle', gain: 0.2, freqEnd: 120 });
 }
 
+/** Shortcut Gate warp (Section 9D): a temporal whoosh + arrival chime —
+ * distinct from the Loop Reset "rewind" cue (playLoopResetSfx): a warp is
+ * empowering (an ascending sweep into a bright landing chime), a loop reset
+ * is a failure signal (a descending one). */
+export function playWarpSfx(): void {
+  tone({ freq: 200, duration: 0.3, type: 'sawtooth', gain: 0.18, freqEnd: 900 });
+  tone({ freq: 900, duration: 0.15, type: 'sine', gain: 0.22, delay: 0.28 });
+  tone({ freq: 1200, duration: 0.15, type: 'sine', gain: 0.18, delay: 0.34 });
+}
+
 /** New Game / New Game+ (Section 9D): distinct from a loss-reset — an ascending chime. */
 export function playNewGameSfx(): void {
   tone({ freq: 260, duration: 0.15, type: 'triangle', gain: 0.2, freqEnd: 520 });
@@ -363,13 +390,68 @@ const BOSS_THEME: MusicTrack = {
   ],
 };
 
-type TrackKey = 'title' | 'game' | 'game_tense' | 'boss';
-const TRACKS: Record<TrackKey, MusicTrack> = {
-  title: TITLE_THEME,
-  game: GAME_THEME,
-  game_tense: GAME_THEME_TENSE,
-  boss: BOSS_THEME,
+/** Floor 99 (Chrono-Lich Arena, Section 9C): "Unique final-boss theme,
+ * highest intensity" — deeper base notes, a faster loop, and a sharper
+ * high-register accent than the shared Mini-Boss theme above. */
+const FINAL_BOSS_THEME: MusicTrack = {
+  loopLength: 2.2,
+  notes: [
+    { freq: 82.41, duration: 0.4, time: 0, type: 'sawtooth', gain: 0.14 },
+    { freq: 87.31, duration: 0.4, time: 0.4, type: 'sawtooth', gain: 0.12 },
+    { freq: 98, duration: 0.4, time: 0.8, type: 'sawtooth', gain: 0.14 },
+    { freq: 73.42, duration: 0.5, time: 1.2, type: 'square', gain: 0.13 },
+    { freq: 293.66, duration: 0.3, time: 1.7, type: 'square', gain: 0.1 },
+    { freq: 311.13, duration: 0.3, time: 2, type: 'square', gain: 0.1 },
+  ],
 };
+
+// Per-Biome ambience (Section 9C: "per-Biome timbre variation — waveform/key
+// shift keyed to the Biome's element"). Reuses GAME_THEME's melodic shape,
+// re-keyed by frequency (key shift) and re-voiced by oscillator type
+// (timbre) — the same per-element mappings the Attack SFX already use, so a
+// Biome's ambience and its enemies' hit sounds share one consistent "sound"
+// per element. Mirrors content.ts's enemyPoolForFloor theme cycle exactly.
+const ELEMENT_KEY_SHIFT: Record<Element, number> = {
+  PHYSICAL: 1,
+  FIRE: 1.12,
+  VOLT: 1.19,
+  FROST: 0.89,
+  CHRONO: 1.35,
+};
+
+function biomeElement(biome: number): Element {
+  if (biome === 1) return 'PHYSICAL';
+  if (biome === 2) return 'VOLT';
+  if (biome === 3) return 'FROST';
+  if (biome === 10) return 'CHRONO';
+  const theme = (biome - 4) % 3;
+  return theme === 0 ? 'FIRE' : theme === 1 ? 'VOLT' : 'FROST';
+}
+
+function gameThemeForElement(element: Element): MusicTrack {
+  const shift = ELEMENT_KEY_SHIFT[element];
+  const type = ELEMENT_TYPE[element];
+  return { loopLength: GAME_THEME.loopLength, notes: GAME_THEME.notes.map((n) => ({ ...n, freq: n.freq * shift, type })) };
+}
+
+/** Mini-Boss Arena theme (Section 9C: "pitch/tempo may step up with Biome
+ * depth"): each empowered repeat (Mk II at F40-60, Mk III at F70-90) shifts
+ * the shared BOSS_THEME up in pitch and slightly faster in tempo. */
+function bossThemeForFloor(floor: number): MusicTrack {
+  const mk = miniBossRepeatNumber(floor);
+  if (mk === 0) return BOSS_THEME;
+  const pitchMult = 1 + mk * 0.12;
+  const tempoMult = 1 - mk * 0.1;
+  return {
+    loopLength: BOSS_THEME.loopLength * tempoMult,
+    notes: BOSS_THEME.notes.map((n) => ({ ...n, freq: n.freq * pitchMult, time: n.time * tempoMult })),
+  };
+}
+
+// A string, not a fixed union: per-Biome/per-Mk tracks are generated on the
+// fly (gameThemeForElement/bossThemeForFloor above), so the set of possible
+// keys isn't enumerable up front the way it was pre-Phase-17.
+type TrackKey = string;
 
 let schedulerTimer: number | null = null;
 let currentTrack: MusicTrack | null = null;
@@ -405,9 +487,9 @@ function schedulerTick(): void {
   }
 }
 
-function playTrack(key: TrackKey): void {
+function playTrack(key: TrackKey, track: MusicTrack): void {
   if (!ctx) return;
-  currentTrack = TRACKS[key];
+  currentTrack = track;
   currentTrackKey = key;
   nextNoteIdx = 0;
   trackStartTime = ctx.currentTime + 0.05;
@@ -436,27 +518,52 @@ function setMusicMuffled(muffled: boolean): void {
   musicFilter.frequency.linearRampToValueAtTime(target, ctx.currentTime + 0.2);
 }
 
-/** Call once per frame: picks TITLE/GAME/tense-GAME/boss music off the current
- * screen/floor/turns-remaining, switching tracks only when it actually
- * changes, and applies Tactical Muffling while a menu is open. */
+/** Call once per frame: picks TITLE / Hub-GAME / per-Biome-GAME / tense-GAME /
+ * Mini-Boss / Floor-99 music off the current screen/floor/turns-remaining,
+ * switching tracks only when the resolved key actually changes, and applies
+ * Tactical Muffling while a menu is open. */
 export function updateMusicForState(state: GameState): void {
   if (!ctx) return; // Not unlocked yet.
 
   const screen = state.ui.currentScreen;
-  const musicScreens = screen === 'GAME' || screen === 'INVENTORY' || screen === 'SKILL_MENU' || screen === 'HELP';
+  const musicScreens = screen === 'GAME' || screen === 'MENU';
   let desired: TrackKey | null = null;
-  if (screen === 'TITLE') desired = 'title';
-  // Hub (Section 9C): "the one place the Anxiety Clock never plays" — always
-  // the calm track, regardless of a possibly-stale turnsRemaining.
-  else if (musicScreens && state.run.currentFloor === HUB_FLOOR) desired = 'game';
-  else if (musicScreens) desired = state.run.currentFloor >= 4 ? 'boss' : state.run.turnsRemaining < 20 ? 'game_tense' : 'game';
+  let desiredTrack: MusicTrack | null = null;
 
-  if (desired !== currentTrackKey) {
-    if (desired === null) stopTrack();
-    else playTrack(desired);
+  if (screen === 'TITLE') {
+    desired = 'title';
+    desiredTrack = TITLE_THEME;
+  } else if (musicScreens && state.run.currentFloor === HUB_FLOOR) {
+    // Hub (Section 9C): "the one place the Anxiety Clock never plays" —
+    // always the calm neutral track, regardless of a possibly-stale
+    // turnsRemaining and independent of any Biome.
+    desired = 'game_hub';
+    desiredTrack = GAME_THEME;
+  } else if (musicScreens) {
+    const floor = state.run.currentFloor;
+    if (floor === FINAL_BOSS_FLOOR) {
+      desired = 'boss_final';
+      desiredTrack = FINAL_BOSS_THEME;
+    } else if (isArenaFloor(floor)) {
+      const mk = miniBossRepeatNumber(floor);
+      desired = `boss_mk${mk}`;
+      desiredTrack = bossThemeForFloor(floor);
+    } else if (state.run.turnsRemaining < 20) {
+      desired = 'game_tense';
+      desiredTrack = GAME_THEME_TENSE;
+    } else {
+      const element = biomeElement(biomeOf(floor));
+      desired = `game_${element}`;
+      desiredTrack = gameThemeForElement(element);
+    }
   }
 
-  setMusicMuffled(screen === 'INVENTORY' || screen === 'SKILL_MENU');
+  if (desired !== currentTrackKey) {
+    if (desired === null || desiredTrack === null) stopTrack();
+    else playTrack(desired, desiredTrack);
+  }
+
+  setMusicMuffled(screen === 'MENU');
 }
 
 // --- The Anxiety Clock (Section 11 Audio #1) ---

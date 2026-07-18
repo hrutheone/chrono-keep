@@ -22,6 +22,7 @@ function migratePersistent(parsed: Record<string, unknown>): GameState['persiste
     maxHpUpgrade: legacy.maxHpUpgrade ?? 0,
     maxStamUpgrade: legacy.maxStamUpgrade ?? 0,
     turnBonusUpgrade: legacy.turnBonusUpgrade ?? 0,
+    baseAtkUpgrade: legacy.baseAtkUpgrade ?? 0,
     skills: legacy.skills ?? { dash: 1 },
     // Small Improvements: pre-existing saves predate the persisted Q/E/R/F
     // loadout — default to whatever their old `run.activeSkills` would have
@@ -39,6 +40,7 @@ function migratePersistent(parsed: Record<string, unknown>): GameState['persiste
     },
     bestiaryKnown: legacy.bestiaryKnown ?? [],
     ngPlusLevel: legacy.ngPlusLevel ?? 0,
+    cheatModeEnabled: legacy.cheatModeEnabled ?? false,
   };
 }
 
@@ -74,6 +76,54 @@ export function hasSave(): boolean {
 export function clearSave(): void {
   try {
     localStorage.removeItem(SAVE_KEY);
+  } catch {
+    // Ignore.
+  }
+}
+
+// Live run persistence (Phase 20: mobile background/reload survival). A
+// second, separate key from SAVE_KEY — `state.run` (HP, inventory, position,
+// current floor) changes every turn, unlike `persistent`, and this snapshot
+// is disposable/best-effort (see loadRunSnapshot's validation) rather than a
+// migration-guaranteed save file, so it's kept out of migratePersistent's
+// contract entirely. `state.dungeon` (tiles/enemies/items) is deliberately
+// NOT included here — main.ts rebuilds it deterministically from
+// `run.currentFloor` on resume instead of serializing enemy/item state.
+const RUN_SAVE_KEY = 'chrono-keep-run-v1';
+
+export function saveRunSnapshot(state: GameState): void {
+  try {
+    localStorage.setItem(RUN_SAVE_KEY, JSON.stringify(state.run));
+  } catch {
+    // Storage unavailable (private mode, quota) — the run continues unsaved.
+  }
+}
+
+/** Returns the saved run snapshot, or null if none exists / it looks stale or
+ * corrupt (same tolerance migratePersistent has for old/bad persistent saves,
+ * just without a field-by-field migration — a resume snapshot this old is
+ * simpler to discard than to patch up). Caller (main.ts) is responsible for
+ * rebuilding `state.dungeon` for the snapshot's floor before installing it. */
+export function loadRunSnapshot(): GameState['run'] | null {
+  try {
+    const raw = localStorage.getItem(RUN_SAVE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) return null;
+    if (typeof parsed.currentHp !== 'number' || parsed.currentHp <= 0) return null;
+    if (typeof parsed.turnsRemaining !== 'number' || parsed.turnsRemaining <= 0) return null;
+    if (typeof parsed.currentFloor !== 'number' || parsed.currentFloor < 0 || parsed.currentFloor > 99) return null;
+    if (typeof parsed.playerX !== 'number' || typeof parsed.playerY !== 'number') return null;
+    if (!Array.isArray(parsed.inventory) || !Array.isArray(parsed.activeSkills)) return null;
+    return parsed as GameState['run'];
+  } catch {
+    return null;
+  }
+}
+
+export function clearRunSnapshot(): void {
+  try {
+    localStorage.removeItem(RUN_SAVE_KEY);
   } catch {
     // Ignore.
   }

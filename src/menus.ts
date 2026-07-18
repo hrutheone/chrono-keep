@@ -6,14 +6,40 @@
 // menu action — never on a per-frame timer — so DOM nodes (and their click
 // listeners/focus) stay stable between user interactions.
 
-import { BESTIARY, ENEMY_NAME, MONSTER_LORE, SKILL_LEVEL_EFFECTS, SKILLS, loreForItem } from './content';
-import { enterFloor } from './mapgen';
-import { onFloorEntered } from './echoes';
+import {
+  ACCESSORY_EFFECT_LABEL,
+  BESTIARY,
+  CONSUMABLE_EFFECT_TEXT,
+  ENEMY_NAME,
+  MONSTER_LORE,
+  POTION_FIXED_TURN_COST,
+  SKILL_LEVEL_EFFECTS,
+  SKILLS,
+  WEAPON_EFFECT_LABEL,
+  itemMeltValue,
+  loreForItem,
+  pickRandomUnheldRelic,
+  relicEffectText,
+  relicLore,
+  relicName,
+} from './content';
+import { spriteCssStyle } from './assets';
+import {
+  ACCESSORY_SPRITE_BY_NAME,
+  CONSUMABLE_SPRITE_BY_NAME,
+  POTION_SPRITE_BY_NAME,
+  RELIC_SPRITE_BY_EFFECT,
+  SPRITES,
+  WEAPON_SPRITE_BY_NAME,
+  type SpriteRef,
+} from './sprites';
 import { HUB_FLOOR, enterHub, gateDestinations, warpToFloor } from './hub';
-import { clearSave, hasSave, saveGame } from './persistence';
+import { clearRunSnapshot, clearSave, hasSave, saveAudioSettings, saveGame, saveRunSnapshot } from './persistence';
 import { continueAfterDeath } from './turnController';
+import { logLine } from './turns';
+import { awardEchoes } from './echoes';
 import { resetRunForNewLoop, resetToNewGame, rerollSeedKeepProgress } from './state';
-import { getMasterVolume, isMuted, playNewGameSfx, playUnlockSfx } from './audio';
+import { getMasterVolume, isMuted, playNewGameSfx, playWarpSfx, setMasterVolume, toggleMuted } from './audio';
 import {
   buySkillUpgrade,
   buyStatUpgrade,
@@ -26,33 +52,72 @@ import {
 } from './shop';
 import {
   INVENTORY_CAP,
-  dropItem,
+  accessoryAtkBonus,
+  accessoryDefBonus,
+  accessoryHpBonus,
+  accessoryStamBonus,
   equipItem,
+  meltItem,
   isThreatNearby,
   totalAtk,
   totalDef,
   unequipAccessory,
   unequipWeapon,
   usePotion,
+  weaponDefBonus,
+  weaponHpBonus,
 } from './inventory';
 import { useConsumable } from './consumables';
 import type { EnemyKind } from './content';
-import type { GameState, Item, Weapon } from './types';
+import type { Accessory, Consumable, GameState, Item, Weapon } from './types';
 
-type MenuScreen = 'INVENTORY' | 'SKILL_MENU';
+// Tile-icon Inventory: every individual Weapon/Accessory/Potion/Consumable
+// has its own sprite (sprites.ts's *_SPRITE_BY_NAME, keyed by Item.name) —
+// a slot reads as "the Rusty Sword" at a glance, not just "a weapon". Falls
+// back to one shared icon per Item.kind (SPRITES.WEAPON/etc., matching the
+// icon world-dropped items render with — render.ts's WORLD_ITEM_REFS) only
+// for a kind with no per-name art at all (ANCHOR/TIME_SHARD/RELIC — each of
+// those is really only ever one specific item already).
+const BY_NAME_FOR_KIND: Partial<Record<Item['kind'], Record<string, SpriteRef>>> = {
+  WEAPON: WEAPON_SPRITE_BY_NAME,
+  ACCESSORY: ACCESSORY_SPRITE_BY_NAME,
+  POTION: POTION_SPRITE_BY_NAME,
+  CONSUMABLE: CONSUMABLE_SPRITE_BY_NAME,
+};
+const INV_ICON_REFS: Partial<Record<Item['kind'], SpriteRef>> = {
+  WEAPON: SPRITES.WEAPON,
+  ACCESSORY: SPRITES.ACCESSORY,
+  POTION: SPRITES.POTION,
+  CONSUMABLE: SPRITES.CONSUMABLE,
+};
+const INV_ICON_SIZE = 24;
+const DETAIL_ICON_SIZE = 40;
+
+function iconStyleForItem(item: Item, size: number): string {
+  const ref = BY_NAME_FOR_KIND[item.kind]?.[item.name] ?? INV_ICON_REFS[item.kind] ?? SPRITES.CHEST;
+  return spriteCssStyle(ref, size);
+}
 
 let lastScreen: GameState['ui']['currentScreen'] | null = null;
 
-// Fun & Feel #1: a tab within the Skill Menu, not a new top-level screen —
-// matches the GDD's own "a Bestiary tab of the pause/skill menu" wording.
-let skillMenuTab: 'skills' | 'bestiary' = 'skills';
+// Unified Menu (Status/Inventory/Chronofacts/Skill/Bestiary/Settings&Help):
+// one flat top-level tab row replacing the old separate INVENTORY/SKILL_MENU/
+// HELP screens (each of which had grown its own internal sub-tabs).
+export type MenuTabId = 'status' | 'inventory' | 'chronofacts' | 'skill' | 'bestiary' | 'settings';
+let menuTab: MenuTabId = 'status';
 
 // Mobile Inventory rework: tapping a grid slot SELECTS it (shows its lore in
 // a dedicated detail panel with explicit Use/Drop buttons) instead of
 // instantly equipping/using/dropping on tap — a stray tap on a crowded touch
-// grid no longer costs the player gear or a consumable. Reset whenever
-// INVENTORY is (re)entered, in render() below.
+// grid no longer costs the player gear or a consumable. Reset whenever the
+// Menu is (re)entered, in render() below.
 let selectedInvIndex: number | null = null;
+
+// Relic Detail Screen (Next-Task.md QoL): the Chronofacts tab, listing
+// `run.relics` — same tap-to-select-then-see-detail shape as the Bag grid
+// above, since relics have no Use/Melt action of their own. Reset alongside
+// selectedInvIndex whenever the Menu is (re)entered.
+let selectedRelicEffect: string | null = null;
 
 // Fun & Feel #6: replaces window.confirm()'s native dialog with a styled
 // overlay. `returnScreen` is captured at call time so Cancel goes back to
@@ -85,8 +150,17 @@ function screenEl(): HTMLElement {
   return document.querySelector<HTMLElement>('#screen-overlay')!;
 }
 
-function toggleScreen(state: GameState, screen: MenuScreen): void {
-  state.ui.currentScreen = state.ui.currentScreen === screen ? 'GAME' : screen;
+/** Opens the unified Menu on a specific tab — or, if it's already open on
+ * that exact tab, closes it (the same keyboard shortcut toggles closed,
+ * matching the old per-screen toggleScreen behavior). Switching to a
+ * DIFFERENT tab while the Menu is already open never closes it. */
+function openMenuTab(state: GameState, tab: MenuTabId): void {
+  if (state.ui.currentScreen === 'MENU' && menuTab === tab) {
+    state.ui.currentScreen = 'GAME';
+  } else {
+    menuTab = tab;
+    state.ui.currentScreen = 'MENU';
+  }
 }
 
 export type SkillSlot = 'Q' | 'E' | 'R' | 'F';
@@ -108,6 +182,11 @@ function assignSkill(state: GameState, skillId: string, slot: SkillSlot): void {
 function startNewGame(state: GameState): void {
   showConfirm(state, 'Start a New Game? This rerolls the dungeon and wipes all permanent progress.', () => {
     clearSave();
+    // Phase 20: a stale run snapshot points at floor layouts generated from
+    // the OLD (about-to-be-discarded) rngSeed — cleared rather than
+    // overwritten so a reload before the next move can't resume into a
+    // dungeon that no longer matches the fresh seed just rolled below.
+    clearRunSnapshot();
     resetToNewGame(state);
     enterHub(state);
     state.ui.currentScreen = 'GAME';
@@ -123,23 +202,33 @@ function continueSave(state: GameState): void {
   enterHub(state);
   state.ui.currentScreen = 'GAME';
   saveGame(state);
+  // Phase 20: reaching TITLE at all means boot found no resumable run
+  // snapshot — write one now so a background/reload right after clicking
+  // Continue (before the first move) still resumes into GAME instead of
+  // falling back to TITLE a second time.
+  saveRunSnapshot(state);
 }
 
 /** VICTORY's New Game+ (Section 7): a fresh dungeon, every permanent upgrade
- * kept, and (Fun & Feel #8) enemies scaled up a notch for the next cycle.
- * Deliberately NOT routed through the Hub yet — Phase 13's constraint is to
- * preserve this direct-to-shop flow unchanged until Phase 16's full Victory
- * Flow (which also resets `unlockedAnchors` for the NG+ re-anchoring
- * challenge, per the GDD, and isn't implemented yet either) replaces it. */
+ * kept, enemies scaled up a notch for the next cycle (Fun & Feel #8,
+ * `scaleEnemyForNgPlus`), and — per the GDD's Victory Flow — `unlockedAnchors`
+ * wiped so re-anchoring the fresh dungeon's Biomes is the NG+ challenge.
+ * Phase 16: lands in the Hub like every other loop start/reset, replacing
+ * the old direct-to-shop flow. */
 function startNewGamePlus(state: GameState): void {
   state.persistent.ngPlusLevel += 1;
+  state.persistent.unlockedAnchors = [];
   rerollSeedKeepProgress(state);
   resetRunForNewLoop(state);
-  enterFloor(state, 1);
-  onFloorEntered(state);
-  state.ui.currentScreen = 'UPGRADE_SHOP';
+  enterHub(state);
+  state.ui.currentScreen = 'GAME';
   playNewGameSfx();
   saveGame(state);
+  // Phase 20: write the fresh (new-seed) run immediately, replacing whatever
+  // pre-NG+ snapshot was on disk — otherwise a reload before the first move
+  // would resume that stale run on top of a dungeon generated from the new
+  // seed it doesn't match.
+  saveRunSnapshot(state);
 }
 
 /** Shortcut Gate destination click (Phase 13): warps into a fresh run at the
@@ -148,16 +237,96 @@ function startNewGamePlus(state: GameState): void {
 function warpFromGate(state: GameState, floor: number): void {
   warpToFloor(state, floor);
   state.ui.currentScreen = 'GAME';
-  playUnlockSfx();
+  playWarpSfx();
 }
 
-/** Small Improvements: a weapon's numeric stat line — cheap to show since
- * atk/element are plain data fields already, unlike a passive's effect text
- * (that's Phase 16's fuller Inventory Stat Block). */
-function weaponStatLine(item: Item): string | null {
-  if (item.kind !== 'WEAPON') return null;
-  const weapon = item as Weapon;
-  return `ATK ${weapon.atk} · ${weapon.element}`;
+function titleCase(s: string): string {
+  return s.charAt(0) + s.slice(1).toLowerCase();
+}
+
+/** A signed (▲/▼) delta suffix — '' when there's nothing to show. */
+function deltaMarker(delta: number): string {
+  if (delta === 0) return '';
+  const arrow = delta > 0 ? '▲' : '▼';
+  return ` (${arrow} ${delta > 0 ? '+' : ''}${delta})`;
+}
+
+function signed(n: number): string {
+  return `${n > 0 ? '+' : ''}${n}`;
+}
+
+/** Inventory Stat Block (GDD Section 8, Phase 16): a pipe-separated,
+ * machine-readable line — stats first, Element, then Effect, the GDD's fixed
+ * field order — shown above an item's lore. Weapons/accessories append a
+ * (▲/▼) comparison marker against whatever's currently equipped in that
+ * slot, skipped when the item under inspection IS the equipped one (nothing
+ * to compare against) or nothing's equipped there yet. */
+function statBlockForItem(state: GameState, item: Item): string | null {
+  const { run } = state;
+
+  if (item.kind === 'WEAPON') {
+    const weapon = item as Weapon;
+    const equipped = run.equippedWeapon;
+    const comparing = equipped !== null && equipped.id !== weapon.id;
+    const atkPart = `ATK: ${weapon.atk}${comparing ? deltaMarker(weapon.atk - equipped!.atk) : ''}`;
+    const parts = [atkPart, `Element: ${titleCase(weapon.element)}`];
+    // Phase 18: a few weapons (Bone Club/Defender, Apocalypse) also carry a
+    // DEF/Max HP modifier while equipped, on top of their ATK/Element/Effect.
+    const defBonus = weaponDefBonus(weapon);
+    if (defBonus !== 0) parts.push(`DEF: ${signed(defBonus)}${comparing ? deltaMarker(defBonus - weaponDefBonus(equipped)) : ''}`);
+    const hpBonus = weaponHpBonus(weapon);
+    if (hpBonus !== 0) parts.push(`Max HP: ${signed(hpBonus)}${comparing ? deltaMarker(hpBonus - weaponHpBonus(equipped)) : ''}`);
+    const effect = WEAPON_EFFECT_LABEL[weapon.passive];
+    if (effect) parts.push(`Effect: ${effect}`);
+    return parts.join(' | ');
+  }
+
+  if (item.kind === 'ACCESSORY') {
+    const acc = item as Accessory;
+    const equipped = run.equippedAccessory;
+    const comparing = equipped !== null && equipped.id !== acc.id;
+    const parts: string[] = [];
+    const statRow = (label: string, value: number, bonusOf: (a: Accessory | null) => number): void => {
+      if (value === 0) return;
+      parts.push(`${label}: ${signed(value)}${comparing ? deltaMarker(value - bonusOf(equipped)) : ''}`);
+    };
+    statRow('DEF', accessoryDefBonus(acc), accessoryDefBonus);
+    statRow('Max HP', accessoryHpBonus(acc), accessoryHpBonus);
+    statRow('ATK', accessoryAtkBonus(acc), accessoryAtkBonus);
+    statRow('Max Stamina', accessoryStamBonus(acc), accessoryStamBonus);
+    const effect = ACCESSORY_EFFECT_LABEL[acc.passive];
+    if (effect) parts.push(`Effect: ${effect}`);
+    return parts.length ? parts.join(' | ') : null;
+  }
+
+  if (item.kind === 'CONSUMABLE') {
+    const consumable = item as Consumable;
+    return CONSUMABLE_EFFECT_TEXT[consumable.effect]?.(consumable.value) ?? null;
+  }
+
+  if (item.kind === 'POTION') {
+    switch (item.effect) {
+      case 'heal_percent_max':
+        return `Heals: ${item.value}% Max HP | Cost: 0-1 Turns`;
+      case 'heal_percent_max_cleanse':
+        return `Heals: ${item.value}% Max HP | Effect: Cleanses Status | Cost: 0-1 Turns`;
+      case 'permanent_max_hp': {
+        const fixedCost = POTION_FIXED_TURN_COST[item.name];
+        return `Max HP: +${item.value} (Permanent) | Cost: ${fixedCost ?? 0} Turns`;
+      }
+      default: {
+        const heal = item.value >= 100 ? 'Full' : `${item.value}`;
+        return `Heals: ${heal} HP | Cost: 0-1 Turns`;
+      }
+    }
+  }
+
+  if (item.kind === 'TIME_SHARD') {
+    return `Turns: +${item.value} (current floor)`;
+  }
+
+  // 'ANCHOR'
+  return 'Effect: Unlocks Biome Shortcut';
 }
 
 function useLabelForItem(item: Item): string {
@@ -170,26 +339,92 @@ function useLabelForItem(item: Item): string {
  * currently selected (or a placeholder hint if none is) — one fixed-height
  * region instead of per-slot lore text, which is what was inflating the grid
  * past the viewport and pushing the Close button out of reach. */
-function renderItemDetail(item: Item | undefined): string {
+function renderItemDetail(state: GameState, item: Item | undefined): string {
   if (!item) return '<div class="item-detail item-detail-empty">Tap an item below to see its effect.</div>';
   const lore = loreForItem(item.name);
-  const stat = weaponStatLine(item);
+  const stat = statBlockForItem(state, item);
+  const countBadge = item.count && item.count > 1 ? ` <span class="item-count">x${item.count}</span>` : '';
+  const meltTotal = itemMeltValue(item) * (item.count && item.count > 1 ? item.count : 1);
   return `
     <div class="item-detail">
-      <div class="item-detail-name">${item.name}</div>
-      ${stat ? `<div class="item-detail-stat">${stat}</div>` : ''}
+      <div class="item-detail-header">
+        <span class="item-detail-icon" style="${iconStyleForItem(item, DETAIL_ICON_SIZE)}"></span>
+        <div class="item-detail-heading">
+          <div class="item-detail-name">${item.name}${countBadge}</div>
+          ${stat ? `<div class="item-detail-stat">${stat}</div>` : ''}
+        </div>
+      </div>
       ${lore ? `<div class="item-detail-lore">${lore}</div>` : ''}
       <div class="item-detail-actions">
         <button data-action="use-selected">${useLabelForItem(item)}</button>
-        <button class="drop-btn" data-action="drop-selected">Drop</button>
+        <button class="melt-btn" data-action="melt-selected">Melt (+${meltTotal})</button>
       </div>
     </div>`;
 }
 
-function renderInventory(state: GameState): string {
+/** Chronofacts tab (Next-Task.md QoL): mirrors renderItemDetail's shape, but
+ * for a relic effect-ID string rather than an Item — relics have no Use/Melt
+ * action (infinite-stacking passives, never equipped/melted), so the panel
+ * is read-only info. */
+function renderRelicDetail(effect: string | null): string {
+  if (!effect) return '<div class="item-detail item-detail-empty">Tap a Chronofact below to see its effect.</div>';
+  const ref = RELIC_SPRITE_BY_EFFECT[effect] ?? SPRITES.RELIC;
+  const stat = relicEffectText(effect);
+  const lore = relicLore(effect);
+  return `
+    <div class="item-detail">
+      <div class="item-detail-header">
+        <span class="item-detail-icon" style="${spriteCssStyle(ref, DETAIL_ICON_SIZE)}"></span>
+        <div class="item-detail-heading">
+          <div class="item-detail-name">${relicName(effect)}</div>
+          ${stat ? `<div class="item-detail-stat">${stat}</div>` : ''}
+        </div>
+      </div>
+      ${lore ? `<div class="item-detail-lore">${lore}</div>` : ''}
+    </div>`;
+}
+
+/** Status tab: character sheet — live stats plus currently-equipped gear
+ * (with unequip as a convenience action on it). Was Inventory's left pane
+ * before the Menu unification split Status out as its own peer tab. */
+function renderStatusTab(state: GameState): string {
   const { run } = state;
   const danger = isThreatNearby(state);
+  const weaponLore = run.equippedWeapon ? loreForItem(run.equippedWeapon.name) : undefined;
+  const accessoryLore = run.equippedAccessory ? loreForItem(run.equippedAccessory.name) : undefined;
+  const weaponStat = run.equippedWeapon ? statBlockForItem(state, run.equippedWeapon) : undefined;
+  const accessoryStat = run.equippedAccessory ? statBlockForItem(state, run.equippedAccessory) : undefined;
 
+  return `
+    <div class="menu-tab-body">
+      <div class="stat-line">HP: ${run.currentHp}/${run.maxHp}</div>
+      <div class="stat-line">Stamina: ${run.currentStamina}/${run.maxStamina}</div>
+      <div class="stat-line">Turns Remaining: ${run.turnsRemaining}</div>
+      <div class="stat-line">Total ATK: ${totalAtk(state)}</div>
+      <div class="stat-line">Total DEF: ${totalDef(state)}${run.braced ? ' (Braced)' : ''}</div>
+      <div class="stat-line">Status: ${run.status === 'NONE' ? 'Normal' : run.status}</div>
+      <div class="equip-slot-wrap">
+        <button class="equip-slot" data-action="unequip-weapon"${weaponLore ? ` title="${weaponLore.replace(/"/g, '&quot;')}"` : ''}>Weapon: ${run.equippedWeapon ? run.equippedWeapon.name : 'None'}</button>
+        ${weaponStat ? `<div class="equip-stat">${weaponStat}</div>` : ''}
+        ${weaponLore ? `<div class="equip-lore">${weaponLore}</div>` : ''}
+      </div>
+      <div class="equip-slot-wrap">
+        <button class="equip-slot" data-action="unequip-accessory"${accessoryLore ? ` title="${accessoryLore.replace(/"/g, '&quot;')}"` : ''}>Accessory: ${run.equippedAccessory ? run.equippedAccessory.name : 'None'}</button>
+        ${accessoryStat ? `<div class="equip-stat">${accessoryStat}</div>` : ''}
+        ${accessoryLore ? `<div class="equip-lore">${accessoryLore}</div>` : ''}
+      </div>
+      ${danger ? '<div class="danger-banner">DANGER — actions cost 1 turn</div>' : ''}
+      <button class="cheat-toggle${state.persistent.cheatModeEnabled ? ' active' : ''}" data-action="toggle-cheat-mode">
+        Cheat Mode: ${state.persistent.cheatModeEnabled ? 'ON' : 'OFF'}
+      </button>
+    </div>`;
+}
+
+/** Inventory tab: the Bag grid + selected-item detail panel. Was Inventory's
+ * right pane (in its "Bag" sub-tab) before the Menu unification promoted
+ * Chronofacts to a peer top-level tab. */
+function renderInventoryTab(state: GameState): string {
+  const { run } = state;
   if (selectedInvIndex !== null && !run.inventory[selectedInvIndex]) selectedInvIndex = null;
 
   const slots = Array.from({ length: INVENTORY_CAP }, (_, i) => run.inventory[i]);
@@ -199,42 +434,38 @@ function renderInventory(state: GameState): string {
       const lore = loreForItem(item.name);
       const titleAttr = lore ? ` title="${lore.replace(/"/g, '&quot;')}"` : '';
       const selected = i === selectedInvIndex ? ' selected' : '';
-      return `<button class="inv-slot${selected}" data-action="select-item" data-index="${i}"${titleAttr}>${item.name}</button>`;
+      const countBadge = item.count && item.count > 1 ? `<span class="item-count">x${item.count}</span>` : '';
+      return `<button class="inv-slot${selected}" data-action="select-item" data-index="${i}"${titleAttr} aria-label="${item.name}"><span class="item-icon" style="${iconStyleForItem(item, INV_ICON_SIZE)}"></span>${countBadge}</button>`;
     })
     .join('');
 
-  const weaponLore = run.equippedWeapon ? loreForItem(run.equippedWeapon.name) : undefined;
-  const accessoryLore = run.equippedAccessory ? loreForItem(run.equippedAccessory.name) : undefined;
   const selectedItem = selectedInvIndex !== null ? run.inventory[selectedInvIndex] : undefined;
 
   return `
-    <div class="menu inventory-menu">
-      <div class="inventory-panes">
-        <div class="menu-pane left-pane">
-          <h2>Inventory</h2>
-          <div class="stat-line">HP: ${run.currentHp}/${run.maxHp}</div>
-          <div class="stat-line">Stamina: ${run.currentStamina}/${run.maxStamina}</div>
-          <div class="stat-line">Turns Remaining: ${run.turnsRemaining}</div>
-          <div class="stat-line">Total ATK: ${totalAtk(state)}</div>
-          <div class="stat-line">Total DEF: ${totalDef(state)}${run.braced ? ' (Braced)' : ''}</div>
-          <div class="stat-line">Status: ${run.status === 'NONE' ? 'Normal' : run.status}</div>
-          <div class="equip-slot-wrap">
-            <button class="equip-slot" data-action="unequip-weapon"${weaponLore ? ` title="${weaponLore.replace(/"/g, '&quot;')}"` : ''}>Weapon: ${run.equippedWeapon ? run.equippedWeapon.name : 'None'}</button>
-            ${weaponLore ? `<div class="equip-lore">${weaponLore}</div>` : ''}
-          </div>
-          <div class="equip-slot-wrap">
-            <button class="equip-slot" data-action="unequip-accessory"${accessoryLore ? ` title="${accessoryLore.replace(/"/g, '&quot;')}"` : ''}>Accessory: ${run.equippedAccessory ? run.equippedAccessory.name : 'None'}</button>
-            ${accessoryLore ? `<div class="equip-lore">${accessoryLore}</div>` : ''}
-          </div>
-          ${danger ? '<div class="danger-banner">DANGER — actions cost 1 turn</div>' : ''}
-        </div>
-        <div class="menu-pane right-pane">
-          <div class="inventory-grid">${gridHtml}</div>
-        </div>
-      </div>
-      ${renderItemDetail(selectedItem)}
-      <button class="continue-btn close-btn" data-action="close-menu">Close</button>
-      <div class="menu-hint">Tap an item, then Use or Drop · I / TAB / Esc: close</div>
+    <div class="menu-tab-body">
+      <div class="inventory-grid">${gridHtml}</div>
+      ${renderItemDetail(state, selectedItem)}
+    </div>`;
+}
+
+/** Chronofacts tab: a grid of held relics + selected-relic detail panel. */
+function renderChronofactsTab(state: GameState): string {
+  if (selectedRelicEffect !== null && !state.run.relics.includes(selectedRelicEffect)) selectedRelicEffect = null;
+
+  const gridHtml = state.run.relics.length
+    ? state.run.relics
+        .map((effect) => {
+          const ref = RELIC_SPRITE_BY_EFFECT[effect] ?? SPRITES.RELIC;
+          const selected = effect === selectedRelicEffect ? ' selected' : '';
+          return `<button class="inv-slot${selected}" data-action="select-relic" data-relic="${effect}" aria-label="${relicName(effect)}"><span class="item-icon" style="${spriteCssStyle(ref, INV_ICON_SIZE)}"></span></button>`;
+        })
+        .join('')
+    : '<div class="stat-line">No Chronofacts held this run.</div>';
+
+  return `
+    <div class="menu-tab-body">
+      <div class="inventory-grid">${gridHtml}</div>
+      ${renderRelicDetail(selectedRelicEffect)}
     </div>`;
 }
 
@@ -261,8 +492,10 @@ function renderSkillsTab(state: GameState): string {
   const activeLine = SKILL_SLOTS.map((slot) => `${slot}: ${state.run.activeSkills[SLOT_INDEX[slot]] ?? '--'}`).join(' · ');
 
   return `
-    <div class="skill-list">${rows}</div>
-    <div class="stat-line">Active — ${activeLine}</div>`;
+    <div class="menu-tab-body">
+      <div class="skill-list">${rows}</div>
+      <div class="stat-line">Active — ${activeLine}</div>
+    </div>`;
 }
 
 function renderBestiaryTab(state: GameState): string {
@@ -278,21 +511,7 @@ function renderBestiaryTab(state: GameState): string {
         </div>`;
     })
     .join('');
-  return `<div class="bestiary-list">${rows}</div>`;
-}
-
-function renderSkillMenu(state: GameState): string {
-  const body = skillMenuTab === 'skills' ? renderSkillsTab(state) : renderBestiaryTab(state);
-  return `
-    <div class="menu skill-menu">
-      <div class="tab-row">
-        <button class="tab-btn" data-action="skill-tab" data-tab="skills" ${skillMenuTab === 'skills' ? 'disabled' : ''}>Skills</button>
-        <button class="tab-btn" data-action="skill-tab" data-tab="bestiary" ${skillMenuTab === 'bestiary' ? 'disabled' : ''}>Bestiary</button>
-      </div>
-      ${body}
-      <button class="continue-btn close-btn" data-action="close-menu">Close</button>
-      <div class="menu-hint">K / Esc: close</div>
-    </div>`;
+  return `<div class="menu-tab-body"><div class="bestiary-list">${rows}</div></div>`;
 }
 
 function renderUpgradeShop(state: GameState): string {
@@ -372,34 +591,114 @@ function renderShortcutGate(state: GameState): string {
     </div>`;
 }
 
+/** Cursed Rift's sacrifice-pact modal (Phase 19, Section 8): verbatim GDD
+ * title/offer text and two large mobile buttons. */
+function renderCursedRift(): string {
+  return `
+    <div class="menu cursed-rift-menu">
+      <h2>A Dark Presence Demands a Sacrifice...</h2>
+      <div class="stat-line">"Sacrifice 20 Max HP for a random Relic."</div>
+      <button class="rift-accept-btn" data-action="rift-accept">ACCEPT PACT</button>
+      <button class="rift-decline-btn" data-action="rift-decline">DECLINE &amp; LEAVE</button>
+      <div class="menu-hint">Esc: decline</div>
+    </div>`;
+}
+
+/** Resolves the pact (accept or decline) and clears dungeon.riftX/Y either
+ * way — a one-time offer per Rift (types.ts's dungeon.riftX/Y comment). */
+function resolveRiftPact(state: GameState, accept: boolean): void {
+  state.dungeon.riftX = null;
+  state.dungeon.riftY = null;
+  if (accept) {
+    state.run.maxHp = Math.max(1, state.run.maxHp - 20);
+    state.run.currentHp = Math.min(state.run.currentHp, state.run.maxHp);
+    const relic = pickRandomUnheldRelic(state.run.relics);
+    if (relic) {
+      state.run.relics.push(relic);
+      logLine(state, `The pact is sealed. Chronofact acquired: ${relicName(relic)}!`);
+    } else {
+      awardEchoes(state, 25, 'Cursed Rift (all Relics held)');
+      logLine(state, 'The pact is sealed, but every Chronofact is already yours — +25 Echoes instead.');
+    }
+  } else {
+    logLine(state, 'You step back from the Rift, pact undone.');
+  }
+  state.ui.currentScreen = 'GAME';
+  saveGame(state);
+}
+
 const HELP_ROWS: readonly [string, string, string][] = [
   ['W/A/S/D or Arrows', 'Move / bump-attack (sets facing)', 'GAME'],
   ['Space', 'Brace / pass turn (+1 DEF until your next turn)', 'GAME'],
   ['Q / E / R / F', 'Use the mapped skill toward facing', 'GAME'],
-  ['I / Tab', 'Open/close Inventory & Equipment', 'GAME, INVENTORY'],
-  ['K', 'Open/close Skill Setting / Bestiary', 'GAME, SKILL_MENU'],
-  ['? / F1', 'Open/close this Help overlay', 'any screen'],
+  ['I / Tab', 'Open Menu -> Inventory tab (or close, if already there)', 'GAME, MENU'],
+  ['K', 'Open Menu -> Skill tab (or close, if already there)', 'GAME, MENU'],
+  ['? / F1', 'Open Menu -> Settings & Help tab (or close, if already there)', 'any screen'],
   ['M', 'Toggle mute', 'any screen'],
   ['[ / ]', 'Master volume down/up', 'any screen'],
-  ['Esc', 'Close the current overlay', 'INVENTORY, SKILL_MENU, HELP, UPGRADE_SHOP, SHORTCUT_GATE, CONFIRM'],
-  ['Click', 'Select an item (then Use/Drop), unequip gear, assign a skill, buy an upgrade', 'INVENTORY, SKILL_MENU, UPGRADE_SHOP'],
+  ['Esc', 'Close the current overlay', 'MENU, UPGRADE_SHOP, SHORTCUT_GATE, CURSED_RIFT, CONFIRM'],
+  ['Click', 'Switch tabs, select/use/melt an item, unequip gear, assign a skill, buy an upgrade', 'MENU, UPGRADE_SHOP'],
   ['Walk into a Hub tile', 'Open the Shop Terminal or Shortcut Gate', 'GAME (Hub only)'],
-  ['Touch D-Pad/buttons', 'Mirrors WASD/Space/Q/E/R/F/I/K on mobile portrait', 'any screen'],
+  ['Walk into a Cursed Rift', 'Open the sacrifice-pact modal', 'GAME (procedural floors)'],
+  ['Tap a Relic Tray icon', 'Show its name/lore in a tooltip', 'GAME'],
+  ['Touch D-Pad/buttons', 'Mirrors WASD/Space/Q/E/R/F on mobile; one MENU button opens the tabbed Menu', 'any screen'],
 ];
 
-function renderHelp(): string {
+/** Settings & Help tab: real Mute/Volume controls (previously keyboard-only —
+ * M / [ / ] in audio.ts's installAudioControls, with no on-screen widget at
+ * all) above the existing static keybind table. */
+function renderSettingsTab(): string {
   const rows = HELP_ROWS.map(
     ([key, action, screen]) =>
       `<div class="help-row"><span class="help-key">${key}</span><span class="help-action">${action}</span><span class="help-screen">${screen}</span></div>`,
   ).join('');
   const volumePct = Math.round(getMasterVolume() * 100);
   return `
-    <div class="menu help-menu">
+    <div class="menu-tab-body">
+      <h2>Settings</h2>
+      <div class="settings-row">
+        <button data-action="toggle-mute">${isMuted() ? 'Unmute' : 'Mute'}</button>
+        <button data-action="volume-down">-</button>
+        <span class="stat-line">Volume: ${isMuted() ? 'Muted' : `${volumePct}%`}</span>
+        <button data-action="volume-up">+</button>
+      </div>
       <h2>Controls</h2>
-      <div class="stat-line">Volume: ${isMuted() ? 'Muted' : `${volumePct}%`}</div>
       <div class="help-list">${rows}</div>
+    </div>`;
+}
+
+const TAB_DEFS: readonly { id: MenuTabId; label: string }[] = [
+  { id: 'status', label: 'Status' },
+  { id: 'inventory', label: 'Inv' },
+  { id: 'chronofacts', label: 'Chronofacts' },
+  { id: 'skill', label: 'Skill' },
+  { id: 'bestiary', label: 'Bestiary' },
+  { id: 'settings', label: 'Settings' },
+];
+
+/** The unified Menu (Next-Task.md QoL): one screen, one flat top-level tab
+ * row, replacing the old separate Inventory/Skill Menu/Help screens (each of
+ * which had grown its own internal sub-tabs — Bag/Chronofacts,
+ * Skills/Bestiary). */
+function renderMenu(state: GameState): string {
+  const body =
+    menuTab === 'status' ? renderStatusTab(state)
+    : menuTab === 'inventory' ? renderInventoryTab(state)
+    : menuTab === 'chronofacts' ? renderChronofactsTab(state)
+    : menuTab === 'skill' ? renderSkillsTab(state)
+    : menuTab === 'bestiary' ? renderBestiaryTab(state)
+    : renderSettingsTab();
+
+  const tabButtons = TAB_DEFS.map(
+    ({ id, label }) => `<button class="tab-btn" data-action="menu-tab" data-tab="${id}" ${menuTab === id ? 'disabled' : ''}>${label}</button>`,
+  ).join('');
+
+  return `
+    <div class="menu unified-menu">
+      <div class="tab-row">${tabButtons}</div>
+      ${body}
       <button class="continue-btn close-btn" data-action="close-menu">Close</button>
-      <div class="menu-hint">? / F1 / Esc: close</div>
+      <div class="menu-hint">I/K/? toggle · Esc: close</div>
     </div>`;
 }
 
@@ -475,11 +774,10 @@ function renderConfirm(): string {
 const ALL_SCREENS = new Set<GameState['ui']['currentScreen']>([
   'TITLE',
   'GAME',
-  'INVENTORY',
-  'SKILL_MENU',
+  'MENU',
   'UPGRADE_SHOP',
   'SHORTCUT_GATE',
-  'HELP',
+  'CURSED_RIFT',
   'CONFIRM',
   'DEATH',
   'VICTORY',
@@ -490,15 +788,20 @@ function render(state: GameState): void {
   const screen = state.ui.currentScreen;
   const isOpen = screen !== 'GAME';
   el.classList.toggle('active', isOpen);
-  // Mobile Inventory rework: start every fresh Inventory visit with nothing
+  // Mobile Inventory rework: start every fresh Menu visit with nothing
   // selected, rather than carrying a stale highlighted slot from last time.
-  if (screen === 'INVENTORY' && lastScreen !== 'INVENTORY') selectedInvIndex = null;
+  // menuTab itself is NOT reset here — it's meant to remember whichever
+  // section you were last on across opens/closes (openMenuTab explicitly
+  // overrides it when a specific keyboard shortcut asks for a specific tab).
+  if (screen === 'MENU' && lastScreen !== 'MENU') {
+    selectedInvIndex = null;
+    selectedRelicEffect = null;
+  }
   if (screen === 'TITLE') el.innerHTML = renderTitle(state);
-  else if (screen === 'INVENTORY') el.innerHTML = renderInventory(state);
-  else if (screen === 'SKILL_MENU') el.innerHTML = renderSkillMenu(state);
+  else if (screen === 'MENU') el.innerHTML = renderMenu(state);
   else if (screen === 'UPGRADE_SHOP') el.innerHTML = renderUpgradeShop(state);
   else if (screen === 'SHORTCUT_GATE') el.innerHTML = renderShortcutGate(state);
-  else if (screen === 'HELP') el.innerHTML = renderHelp();
+  else if (screen === 'CURSED_RIFT') el.innerHTML = renderCursedRift();
   else if (screen === 'CONFIRM') el.innerHTML = renderConfirm();
   else if (screen === 'DEATH') el.innerHTML = renderDeath(state);
   else if (screen === 'VICTORY') el.innerHTML = renderVictory(state);
@@ -506,7 +809,8 @@ function render(state: GameState): void {
   lastScreen = screen;
 }
 
-/** Wires I/TAB (Inventory), K (Skill Menu), ?/F1 (Help), Escape (close), and clicks on the overlay. */
+/** Wires I/TAB (Menu -> Inventory tab), K (Menu -> Skill tab), ?/F1 (Menu ->
+ * Settings & Help tab), Escape (close), and clicks on the overlay. */
 export function initMenus(state: GameState): void {
   window.addEventListener('keydown', (ev) => {
     const screen = state.ui.currentScreen;
@@ -515,27 +819,27 @@ export function initMenus(state: GameState): void {
 
     if (key === '?' || key === 'f1') {
       ev.preventDefault();
-      state.ui.currentScreen = screen === 'HELP' ? 'GAME' : 'HELP';
+      openMenuTab(state, 'settings');
       render(state);
-    } else if ((key === 'i' || key === 'tab') && (screen === 'GAME' || screen === 'INVENTORY')) {
+    } else if ((key === 'i' || key === 'tab') && (screen === 'GAME' || screen === 'MENU')) {
       ev.preventDefault();
-      toggleScreen(state, 'INVENTORY');
+      openMenuTab(state, 'inventory');
       render(state);
-    } else if (key === 'k' && (screen === 'GAME' || screen === 'SKILL_MENU')) {
+    } else if (key === 'k' && (screen === 'GAME' || screen === 'MENU')) {
       ev.preventDefault();
-      toggleScreen(state, 'SKILL_MENU');
+      openMenuTab(state, 'skill');
       render(state);
     } else if (
       key === 'escape' &&
-      (screen === 'INVENTORY' ||
-        screen === 'SKILL_MENU' ||
+      (screen === 'MENU' ||
         screen === 'UPGRADE_SHOP' ||
         screen === 'SHORTCUT_GATE' ||
-        screen === 'HELP' ||
+        screen === 'CURSED_RIFT' ||
         screen === 'CONFIRM')
     ) {
       ev.preventDefault();
       if (screen === 'CONFIRM') answerPendingConfirm(state, false);
+      else if (screen === 'CURSED_RIFT') resolveRiftPact(state, false);
       else state.ui.currentScreen = 'GAME';
       render(state);
     }
@@ -544,22 +848,35 @@ export function initMenus(state: GameState): void {
   screenEl().addEventListener('click', (ev) => {
     const target = (ev.target as HTMLElement).closest<HTMLElement>('[data-action]');
     if (!target) return;
-    const { action, index, skill, slot, track, tab, floor } = target.dataset;
+    const { action, index, skill, slot, track, tab, floor, relic } = target.dataset;
 
     if (action === 'select-item') selectedInvIndex = Number(index);
+    else if (action === 'menu-tab') menuTab = (tab as MenuTabId) ?? 'status';
+    else if (action === 'select-relic') selectedRelicEffect = relic ?? null;
     else if (action === 'use-selected' && selectedInvIndex !== null) {
       const item = state.run.inventory[selectedInvIndex];
       if (item?.kind === 'WEAPON' || item?.kind === 'ACCESSORY') equipItem(state, selectedInvIndex);
       else if (item?.kind === 'POTION') usePotion(state, selectedInvIndex);
       else if (item?.kind === 'CONSUMABLE') useConsumable(state, selectedInvIndex);
       selectedInvIndex = null;
-    } else if (action === 'drop-selected' && selectedInvIndex !== null) {
-      dropItem(state, selectedInvIndex);
+    } else if (action === 'melt-selected' && selectedInvIndex !== null) {
+      meltItem(state, selectedInvIndex);
       selectedInvIndex = null;
     } else if (action === 'unequip-weapon') unequipWeapon(state);
     else if (action === 'unequip-accessory') unequipAccessory(state);
+    else if (action === 'toggle-cheat-mode') {
+      state.persistent.cheatModeEnabled = !state.persistent.cheatModeEnabled;
+      logLine(state, `Cheat Mode: ${state.persistent.cheatModeEnabled ? 'ON' : 'OFF'}.`);
+      saveGame(state);
+    }
     else if (action === 'assign-skill') assignSkill(state, skill!, slot as SkillSlot);
-    else if (action === 'skill-tab') skillMenuTab = tab === 'bestiary' ? 'bestiary' : 'skills';
+    else if (action === 'toggle-mute') {
+      toggleMuted();
+      saveAudioSettings({ volume: getMasterVolume(), muted: isMuted() });
+    } else if (action === 'volume-down' || action === 'volume-up') {
+      setMasterVolume(getMasterVolume() + (action === 'volume-up' ? 0.1 : -0.1));
+      saveAudioSettings({ volume: getMasterVolume(), muted: isMuted() });
+    }
     else if (action === 'buy-stat') buyStatUpgrade(state, track as StatTrack);
     else if (action === 'buy-skill') buySkillUpgrade(state, skill!);
     else if (action === 'warp') warpFromGate(state, Number(floor));
@@ -570,6 +887,8 @@ export function initMenus(state: GameState): void {
     else if (action === 'victory-newgameplus') startNewGamePlus(state);
     else if (action === 'confirm-yes') answerPendingConfirm(state, true);
     else if (action === 'confirm-no') answerPendingConfirm(state, false);
+    else if (action === 'rift-accept') resolveRiftPact(state, true);
+    else if (action === 'rift-decline') resolveRiftPact(state, false);
     else if (action === 'close-menu') state.ui.currentScreen = 'GAME';
 
     render(state);

@@ -38,6 +38,7 @@ export function createNewGameState(): GameState {
       maxHpUpgrade: 0,
       maxStamUpgrade: 0,
       turnBonusUpgrade: 0,
+      baseAtkUpgrade: 0,
       skills: { dash: 1 },
       skillLoadout: ['dash'],
       unlockedAnchors: [],
@@ -48,6 +49,7 @@ export function createNewGameState(): GameState {
       },
       bestiaryKnown: [],
       ngPlusLevel: 0,
+      cheatModeEnabled: false,
     },
 
     run: {
@@ -72,8 +74,23 @@ export function createNewGameState(): GameState {
       iceAegisChillsAttacker: false,
       floorDamageTaken: false,
       floorsVisitedThisLoop: [],
+      floorFirstHitNegated: false,
       quicksilverCharges: 0,
       whetstoneCharge: false,
+      recallMarkX: null,
+      recallMarkY: null,
+      vanishCharges: 0,
+      reflectBarrierCharges: 0,
+      reflectBarrierStuns: false,
+      tempAtkBonus: 0,
+      tempAtkBonusTurns: 0,
+      tempDefBonus: 0,
+      tempDefBonusTurns: 0,
+      statusImmuneTurns: 0,
+      relics: [],
+      staticGenSteps: 0,
+      staticGenCharged: false,
+      trollBloodCounter: 0,
     },
 
     dungeon: {
@@ -84,6 +101,10 @@ export function createNewGameState(): GameState {
       items: [],
       spawnX: 0,
       spawnY: 0,
+      stairsX: 0,
+      stairsY: 0,
+      riftX: null,
+      riftY: null,
       expiringTiles: [],
       telegraphTiles: [],
     },
@@ -140,4 +161,22 @@ export function resetRunForNewLoop(state: GameState, startFloor = 1): void {
   state.run.floorsVisitedThisLoop = [];
   state.run.quicksilverCharges = 0;
   state.run.whetstoneCharge = false;
+  state.run.recallMarkX = null;
+  state.run.recallMarkY = null;
+  state.run.vanishCharges = 0;
+  state.run.reflectBarrierCharges = 0;
+  state.run.reflectBarrierStuns = false;
+  state.run.tempAtkBonus = 0;
+  state.run.tempAtkBonusTurns = 0;
+  state.run.tempDefBonus = 0;
+  state.run.tempDefBonusTurns = 0;
+  state.run.statusImmuneTurns = 0;
+  // Phase 19: Chronofacts are run-scoped, same lifecycle as inventory/
+  // equipment above — a fresh loop (or a Shortcut Gate warp, which is a
+  // fresh run by the same "starter gear, full HP/Stamina" rule) starts with
+  // none held.
+  state.run.relics = [];
+  state.run.staticGenSteps = 0;
+  state.run.staticGenCharged = false;
+  state.run.trollBloodCounter = 0;
 }

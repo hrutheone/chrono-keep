@@ -8,14 +8,14 @@
 import { enterFloor, TILE } from './mapgen';
 import { DUNGEON_SIZE, floorTurnLimit, resetRunForNewLoop } from './state';
 import { onFloorEntered } from './echoes';
-import { saveGame } from './persistence';
+import { saveGame, saveRunSnapshot } from './persistence';
 import type { GameState } from './types';
 
 const N = DUNGEON_SIZE;
 export const HUB_FLOOR = 0;
 
-const HUB_W = 12;
-const HUB_H = 9;
+const HUB_W = 8;
+const HUB_H = 6;
 
 interface HubLayout {
   tiles: number[][];
@@ -71,6 +71,13 @@ export function enterHub(state: GameState): void {
   // floor entry, Hub included, even though nothing in the Hub can use it.
   state.dungeon.spawnX = hub.spawnX;
   state.dungeon.spawnY = hub.spawnY;
+  // Phase 19: no Stairs in the Hub — set equal to spawn, same "harmless
+  // default where nothing can use it" precedent as spawnX/Y's own comment.
+  state.dungeon.stairsX = hub.spawnX;
+  state.dungeon.stairsY = hub.spawnY;
+  // Phase 19: no Cursed Rifts in the Hub.
+  state.dungeon.riftX = null;
+  state.dungeon.riftY = null;
   state.dungeon.expiringTiles = [];
   state.dungeon.telegraphTiles = [];
 }
@@ -90,4 +97,8 @@ export function warpToFloor(state: GameState, floor: number): void {
   enterFloor(state, floor);
   onFloorEntered(state);
   saveGame(state);
+  // Phase 20: write the freshly-warped run immediately — otherwise a reload
+  // before the first move would resume the pre-warp snapshot (still pointing
+  // at the Hub or wherever the player warped from) instead of this floor.
+  saveRunSnapshot(state);
 }

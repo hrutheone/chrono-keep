@@ -1,14 +1,20 @@
-// Legacy Chrono-Lich arena from the pre-99-floor build. Phase 16 relocates
-// and re-stats this fight for Floor 99.
+// The Chrono-Lich Arena (GDD Section 6C, Final Boss): a fixed, hand-authored
+// Floor 99 — same "skip the generator, install dungeon/run fields directly"
+// principle as hub.ts/arenas.ts. Kept separate from arenas.ts's Mini-Boss
+// Arenas since there's no Boss Gate here (no Floor 100 to seal behind one —
+// killEnemy's CHRONO_LICH branch calls triggerVictory directly) and no
+// repeat-appearance scaling (the fight only ever happens once).
 
 import { createEnemy, scaleEnemyForNgPlus } from './content';
+import { resetChronoLichEncounter } from './enemyAI';
 import { TILE } from './mapgen';
-import { DUNGEON_SIZE } from './state';
+import { DUNGEON_SIZE, floorTurnLimit } from './state';
 import type { Enemy, GameState, WorldItem } from './types';
 
 const N = DUNGEON_SIZE;
 
 export const BOSS_ID = 'chrono-lich-boss';
+export const FINAL_BOSS_FLOOR = 99;
 
 interface BossFloor {
   tiles: number[][];
@@ -55,10 +61,16 @@ function buildArena(): BossFloor {
   return { tiles, enemies: [boss], items: [], spawnX, spawnY };
 }
 
-/** Generates the arena and installs it into game state, replacing Floor 1-3's dungeon. */
+/** Generates the arena and installs it into game state, replacing whatever
+ * dungeon was there. `resetChronoLichEncounter` clears the boss's cadence
+ * counter and one-time Rewind flag — BOSS_ID is a fixed id reused across
+ * every Floor 99 attempt (unlike Mini-Boss Arenas' per-loop unique ids), so a
+ * prior failed attempt's fight state must not leak into a fresh one. */
 export function enterBossFloor(state: GameState): void {
   const floor = buildArena();
-  state.run.currentFloor = 4;
+  resetChronoLichEncounter(BOSS_ID);
+  state.run.currentFloor = FINAL_BOSS_FLOOR;
+  state.run.turnsRemaining = floorTurnLimit(state);
   state.run.playerX = floor.spawnX;
   state.run.playerY = floor.spawnY;
   state.dungeon.width = N;
@@ -66,6 +78,12 @@ export function enterBossFloor(state: GameState): void {
   // Recall Rune must return to the arena entry point, not the prior floor.
   state.dungeon.spawnX = floor.spawnX;
   state.dungeon.spawnY = floor.spawnY;
+  // Phase 19: no Stairs on Floor 99 — see hub.ts's identical fallback.
+  state.dungeon.stairsX = floor.spawnX;
+  state.dungeon.stairsY = floor.spawnY;
+  // Phase 19: no Cursed Rifts on Floor 99.
+  state.dungeon.riftX = null;
+  state.dungeon.riftY = null;
   state.dungeon.tiles = floor.tiles;
   state.dungeon.enemies = floor.enemies;
   for (const enemy of state.dungeon.enemies) scaleEnemyForNgPlus(enemy, state.persistent.ngPlusLevel);

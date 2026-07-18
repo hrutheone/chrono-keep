@@ -28,26 +28,33 @@
            events the WASD/Space/Q/E/I/K/? keyboard listeners already
            consume, so touch and keyboard input share one code path. -->
       <div id="touch-controls" class="touch-controls">
-        <div class="dpad">
-          <button class="pad-btn dpad-up" data-touch-key="move-up" aria-label="Move up">▲</button>
-          <button class="pad-btn dpad-left" data-touch-key="move-left" aria-label="Move left">◀</button>
-          <button class="pad-btn dpad-right" data-touch-key="move-right" aria-label="Move right">▶</button>
-          <button class="pad-btn dpad-down" data-touch-key="move-down" aria-label="Move down">▼</button>
+        <div class="dpad-column">
+          <div class="dpad">
+            <button class="pad-btn dpad-up" data-touch-key="move-up" aria-label="Move up">▲</button>
+            <button class="pad-btn dpad-left" data-touch-key="move-left" aria-label="Move left">◀</button>
+            <button class="pad-btn dpad-right" data-touch-key="move-right" aria-label="Move right">▶</button>
+            <button class="pad-btn dpad-down" data-touch-key="move-down" aria-label="Move down">▼</button>
+          </div>
+          <!-- Brace lives under the D-Pad (not the action pad) so it reads as
+               a movement-adjacent defensive stance, and so its width doesn't
+               force the Q/E/R/F diamond and INV/SKL/? row apart from each
+               other on the right. -->
+          <button class="pad-btn brace-btn" data-touch-key="brace" aria-label="Brace">BRACE</button>
         </div>
         <div class="action-pad">
-          <div class="action-row">
-            <button class="pad-btn skill-btn" data-touch-key="skill-q" aria-label="Skill Q">Q</button>
-            <button class="pad-btn skill-btn" data-touch-key="skill-e" aria-label="Skill E">E</button>
+          <!-- Phase 18: 4-button ABXY-style diamond (Q top, E right, F bottom,
+               R left) replacing the old 2x2 grid — 20 more skills to choose
+               from makes these 4 slots the main way a build reads at a
+               glance, so they get the same "always comfortably reachable"
+               layout the D-Pad already uses. -->
+          <div class="skill-diamond">
+            <button class="pad-btn skill-btn skill-btn-q" data-touch-key="skill-q" aria-label="Skill Q">Q</button>
+            <button class="pad-btn skill-btn skill-btn-e" data-touch-key="skill-e" aria-label="Skill E">E</button>
+            <button class="pad-btn skill-btn skill-btn-r" data-touch-key="skill-r" aria-label="Skill R">R</button>
+            <button class="pad-btn skill-btn skill-btn-f" data-touch-key="skill-f" aria-label="Skill F">F</button>
           </div>
-          <div class="action-row">
-            <button class="pad-btn skill-btn" data-touch-key="skill-r" aria-label="Skill R">R</button>
-            <button class="pad-btn skill-btn" data-touch-key="skill-f" aria-label="Skill F">F</button>
-          </div>
-          <button class="pad-btn brace-btn" data-touch-key="brace" aria-label="Brace">BRACE</button>
           <div class="menu-row">
-            <button class="menu-btn" data-touch-key="open-inventory" aria-label="Inventory">INV</button>
-            <button class="menu-btn" data-touch-key="open-skills" aria-label="Skills">SKL</button>
-            <button class="menu-btn" data-touch-key="open-help" aria-label="Help">?</button>
+            <button class="menu-btn" data-touch-key="open-menu" aria-label="Menu">MENU</button>
           </div>
         </div>
       </div>

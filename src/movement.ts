@@ -7,32 +7,67 @@ import { pickupItemsAt } from './inventory';
 import { onFloorCleared, onFloorEntered } from './echoes';
 import { enterFloor, isWalkableAt, TILE } from './mapgen';
 import { HUB_FLOOR } from './hub';
+import { isArenaFloor, enterArenaFloor } from './arenas';
+import { enterBossFloor, FINAL_BOSS_FLOOR } from './bossArena';
+import { showConfirm } from './menus';
 import { isTurnBusy, resolvePlayerTurn } from './turnController';
 import { isRunOver, logLine } from './turns';
 import { playBlockedSfx, playMoveSfx } from './audio';
+import { saveRunSnapshot } from './persistence';
 import type { GameState } from './types';
 
 type Facing = GameState['run']['facing'];
 
-export const MAX_PLAYABLE_FLOOR = 99;
+// Arena Threshold Warning (GDD Section 7), verbatim.
+const ARENA_THRESHOLD_WARNING =
+  'The temporal density beyond this stair is overwhelming. Something old and hungry guards the descent. Steady yourself — there is no retreat once you cross.';
 
-/** Descends to the next floor if the player is standing on Stairs, awarding the
- * Flawless Floor bonus for the floor just left and the first-visit bonus for
- * the one just entered (Section 7). Shared by move, Dash, and Static Shift. */
+/** Shared by both branches of tryDescendIfOnStairs below: leaves the current
+ * floor (Flawless Floor bonus), installs the next one (procedural, a
+ * Mini-Boss Arena, or the Floor 99 Chrono-Lich Arena), and awards the
+ * first-visit bonus for it. Sets the screen back to GAME explicitly —
+ * required for the confirm-accepted path (showConfirm/answerPendingConfirm
+ * only ever restores the screen on *decline*; every onConfirm callback in
+ * this codebase is responsible for setting it back itself on accept, e.g.
+ * menus.ts's startNewGame) but a harmless no-op for the direct (non-Arena)
+ * path, which is already on GAME. */
+function performDescend(state: GameState, next: number): void {
+  onFloorCleared(state);
+  if (next === FINAL_BOSS_FLOOR) enterBossFloor(state);
+  else if (isArenaFloor(next)) enterArenaFloor(state, next);
+  else enterFloor(state, next);
+  onFloorEntered(state);
+  logLine(state, next === FINAL_BOSS_FLOOR ? 'You descend into the Chrono-Lich\'s arena.' : `You descend to Floor ${next}.`);
+  state.ui.currentScreen = 'GAME';
+  // Phase 20: stepping onto Stairs never costs a turn (this comment's own
+  // header note above), so the per-turn save in turnController.ts's
+  // resolvePlayerTurn never fires here — without this, a background/reload
+  // right after descending (before the next move) would resume the PREVIOUS
+  // floor instead of the one just entered.
+  saveRunSnapshot(state);
+}
+
+/** Descends to the next floor if the player is standing on Stairs (Section 7).
+ * Shared by move, Dash, and Static Shift. A next-floor that's a Mini-Boss
+ * Arena (Phase 15) or the Floor 99 Chrono-Lich Arena (Phase 16) shows the
+ * Arena Threshold Warning confirm first — GDD Section 7 places it on every
+ * Arena floor, "10, 20, ... 90, 99" alike. This still short-circuits the
+ * caller's normal turn resolution (returns true) either way, since stepping
+ * onto the stairs itself never costs a turn; declining just leaves the
+ * player exactly where they were. Floor 99's arena has no Stairs tile (no
+ * Floor 100 to descend to — killing the Chrono-Lich ends the run via
+ * triggerVictory instead), so this never re-fires once there. */
 export function tryDescendIfOnStairs(state: GameState): boolean {
   const tile = state.dungeon.tiles[state.run.playerY][state.run.playerX];
   if (tile !== TILE.STAIRS) return false;
 
-  if (state.run.currentFloor >= MAX_PLAYABLE_FLOOR) {
-    logLine(state, 'The final descent is not implemented until Phase 16.');
-    return false;
+  const next = state.run.currentFloor + 1;
+  if (next === FINAL_BOSS_FLOOR || isArenaFloor(next)) {
+    showConfirm(state, ARENA_THRESHOLD_WARNING, () => performDescend(state, next));
+    return true;
   }
 
-  onFloorCleared(state);
-  const next = state.run.currentFloor + 1;
-  enterFloor(state, next);
-  onFloorEntered(state);
-  logLine(state, `You descend to Floor ${next}.`);
+  performDescend(state, next);
   return true;
 }
 
@@ -52,6 +87,17 @@ function tryHubInteraction(state: GameState): boolean {
     return true;
   }
   return false;
+}
+
+/** Stepping onto a procedural floor's Cursed Rift (Phase 19) opens its
+ * sacrifice-pact modal — same "free to open, no turn cost until the player
+ * actually answers" shape as the Hub tiles above. A coordinate check, not a
+ * tile-type check — see types.ts's dungeon.riftX/Y comment for why. */
+function tryRiftInteraction(state: GameState): boolean {
+  if (state.dungeon.riftX === null) return false;
+  if (state.run.playerX !== state.dungeon.riftX || state.run.playerY !== state.dungeon.riftY) return false;
+  state.ui.currentScreen = 'CURSED_RIFT';
+  return true;
 }
 
 const DIRECTIONS: Record<string, { dx: number; dy: number; facing: Facing }> = {
@@ -112,17 +158,38 @@ export function tryMove(state: GameState, dx: number, dy: number, facing: Facing
   }
 
   if (!isWalkableAt(state, nx, ny)) {
-    playBlockedSfx();
-    return Promise.resolve();
+    // Vanish (Phase 18 skill): the next move ignores collision entirely —
+    // consumed here rather than in skills.ts since this is the only place
+    // that actually knows a move was blocked.
+    if (state.run.vanishCharges > 0) {
+      state.run.vanishCharges -= 1;
+      logLine(state, 'You phase through the wall.');
+    } else {
+      playBlockedSfx();
+      return Promise.resolve();
+    }
   }
 
   state.run.playerX = nx;
   state.run.playerY = ny;
   logLine(state, `You move ${facing.toLowerCase()}.`);
   playMoveSfx();
+
+  // Static Generator (Phase 19 Relic): every 3 steps taken, the next attack
+  // auto-Stuns — combat.ts's playerAttackEnemy consumes staticGenCharged.
+  if (state.run.relics.includes('static_generator')) {
+    state.run.staticGenSteps += 1;
+    if (state.run.staticGenSteps >= 3) {
+      state.run.staticGenSteps = 0;
+      state.run.staticGenCharged = true;
+      logLine(state, 'Static Generator crackles — next attack Stuns!');
+    }
+  }
+
   pickupItemsAt(state, nx, ny);
   if (tryDescendIfOnStairs(state)) return Promise.resolve();
   if (tryHubInteraction(state)) return Promise.resolve();
+  if (tryRiftInteraction(state)) return Promise.resolve();
 
   return resolvePlayerTurn(state, 'move');
 }
@@ -135,13 +202,41 @@ export function passTurn(state: GameState): Promise<void> {
   return resolvePlayerTurn(state, 'wait');
 }
 
+// Hold-to-Move (Delayed Auto-Shift, Tetris-style): an initial instant move,
+// then a 300ms delay before repeating every 120ms while the key stays down.
+// Each repeat tick re-checks eligibility (screen/run-over/hit-stop) rather
+// than cancelling the timer on an ineligible tick — a key held through a
+// hit-stop freeze (e.g. stepping into a fire hazard) pauses instead of
+// queuing extra moves, then resumes once the freeze clears, matching the
+// "safety catch" the DAS spec calls for. Keyed by the lowercased key string
+// so held direction keys track independently.
+const DAS_DELAY_MS = 300;
+const DAS_REPEAT_MS = 120;
+const dasTimers = new Map<string, { timeout: number; interval: number | null }>();
+
+function stopDas(key: string): void {
+  const timer = dasTimers.get(key);
+  if (!timer) return;
+  clearTimeout(timer.timeout);
+  if (timer.interval !== null) clearInterval(timer.interval);
+  dasTimers.delete(key);
+}
+
+function stopAllDas(): void {
+  for (const key of dasTimers.keys()) stopDas(key);
+}
+
+function canMoveNow(state: GameState): boolean {
+  return state.ui.currentScreen === 'GAME' && !isRunOver(state) && !isTurnBusy();
+}
+
 /** Wires WASD/Arrows (move) and Space (pass) to the game state. */
 export function installInput(state: GameState): void {
   window.addEventListener('keydown', (ev) => {
-    if (state.ui.currentScreen !== 'GAME' || isRunOver(state) || isTurnBusy()) return;
     const key = ev.key.toLowerCase();
 
     if (key === ' ' || key === 'spacebar') {
+      if (state.ui.currentScreen !== 'GAME' || isRunOver(state) || isTurnBusy()) return;
       ev.preventDefault();
       passTurn(state);
       return;
@@ -150,6 +245,27 @@ export function installInput(state: GameState): void {
     const dir = DIRECTIONS[key];
     if (!dir) return;
     ev.preventDefault();
+    // Ignore the OS's own key-repeat keydowns (and a stray re-press of an
+    // already-armed key) — the DAS timer below drives every repeat itself.
+    if (ev.repeat || dasTimers.has(key)) return;
+    if (!canMoveNow(state)) return;
+
     tryMove(state, dir.dx, dir.dy, dir.facing);
+
+    const timeout = window.setTimeout(() => {
+      const interval = window.setInterval(() => {
+        if (canMoveNow(state)) tryMove(state, dir.dx, dir.dy, dir.facing);
+      }, DAS_REPEAT_MS);
+      dasTimers.set(key, { timeout, interval });
+    }, DAS_DELAY_MS);
+    dasTimers.set(key, { timeout, interval: null });
+  });
+
+  window.addEventListener('keyup', (ev) => stopDas(ev.key.toLowerCase()));
+  // A key held through an alt-tab/tab-switch never fires 'keyup' — clear
+  // every timer rather than leave a phantom repeat running unattended.
+  window.addEventListener('blur', stopAllDas);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopAllDas();
   });
 }

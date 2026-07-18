@@ -239,6 +239,82 @@ body {
   opacity: 0.85;
 }
 
+/* Phase 19 Relic Tray: horizontally-scrolling icon strip, below the HP/
+ * Stamina bars in the Top HUD — hidden scrollbar but still swipeable. */
+.relic-tray {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 3px;
+  overflow-x: auto;
+  white-space: nowrap;
+  margin-top: 3px;
+  scrollbar-width: none;
+}
+.relic-tray::-webkit-scrollbar {
+  display: none;
+}
+
+/* Carry-over polish: width/height/background-image/-position/-size come from
+ * the inline style attribute (assets.ts's spriteCssStyle) per-icon — this
+ * class only supplies the frame around it. */
+.relic-icon {
+  flex-shrink: 0;
+  border: 1px solid var(--color-mid);
+  border-radius: 2px;
+  background-color: var(--color-bg);
+  cursor: pointer;
+  padding: 0;
+}
+.relic-icon:hover {
+  border-color: var(--color-light);
+}
+
+/* Tap-to-show tooltip (no hover on mobile) — anchored under the Relic Tray,
+ * dismissed by tapping anywhere else (hud.ts's document click listener). */
+.tooltip {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 6px;
+  z-index: 5;
+  max-width: 200px;
+  margin-top: 2px;
+  padding: 4px 6px;
+  font-size: 9px;
+  line-height: 1.3;
+  color: var(--color-light);
+  background: var(--color-bg);
+  border: 1px solid var(--color-light);
+}
+.tooltip.visible {
+  display: block;
+}
+
+/* Phase 19 Elite Warning banner: just above the Action Log, flashes in when
+ * an Elite is within range (hud.ts's ELITE_WARNING_RADIUS). */
+.elite-warning {
+  display: none;
+  margin-bottom: 4px;
+  padding: 2px 4px;
+  font-size: 9px;
+  font-weight: bold;
+  text-align: center;
+  color: #ff3b3b;
+  border: 1px solid #ff3b3b;
+  animation: elite-warning-pulse 1s ease-in-out infinite;
+}
+.elite-warning.visible {
+  display: block;
+}
+@keyframes elite-warning-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
 /* Inventory & Skill Setting overlays (Phase 3) */
 #screen-overlay.active {
   pointer-events: auto;
@@ -263,37 +339,31 @@ body {
   letter-spacing: 0.05em;
 }
 
-/* The row layout is scoped to .inventory-panes, not .inventory-menu itself —
- * .inventory-menu stays a normal column .menu so the Close button/hint below
- * it render as full-width bars (like every other menu), not squeezed into
- * the same flex row as the two panes. overflow-y:auto is a defensive fallback
- * (matches .skill-menu/.upgrade-shop/.help-menu below) so Close/the detail
- * panel stay reachable via scroll even if the grid content ever runs tall,
- * rather than silently overflowing past the viewport with no way back. */
-.inventory-menu {
+/* .unified-menu stays a normal column .menu so the tab row/Close button/hint
+ * render as full-width bars (like every other menu). overflow-y:auto is a
+ * defensive fallback (matches .upgrade-shop below) so Close/the detail panel
+ * stay reachable via scroll even if a tab's content ever runs tall, rather
+ * than silently overflowing past the viewport with no way back. */
+.unified-menu {
   overflow-y: auto;
 }
 
-.inventory-panes {
-  display: flex;
-  flex-direction: row;
-  gap: 12px;
+/* Every Menu tab (Status/Inventory/Chronofacts/Skill/Bestiary/Settings) is a
+ * single full-width column now — the old side-by-side Status+Bag panes
+ * (.inventory-panes/.left-pane/.right-pane) went away once Status became its
+ * own peer tab instead of Inventory's sidebar. min-height:0 is required for
+ * .inventory-grid's own min-height:0/overflow-y:auto below to actually take
+ * effect, since a flex child's default min-height:auto refuses to shrink
+ * below its content size otherwise, silently growing past this box (the
+ * stats/equip panel can genuinely outgrow its flex share on a short
+ * mobile-portrait viewport). */
+.menu-tab-body {
   flex: 1;
   min-height: 0;
-}
-
-.menu-pane {
   display: flex;
   flex-direction: column;
   gap: 6px;
-}
-
-.left-pane {
-  flex: 1;
-}
-
-.right-pane {
-  flex: 1.4;
+  overflow-y: auto;
 }
 
 .stat-line {
@@ -311,9 +381,18 @@ body {
   padding: 3px 5px;
 }
 
-.menu button:hover:not(:disabled) {
-  border-color: var(--color-light);
-  background: var(--color-mid);
+/* hover: hover / pointer: fine gates this to devices with a real mouse —
+ * without it, tapping an .inv-slot leaves a sticky :hover on touch browsers.
+ * Selecting a slot grows .item-detail below the grid, which reflows the
+ * grid's rows; the sticky hover then lands on whatever button ends up under
+ * the same screen coordinate (often the slot directly below, same column)
+ * and reads as a second highlighted selection, since :hover and .selected
+ * use identical colors. */
+@media (hover: hover) and (pointer: fine) {
+  .menu button:hover:not(:disabled) {
+    border-color: var(--color-light);
+    background: var(--color-mid);
+  }
 }
 
 .menu button:disabled {
@@ -339,12 +418,36 @@ body {
   animation: turn-pulse 0.6s ease-in-out infinite alternate;
 }
 
+/* Testing/QA-only toggle (Inventory screen) — dimmed off, a loud red border
+ * once active so it never gets left on by accident unnoticed. */
+.cheat-toggle {
+  margin-top: 6px;
+  opacity: 0.6;
+  font-size: 11px;
+}
+
+.cheat-toggle.active {
+  opacity: 1;
+  color: #ff4444;
+  border-color: #ff4444;
+}
+
+/* The grid is the one part of the Inventory screen that actually scrolls —
+ * min-height:0 + overflow-y:auto (matching .skill-list's identical fix)
+ * clips it to its flex-allocated box instead of the default min-height:auto
+ * letting it grow past that box and visually spill into .item-detail below
+ * (a real bug on mobile portrait's column layout: the grid's 5 rows don't
+ * fit the short remaining viewport height, and without this it just
+ * overflowed the pane's bottom edge and overlapped the detail panel instead
+ * of scrolling). */
 .inventory-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   grid-auto-rows: minmax(20px, 1fr);
   gap: 4px;
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* Mobile Inventory rework: a slot is a single tap-to-select button — no
@@ -353,11 +456,41 @@ body {
  * used to cost the player gear or a consumable). Selecting shows the item in
  * the fixed-height .item-detail panel below, with explicit Use/Drop buttons. */
 .inv-slot {
+  position: relative;
   border: 1px solid var(--color-mid);
   display: flex;
   align-items: center;
   justify-content: center;
   text-align: center;
+}
+
+/* Tile-icon Inventory rework: width/height/background-image/-position/-size
+ * come from the inline style attribute (assets.ts's spriteCssStyle, same
+ * pattern as .relic-icon) — this class only keeps the sprite from stretching
+ * to the button's own flex-filled size. */
+.inv-slot .item-icon {
+  flex-shrink: 0;
+}
+
+/* Phase 18 Inventory Stacking: a small corner badge showing a stacked
+ * Potion/Consumable's count — on the grid slot itself, and inline next to
+ * the name in the detail panel/equip slots (menus.ts adds `position:
+ * relative` only where the badge needs absolute positioning, i.e. the grid). */
+.inv-slot .item-count {
+  position: absolute;
+  bottom: 2px;
+  right: 3px;
+  font-size: 10px;
+  color: var(--color-light);
+  background: var(--color-bg);
+  padding: 0 2px;
+  border: 1px solid var(--color-mid);
+}
+
+.item-detail-name .item-count {
+  color: var(--color-light);
+  opacity: 0.85;
+  font-weight: normal;
 }
 
 .inv-slot.empty {
@@ -371,7 +504,7 @@ body {
 }
 
 /* Equipped Weapon/Accessory lore: only 2 of these ever exist (unlike the
- * 10-slot grid), so always-visible text here doesn't risk the same overflow —
+ * 25-slot grid), so always-visible text here doesn't risk the same overflow —
  * hidden on desktop, where hovering the button's `title` already covers it. */
 .equip-lore {
   display: none;
@@ -383,6 +516,11 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  /* Never let .menu-tab-body's flex distribution squeeze this — it's the
+   * whole reason Use/Drop need to stay reachable, so it and the Close
+   * button below it always keep their natural height even if the grid
+   * above is tight on space. */
+  flex-shrink: 0;
 }
 
 .item-detail-empty {
@@ -393,18 +531,50 @@ body {
   text-align: center;
 }
 
+.item-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.item-detail-icon {
+  flex-shrink: 0;
+  border: 1px solid var(--color-mid);
+  border-radius: 2px;
+  background-color: var(--color-bg);
+}
+
+.item-detail-heading {
+  flex: 1;
+  min-width: 0;
+}
+
 .item-detail-name {
   font-weight: bold;
   color: var(--color-light);
 }
 
+/* Inventory Stat Block (GDD Section 8, Phase 16): bright-amber monospace,
+ * visually distinct from the muted-midtone lore below it. */
 .item-detail-stat {
-  opacity: 0.85;
+  color: var(--color-light);
+  font-weight: bold;
+  opacity: 1;
 }
 
 .item-detail-lore {
-  opacity: 0.8;
+  color: var(--color-mid);
+  opacity: 1;
   font-style: italic;
+}
+
+/* Equipped-slot Stat Block: same treatment, always visible (unlike
+ * .equip-lore, which is hover-only on desktop) since the GDD's Stat Block
+ * requirement applies to every item, equipped ones included. */
+.equip-stat {
+  color: var(--color-light);
+  font-weight: bold;
+  font-size: 12px;
 }
 
 .item-detail-actions {
@@ -418,14 +588,23 @@ body {
   text-align: center;
 }
 
-.item-detail-actions .drop-btn {
+.item-detail-actions .melt-btn {
   opacity: 0.7;
 }
 
+/* Phase 18: 25 skills (5 original + the 20-skill roster) run well past a
+ * fixed-height menu — the list itself scrolls, flex:1/min-height:0 so it's
+ * the one part that shrinks/scrolls inside .menu-tab-body's column, while
+ * the tab row above and Close button/hint below stay pinned and reachable
+ * (the same "don't let content push the Close button off-screen" fix the
+ * Inventory grid got in Phase 11h). */
 .skill-list {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .skill-row {
@@ -445,12 +624,19 @@ body {
 .menu-hint {
   opacity: 0.6;
   margin-top: auto;
+  flex-shrink: 0;
 }
 
-/* Upgrade Shop & Help overlays (Phase 5) */
-.upgrade-shop,
-.help-menu {
+/* Upgrade Shop overlay (Phase 5) */
+.upgrade-shop {
   overflow-y: auto;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
 }
 
 .shop-section h3 {
@@ -475,9 +661,39 @@ body {
 .new-game-btn {
   width: 100%;
   margin-top: 6px;
+  flex-shrink: 0;
 }
 
 .new-game-btn {
+  opacity: 0.7;
+}
+
+/* Phase 19 Cursed Rift modal: dark purple/amber, per the GDD's "A Dark
+ * Presence Demands a Sacrifice..." styling. */
+.cursed-rift-menu {
+  background: #12061a;
+}
+.cursed-rift-menu h2 {
+  color: #b98bff;
+}
+.rift-accept-btn,
+.rift-decline-btn {
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 5px;
+  font-size: 12px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.rift-accept-btn {
+  color: #b98bff;
+  border-color: #6a3b9e;
+}
+.rift-accept-btn:hover {
+  background: #3a1f5c;
+  border-color: #b98bff;
+}
+.rift-decline-btn {
   opacity: 0.7;
 }
 
@@ -537,19 +753,23 @@ body {
   max-width: 26em;
 }
 
-/* Skill Menu tabs / Bestiary (Fun & Feel #1, #5) */
-.skill-menu {
-  overflow-y: auto;
-}
-
+/* Menu tab row (Fun & Feel #1, #5; Next-Task.md unified Menu) — 6 tabs now
+ * (Status/Inv/Chronofacts/Skill/Bestiary/Settings) vs. the old max of 2.
+ * `flex: 1 1 30%` (not plain `flex: 1`, which lets flex-basis:0 shrink every
+ * button down to its 44px min-width mobile touch-target floor before ever
+ * wrapping — 6 * 44px comfortably fits one row, just with unreadably
+ * clipped/overlapping label text) forces a firm 3-per-row grid: 3 buttons'
+ * 30% bases sum to 90% (fits), a 4th pushes past 100% and wraps, giving a
+ * clean 3+3 layout at any container width instead of a squeeze. */
 .tab-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 6px;
 }
 
 .tab-btn {
-  flex: 1;
+  flex: 1 1 30%;
 }
 
 .bestiary-list {
@@ -604,6 +824,15 @@ body {
   html,
   body {
     overscroll-behavior: none;
+    /* Base rule above sets overflow:hidden for every breakpoint, which is
+     * fine on desktop (nothing needs to scroll) but on mobile it means a
+     * viewport that ends up shorter than #app's content (e.g. Safari's
+     * bottom URL bar expanded, eating into the visible area even with
+     * setAppHeight() above tracking it) has no escape hatch at all — the
+     * touch-controls just render off the bottom of the screen with no way
+     * to reach them. Letting the page scroll as a fallback means the worst
+     * case is "scroll a bit for the d-pad," not "it's gone." */
+    overflow-y: auto;
   }
 
   body {
@@ -622,6 +851,10 @@ body {
     width: 100vw;
     height: 100vh;
     height: 100dvh;
+    /* main.ts's setAppHeight() keeps this in sync with
+     * window.visualViewport.height — see its comment for why 100dvh alone
+     * isn't enough here. Falls back to the dvh line above until JS runs. */
+    height: var(--app-height, 100dvh);
   }
 
   #hud-top {
@@ -637,6 +870,13 @@ body {
     max-height: 42vh;
     flex-shrink: 0;
     align-self: center;
+    /* main.ts's mobile canvas is a 20x15-tile view (4:3), a different aspect
+     * from desktop's 30x20 (3:2) — object-fit: contain keeps it
+     * letterboxed-but-undistorted whichever of width/max-height ends up the
+     * binding constraint, instead
+     * of height:auto's plain aspect-from-width math stretching it to fill
+     * whatever box max-height leaves once it's the tighter of the two. */
+    object-fit: contain;
   }
 
   #hud-bottom {
@@ -674,6 +914,15 @@ body {
     font-size: 15px;
     line-height: 1.7;
     padding: 4px 0 8px;
+    /* hud.ts caps the log at its last 3 lines, but starts empty and fills up
+     * one line at a time as the player acts. #hud-bottom sits in normal flex
+     * flow here (see #app's mobile column layout above), so an un-reserved
+     * .action-log grows taller each time a line is appended, shoving the
+     * touch-controls dpad/skill buttons further down the screen on every
+     * move until the log hits its 3-line cap. Reserving the full 3-line
+     * height up front keeps #hud-bottom (and everything below it) a
+     * constant height regardless of how many lines are currently filled. */
+    min-height: calc(1.7em * 3 + 12px);
   }
 
   .skill-slot,
@@ -702,11 +951,6 @@ body {
     padding: 11px 12px;
     min-height: 44px;
     min-width: 44px;
-  }
-
-  /* Stack every side-by-side overlay row into a column */
-  .inventory-panes {
-    flex-direction: column;
   }
 
   .inventory-grid {
@@ -798,6 +1042,16 @@ body {
     touch-action: none;
   }
 
+  /* Brace sits below the D-Pad, not in the action pad on the right — keeps
+   * it movement-adjacent and lets the Q/E/R/F diamond sit directly above
+   * the INV/SKL/? row instead of being pushed apart by Brace's width. */
+  .dpad-column {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+
   .dpad {
     display: grid;
     grid-template-areas:
@@ -863,9 +1117,33 @@ body {
     gap: 6px;
   }
 
-  .action-row {
-    display: flex;
-    gap: 8px;
+  /* Phase 18: Q/E/R/F in an ABXY-style diamond — same 3x3 CSS-grid technique
+   * as .dpad above, just with the 4 skill buttons instead of movement. */
+  .skill-diamond {
+    display: grid;
+    grid-template-areas:
+      ".    q ."
+      "r    . e"
+      ".    f .";
+    grid-template-columns: repeat(3, 56px);
+    grid-template-rows: repeat(3, 56px);
+    gap: 4px;
+  }
+
+  .skill-btn-q {
+    grid-area: q;
+  }
+
+  .skill-btn-e {
+    grid-area: e;
+  }
+
+  .skill-btn-r {
+    grid-area: r;
+  }
+
+  .skill-btn-f {
+    grid-area: f;
   }
 
   .skill-btn {

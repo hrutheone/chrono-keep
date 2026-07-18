@@ -137,7 +137,11 @@ export function useConsumable(state: GameState, invIndex: number): Promise<void>
   const effect = EFFECTS[consumable.effect];
   if (!effect) return Promise.resolve();
 
-  state.run.inventory.splice(invIndex, 1);
+  // Phase 18 Inventory Stacking: decrement in place; only clear the slot
+  // once the stack empties.
+  const remaining = (consumable.count ?? 1) - 1;
+  if (remaining > 0) consumable.count = remaining;
+  else state.run.inventory.splice(invIndex, 1);
   effect(state, consumable);
   logLine(state, `Used ${consumable.name}.`);
 

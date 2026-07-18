@@ -2,14 +2,19 @@
 // logic — src/menus.ts owns the HTML overlay and dispatches into these.
 
 import { PLAYER_BASE_ATK, PLAYER_BASE_DEF } from './types';
-import type { Accessory, GameState, Weapon } from './types';
-import { FREE_SWAP_PASSIVES, rollChestItem } from './content';
+import type { Accessory, GameState, Item, Weapon } from './types';
+import { FREE_SWAP_PASSIVES, POTION_FIXED_TURN_COST, itemMeltValue, rollChestItem } from './content';
 import { spendTurn, logLine } from './turns';
 import { awardEchoes } from './echoes';
-import { playAnchorSfx, playEquipSfx, playPickupSfx, playPotionSfx, playTimeShardSfx, playUnequipSfx } from './audio';
+import { playAnchorSfx, playEquipSfx, playPickupSfx, playPotionSfx, playPurchaseSfx, playTimeShardSfx, playUnequipSfx, playUnlockSfx } from './audio';
 import { notifyFloatingText } from './floatingText';
 
-export const INVENTORY_CAP = 10;
+// Raised 10 -> 20 alongside Phase 18's 40-weapon/25-skill roster — a
+// 10-slot cap (halved further by Inventory Stacking merging Potions/
+// Consumables into one slot each) was cramped against a much bigger item
+// pool to actually be carrying loot from. Raised again 20 -> 25 to back a
+// 5x5 grid (menus.ts/style.css's .inventory-grid).
+export const INVENTORY_CAP = 25;
 
 /** 7-tile taxicab wake radius (GDD Section 7): only *awake* enemies count. */
 const THREAT_RADIUS = 7;
@@ -32,19 +37,39 @@ const STAM_BONUS: Partial<Record<string, number>> = {
   max_stam_plus_3: 3,
 };
 
-function accessoryDefBonus(acc: Accessory | null): number {
+// Phase 18: weapon-side DEF/Max HP modifiers while equipped (Bone Club/
+// Defender, Apocalypse) — the weapon equivalent of the accessory maps above,
+// applied the same way in equipWeapon/unequipWeapon below.
+const WEAPON_DEF_BONUS: Partial<Record<string, number>> = { def_minus_1_equipped: -1, def_plus_1_equipped: 1 };
+const WEAPON_HP_BONUS: Partial<Record<string, number>> = { max_hp_minus_10_equipped: -10 };
+
+// Exported for menus.ts's Inventory Stat Block, same reasoning as the
+// accessory bonus functions above.
+export function weaponDefBonus(weapon: Weapon | null): number {
+  return WEAPON_DEF_BONUS[weapon?.passive ?? ''] ?? 0;
+}
+
+export function weaponHpBonus(weapon: Weapon | null): number {
+  return WEAPON_HP_BONUS[weapon?.passive ?? ''] ?? 0;
+}
+
+// Exported for menus.ts's Inventory Stat Block (Phase 16): the same
+// per-passive numeric lookups equip/unequip use for the live stat math,
+// reused so the displayed DEF/Max HP/ATK/Max Stamina lines can never drift
+// from what equipping the item actually does.
+export function accessoryDefBonus(acc: Accessory | null): number {
   return DEF_BONUS[acc?.passive ?? ''] ?? 0;
 }
 
-function accessoryHpBonus(acc: Accessory | null): number {
+export function accessoryHpBonus(acc: Accessory | null): number {
   return HP_BONUS[acc?.passive ?? ''] ?? 0;
 }
 
-function accessoryAtkBonus(acc: Accessory | null): number {
+export function accessoryAtkBonus(acc: Accessory | null): number {
   return ATK_BONUS[acc?.passive ?? ''] ?? 0;
 }
 
-function accessoryStamBonus(acc: Accessory | null): number {
+export function accessoryStamBonus(acc: Accessory | null): number {
   return STAM_BONUS[acc?.passive ?? ''] ?? 0;
 }
 
@@ -67,13 +92,28 @@ export function elementSynergyBonus(state: GameState, element: string): number {
   return ELEMENT_SYNERGY_BONUS[passive] ?? 0;
 }
 
+// Giant's Anvil (Phase 19 Relic): +5 flat ATK — the trade-off (Dash
+// permanently disabled) is enforced in skills.ts's skillStaminaCost instead,
+// the only place that already gates whether a skill can be cast at all.
+export const GIANTS_ANVIL_ATK = 5;
+
 export function totalAtk(state: GameState): number {
-  return PLAYER_BASE_ATK + (state.run.equippedWeapon?.atk ?? 0) + accessoryAtkBonus(state.run.equippedAccessory);
+  const relicBonus = state.run.relics.includes('giants_anvil') ? GIANTS_ANVIL_ATK : 0;
+  return (
+    PLAYER_BASE_ATK +
+    state.persistent.baseAtkUpgrade +
+    (state.run.equippedWeapon?.atk ?? 0) +
+    accessoryAtkBonus(state.run.equippedAccessory) +
+    state.run.tempAtkBonus +
+    relicBonus
+  );
 }
 
 export function totalDef(state: GameState): number {
   const brace = state.run.braced ? 1 : 0;
-  return PLAYER_BASE_DEF + accessoryDefBonus(state.run.equippedAccessory) + brace;
+  return (
+    PLAYER_BASE_DEF + accessoryDefBonus(state.run.equippedAccessory) + weaponDefBonus(state.run.equippedWeapon) + state.run.tempDefBonus + brace
+  );
 }
 
 export function isThreatNearby(state: GameState): boolean {
@@ -108,10 +148,41 @@ export function hasAlchemistsBelt(state: GameState): boolean {
   return state.run.equippedAccessory?.passive === 'alchemist_belt';
 }
 
+/** Shared tail of a normal (non-Anchor/Time-Shard/Relic) pickup: Inventory
+ * Stacking merge, then the INVENTORY_CAP check, then a straight push. Pulled
+ * out of pickupItemsAt's loop so Golden Scarab's bonus chest item (Phase 19)
+ * can reuse the exact same rules a primary pickup gets, instead of a
+ * duplicated near-copy. Returns false (caller should stop granting more —
+ * the floor return-to-tile already happened) when the cap blocks it. */
+function grantItem(state: GameState, x: number, y: number, item: Item, chestLoot: boolean): boolean {
+  if (item.kind === 'POTION' || item.kind === 'CONSUMABLE') {
+    const stack = state.run.inventory.find((i) => i.name === item.name);
+    if (stack) {
+      stack.count = (stack.count ?? 1) + 1;
+      logLine(state, `Picked up ${item.name} (x${stack.count}).`);
+      playPickupSfx();
+      return true;
+    }
+  }
+  if (state.run.inventory.length >= INVENTORY_CAP) {
+    logLine(state, 'Inventory full.');
+    // With nowhere to go — put it back rather than deleting it outright.
+    // Chest contents reroll on every pickup attempt by design (Dynamic Chest
+    // Loot, Section 7), so a rejected attempt re-rolling next time isn't a
+    // regression from the original tiles' own random-per-attempt contract.
+    state.dungeon.items.push({ item, x, y, chestLoot });
+    return false;
+  }
+  state.run.inventory.push(item);
+  logLine(state, `Picked up ${item.name}.`);
+  playPickupSfx();
+  return true;
+}
+
 /** Adds every WorldItem standing at (x, y) to the inventory, removing each from the floor.
  * A tile can hold more than one drop (e.g. a kill's item plus a separately-rolled Time Shard).
- * Anchors and Time Shards are instant effects and never occupy a slot (Section 7).
- * Chest-loot items (Section 7 Dynamic Chest Loot) are rerolled from gameplay RNG
+ * Anchors, Time Shards, and Relics are instant effects and never occupy a slot (Section 7,
+ * Phase 19). Chest-loot items (Section 7 Dynamic Chest Loot) are rerolled from gameplay RNG
  * here, at pickup time, so contents vary loop to loop while position stays seeded. */
 export function pickupItemsAt(state: GameState, x: number, y: number): void {
   for (;;) {
@@ -126,6 +197,10 @@ export function pickupItemsAt(state: GameState, x: number, y: number): void {
       if (!state.persistent.unlockedAnchors.includes(nextBiomeStart)) {
         state.persistent.unlockedAnchors.push(nextBiomeStart);
         state.persistent.unlockedAnchors.sort((a, b) => a - b);
+        // "New Biome anchored" (Section 9D) is its own row, distinct from the
+        // pickup fanfare below — only fires the once-per-Biome-per-save this
+        // guard already exists to detect, not on a hypothetical re-pickup.
+        playUnlockSfx();
       }
       awardEchoes(state, 25, 'Anchor collected');
       logLine(state, `Temporal Anchor secured! Floor ${nextBiomeStart} unlocked.`);
@@ -135,35 +210,82 @@ export function pickupItemsAt(state: GameState, x: number, y: number): void {
 
     if (item.kind === 'TIME_SHARD') {
       state.dungeon.items.splice(idx, 1);
-      state.run.turnsRemaining += item.value;
-      logLine(state, `Time Shard! +${item.value} Turns.`);
+      // Time-Eater's Jaw (Phase 19 Relic): +8 Turns instead of +5 — an
+      // override on the fixed base value, not a multiplier (matches the
+      // Relic's stated "grants +8 instead of +5" wording exactly).
+      const gain = state.run.relics.includes('time_eaters_jaw') ? 8 : item.value;
+      state.run.turnsRemaining += gain;
+      logLine(state, `Time Shard! +${gain} Turns.`);
       playTimeShardSfx();
-      notifyFloatingText(x, y, `+${item.value} TURNS`, 'turns');
+      notifyFloatingText(x, y, `+${gain} TURNS`, 'turns');
       continue;
     }
 
-    if (state.run.inventory.length >= INVENTORY_CAP) {
-      logLine(state, 'Inventory full.');
-      return;
+    if (item.kind === 'RELIC') {
+      state.dungeon.items.splice(idx, 1);
+      const effect = item.effect!;
+      if (state.run.relics.includes(effect)) {
+        // Already held — this Relic doesn't stack with itself; a small
+        // Echo consolation so the pickup still feels like it did something.
+        awardEchoes(state, 10, 'duplicate Relic');
+        logLine(state, `Already carrying ${item.name} — +10 Echoes instead.`);
+      } else {
+        state.run.relics.push(effect);
+        logLine(state, `Chronofact acquired: ${item.name}!`);
+        playUnlockSfx();
+      }
+      continue;
     }
+
     state.dungeon.items.splice(idx, 1);
-    const finalItem = worldItem.chestLoot ? rollChestItem(Math.random, state.run.currentFloor, item.id) : item;
-    state.run.inventory.push(finalItem);
-    logLine(state, `Picked up ${finalItem.name}.`);
-    playPickupSfx();
+    let finalItem = worldItem.chestLoot ? rollChestItem(Math.random, state.run.currentFloor, item.id) : item;
+    // Alchemist's Satchel (Phase 19 Relic): "Potion drop rates are halved" —
+    // reinterpreted as a 50% chance to re-roll a chest's Potion result once
+    // (rollChestItem's pool is flat/equal-weight per entry, no probability
+    // knob to literally halve), landing on whatever else the pool gives.
+    if (worldItem.chestLoot && finalItem.kind === 'POTION' && state.run.relics.includes('alchemists_satchel') && Math.random() < 0.5) {
+      finalItem = rollChestItem(Math.random, state.run.currentFloor, `${item.id}-satchel-reroll`);
+    }
+    // A chest reroll can land on a RELIC (Phase 19's CHEST_POOL_B3 entry) —
+    // re-dispatch through the same instant-pickup path above instead of
+    // falling into the slot-occupying logic below, which RELIC never uses.
+    if (finalItem.kind === 'RELIC') {
+      state.dungeon.items.push({ item: finalItem, x, y, chestLoot: false });
+      continue;
+    }
+
+    if (!grantItem(state, x, y, finalItem, worldItem.chestLoot ?? false)) return;
+
+    // Golden Scarab (Phase 19 Relic): chests drop a second item. Only for
+    // actual chest loot (not a plain floor/enemy drop) and only once the
+    // primary item successfully found a slot — a full inventory shouldn't
+    // roll (and potentially waste) a bonus on top of the rejected primary.
+    if (worldItem.chestLoot && state.run.relics.includes('golden_scarab')) {
+      const bonus = rollChestItem(Math.random, state.run.currentFloor, `${item.id}-scarab`);
+      if (bonus.kind === 'RELIC') state.dungeon.items.push({ item: bonus, x, y, chestLoot: false });
+      else grantItem(state, x, y, bonus, false);
+    }
   }
 }
 
-/** Discards the inventory item at this slot for good — Small Improvements:
- * the only way to clear out a duplicate/unwanted pickup once the 10-slot cap
- * is in reach. Same context-sensitive turn cost as an equip/unequip swap. */
-export function dropItem(state: GameState, invIndex: number): void {
+/** Melts the inventory item at this slot for good, converting it to Echoes —
+ * Small Improvements: the only way to clear out a duplicate/unwanted pickup
+ * once the 25-slot cap is in reach, now with a payout instead of just
+ * vanishing. Same context-sensitive turn cost an equip/unequip swap (or the
+ * old Drop action) used. Per-unit value (content.ts's itemMeltValue) times
+ * the full stack — melting a Potion stack of 2 pays out for both, same as
+ * Drop used to clear both at once. */
+export function meltItem(state: GameState, invIndex: number): void {
   const item = state.run.inventory[invIndex];
   if (!item) return;
   state.run.inventory.splice(invIndex, 1);
   chargeInventoryAction(state, false);
-  logLine(state, `Dropped ${item.name}.`);
-  playUnequipSfx();
+  const units = item.count && item.count > 1 ? item.count : 1;
+  // awardEchoes already logs "+N Echoes (reason)." (and saves) — no separate
+  // "Melted ..." line, same single-log-line convention every other Echo
+  // source (kills, Flawless Floor, Anchor pickup) already follows.
+  awardEchoes(state, itemMeltValue(item) * units, units > 1 ? `melted ${item.name} x${units}` : `melted ${item.name}`);
+  playPurchaseSfx();
 }
 
 function equipWeapon(state: GameState, invIndex: number, weapon: Weapon): void {
@@ -171,7 +293,9 @@ function equipWeapon(state: GameState, invIndex: number, weapon: Weapon): void {
     FREE_SWAP_PASSIVES.has(weapon.passive) || FREE_SWAP_PASSIVES.has(state.run.equippedWeapon?.passive ?? '');
   state.run.inventory.splice(invIndex, 1);
   const prior = state.run.equippedWeapon;
+  applyMaxHpDelta(state, -weaponHpBonus(prior));
   state.run.equippedWeapon = weapon;
+  applyMaxHpDelta(state, weaponHpBonus(weapon));
   if (prior) state.run.inventory.push(prior);
   chargeInventoryAction(state, freeAlways);
   logLine(state, `Equipped ${weapon.name}.`);
@@ -207,6 +331,7 @@ export function unequipWeapon(state: GameState): void {
     logLine(state, 'Inventory full — cannot unequip.');
     return;
   }
+  applyMaxHpDelta(state, -weaponHpBonus(weapon));
   state.run.equippedWeapon = null;
   state.run.inventory.push(weapon);
   chargeInventoryAction(state, FREE_SWAP_PASSIVES.has(weapon.passive));
@@ -231,12 +356,52 @@ export function unequipAccessory(state: GameState): void {
 }
 
 /** Consumes the POTION at this inventory slot, healing by its value (capped at maxHp). */
+/** Consumes one from the POTION stack at this inventory slot, applying its
+ * `effect` (Phase 18: heal_flat, heal_percent_max, heal_percent_max_cleanse,
+ * or Soma Drop's permanent_max_hp). Only clears the slot once the stack
+ * (Phase 18 Inventory Stacking) empties. */
 export function usePotion(state: GameState, invIndex: number): void {
   const item = state.run.inventory[invIndex];
   if (!item || item.kind !== 'POTION') return;
-  state.run.inventory.splice(invIndex, 1);
-  state.run.currentHp = Math.min(state.run.maxHp, state.run.currentHp + item.value);
-  chargeInventoryAction(state, hasAlchemistsBelt(state));
-  logLine(state, `Used ${item.name}, healed ${item.value} HP.`);
+
+  // Alchemist's Satchel (Phase 19 Relic): doubles a Potion's HP restore —
+  // deliberately excludes Soma Drop's permanent_max_hp below, which isn't a
+  // "heal" in the relic's sense.
+  const satchelMult = state.run.relics.includes('alchemists_satchel') ? 2 : 1;
+
+  let healed = 0;
+  switch (item.effect) {
+    case 'heal_percent_max':
+    case 'heal_percent_max_cleanse':
+      healed = Math.round((state.run.maxHp * item.value * satchelMult) / 100);
+      state.run.currentHp = Math.min(state.run.maxHp, state.run.currentHp + healed);
+      if (item.effect === 'heal_percent_max_cleanse') {
+        state.run.status = 'NONE';
+        state.run.statusTurns = 0;
+      }
+      break;
+    case 'permanent_max_hp':
+      applyMaxHpDelta(state, item.value);
+      break;
+    default: // 'heal_flat'
+      healed = item.value * satchelMult;
+      state.run.currentHp = Math.min(state.run.maxHp, state.run.currentHp + healed);
+  }
+
+  const remaining = (item.count ?? 1) - 1;
+  if (remaining > 0) item.count = remaining;
+  else state.run.inventory.splice(invIndex, 1);
+
+  const free = hasAlchemistsBelt(state);
+  const fixedCost = POTION_FIXED_TURN_COST[item.name];
+  if (fixedCost !== undefined && !free) {
+    for (let i = 0; i < fixedCost; i++) spendTurn(state);
+  } else {
+    chargeInventoryAction(state, free);
+  }
+
+  if (item.effect === 'permanent_max_hp') logLine(state, `Used ${item.name} — +${item.value} Max HP.`);
+  else if (item.effect === 'heal_percent_max_cleanse') logLine(state, `Used ${item.name}, healed ${healed} HP and cleansed Status.`);
+  else logLine(state, `Used ${item.name}, healed ${healed} HP.`);
   playPotionSfx();
 }

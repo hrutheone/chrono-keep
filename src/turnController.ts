@@ -4,14 +4,14 @@
 // Inventory actions follow Phase 3's separate context-sensitive rule and
 // never go through here.
 
-import { applyEnemyStatus, applyPlayerStatus, computeDamage, consumeHitStopFlag, playerElement } from './combat';
-import { runEnemyPhase } from './enemyAI';
+import { applyEnemyStatus, applyPlayerStatus, computeDamage, consumeHitStopFlag, killEnemy, playerElement } from './combat';
+import { runEnemyPhase, tickBossRewind } from './enemyAI';
 import { TILE, effectiveTileAt } from './mapgen';
 import { HUB_FLOOR, enterHub } from './hub';
 import { resetRunForNewLoop } from './state';
 import { logLine } from './turns';
 import { markFloorDamageTaken } from './echoes';
-import { saveGame } from './persistence';
+import { saveGame, saveRunSnapshot } from './persistence';
 import { playDeathSfx, playLoopResetSfx } from './audio';
 import { PLAYER_ID, notifyDeath } from './animation';
 import { notifyFloatingText } from './floatingText';
@@ -37,15 +37,92 @@ function applyFireHazard(state: GameState): void {
   }
 }
 
+// Phase 18 (Scourge skill): Frost Hazard, the direct-damage counterpart to
+// Fire Hazard's Burn-status one — deals flat DEF-piercing chip damage each
+// Tick Phase instead of applying a status effect, so it stays lethal even
+// against Chilled/Stun-immune builds.
+const FROST_HAZARD_DAMAGE = 1;
+
+function isFrostHazardAt(state: GameState, x: number, y: number): boolean {
+  return effectiveTileAt(state, x, y) === TILE.FROST_HAZARD;
+}
+
+function applyFrostHazard(state: GameState): void {
+  if (isFrostHazardAt(state, state.run.playerX, state.run.playerY)) {
+    state.run.currentHp = Math.max(0, state.run.currentHp - FROST_HAZARD_DAMAGE);
+    markFloorDamageTaken(state);
+    logLine(state, `The frost gnaws at you for ${FROST_HAZARD_DAMAGE}.`);
+    notifyFloatingText(state.run.playerX, state.run.playerY, `${FROST_HAZARD_DAMAGE}`, 'damage');
+  }
+  // Iterate a snapshot — killEnemy reassigns state.dungeon.enemies to a
+  // filtered copy, which would otherwise invalidate a live for..of over it.
+  for (const enemy of [...state.dungeon.enemies]) {
+    if (!isFrostHazardAt(state, enemy.x, enemy.y)) continue;
+    enemy.hp -= FROST_HAZARD_DAMAGE;
+    notifyFloatingText(enemy.x, enemy.y, `${FROST_HAZARD_DAMAGE}`, 'damage');
+    if (enemy.hp <= 0) killEnemy(state, enemy, 'bump');
+  }
+}
+
+/** Phase 18 (Chakra Lv3/Provoke): temporary ATK/DEF buffs and Aura's status
+ * immunity window, all counted down once per Tick Phase and cleared at 0 —
+ * the same shape as tickPlayerStatus's statusTurns countdown. */
+function tickTempBuffs(state: GameState): void {
+  if (state.run.tempAtkBonusTurns > 0) {
+    state.run.tempAtkBonusTurns -= 1;
+    if (state.run.tempAtkBonusTurns <= 0) state.run.tempAtkBonus = 0;
+  }
+  if (state.run.tempDefBonusTurns > 0) {
+    state.run.tempDefBonusTurns -= 1;
+    if (state.run.tempDefBonusTurns <= 0) state.run.tempDefBonus = 0;
+  }
+  if (state.run.statusImmuneTurns > 0) state.run.statusImmuneTurns -= 1;
+}
+
+/** Phase 18 (Defuse/Slow skills): restores the enemy's original DEF/Speed
+ * once the temporary override's timer runs out. */
+function tickEnemyOverrides(state: GameState): void {
+  for (const enemy of state.dungeon.enemies) {
+    if (enemy.defuseTurnsLeft !== undefined && enemy.defuseTurnsLeft > 0) {
+      enemy.defuseTurnsLeft -= 1;
+      if (enemy.defuseTurnsLeft <= 0) {
+        enemy.defense = enemy.defuseOriginalDef ?? enemy.defense;
+        enemy.defuseOriginalDef = undefined;
+      }
+    }
+    if (enemy.slowTurnsLeft !== undefined && enemy.slowTurnsLeft > 0) {
+      enemy.slowTurnsLeft -= 1;
+      if (enemy.slowTurnsLeft <= 0) {
+        enemy.speed = enemy.slowOriginalSpeed ?? enemy.speed;
+        enemy.slowOriginalSpeed = undefined;
+      }
+    }
+  }
+}
+
+/** Troll Blood (Phase 19 Relic): auto-restores 1 HP every 10 real dungeon
+ * turns (Hub excluded, same as every other Tick-Phase-gated counter here). */
+function tickTrollBlood(state: GameState): void {
+  if (!state.run.relics.includes('troll_blood')) return;
+  state.run.trollBloodCounter += 1;
+  if (state.run.trollBloodCounter < 10) return;
+  state.run.trollBloodCounter = 0;
+  if (state.run.currentHp < state.run.maxHp) {
+    state.run.currentHp = Math.min(state.run.maxHp, state.run.currentHp + 1);
+    logLine(state, 'Troll Blood knits a wound shut — +1 HP.');
+  }
+}
+
 function tickExpiringTiles(state: GameState): void {
   for (const tile of state.dungeon.expiringTiles) tile.turnsLeft -= 1;
   state.dungeon.expiringTiles = state.dungeon.expiringTiles.filter((t) => t.turnsLeft > 0);
 }
 
-// Cinder-Shaman's firebomb (Section 6C, Phase 14): the Fire Hazard left on
-// the 3x3's center tile burns for this many turns — same duration Flame Arc
-// Lvl 3 uses (skills.ts), so hazard tiles read consistently across sources.
-const CINDER_FIRE_HAZARD_TURNS = 2;
+// Cinder-Shaman's firebomb (Section 6C, Phase 14) and Inferno-Golem's Magma
+// Slam (Phase 15): the Fire Hazard left on the AOE's center tile burns for
+// `t.hazardTurns` turns if set (Magma Slam: 3), or this default (Cinder-
+// Shaman: 2, same duration Flame Arc Lvl 3 uses in skills.ts) if not.
+const DEFAULT_FIRE_HAZARD_TURNS = 2;
 
 function detonateTelegraph(state: GameState, t: GameState['dungeon']['telegraphTiles'][number]): void {
   const hitsPlayer = state.run.playerX === t.x && state.run.playerY === t.y;
@@ -66,13 +143,14 @@ function detonateTelegraph(state: GameState, t: GameState['dungeon']['telegraphT
       const dmg = computeDamage(t.sourceAttack, totalDef(state), 'FIRE', playerElement(state));
       state.run.currentHp = Math.max(0, state.run.currentHp - dmg);
       markFloorDamageTaken(state);
-      logLine(state, `The firebomb detonates — you take ${dmg} Fire damage!`);
+      logLine(state, `The fire detonates — you take ${dmg} Fire damage!`);
       notifyFloatingText(t.x, t.y, `${dmg}`, 'damage');
     }
     if (t.hazard) {
+      const turns = t.hazardTurns ?? DEFAULT_FIRE_HAZARD_TURNS;
       const existing = state.dungeon.expiringTiles.find((et) => et.x === t.x && et.y === t.y);
-      if (existing) existing.turnsLeft = CINDER_FIRE_HAZARD_TURNS;
-      else state.dungeon.expiringTiles.push({ x: t.x, y: t.y, turnsLeft: CINDER_FIRE_HAZARD_TURNS, tileType: TILE.FIRE_HAZARD });
+      if (existing) existing.turnsLeft = turns;
+      else state.dungeon.expiringTiles.push({ x: t.x, y: t.y, turnsLeft: turns, tileType: TILE.FIRE_HAZARD });
     }
     return;
   }
@@ -131,8 +209,16 @@ function runTickPhase(state: GameState, actionKind: PlayerActionKind): void {
   const chilledBeforeTick = state.run.status === 'CHILLED';
 
   applyFireHazard(state);
+  applyFrostHazard(state);
   tickPlayerStatus(state);
+  tickTempBuffs(state);
+  tickTrollBlood(state);
+  // Before tickEnemyStatuses: a Rewind resolving this turn must see whether
+  // the boss WAS Stunned during the Enemy Phase that just ran, not a status
+  // tickEnemyStatuses is about to clear in this same Tick Phase.
+  tickBossRewind(state);
   tickEnemyStatuses(state);
+  tickEnemyOverrides(state);
   tickExpiringTiles(state);
   tickTelegraphTiles(state);
 
@@ -193,6 +279,21 @@ function tryShatteredHourglass(state: GameState): boolean {
   return true;
 }
 
+/** Phoenix Feather (Phase 19 Relic): "on fatal damage, revive at 50% HP,
+ * then the relic is destroyed" — an HP-death-only save (not the turn-
+ * timeout case, which isn't "fatal damage"), one-time-per-run (removed from
+ * `run.relics` the instant it fires, so a re-pickup elsewhere in the run
+ * would be needed to save a second time). */
+function tryPhoenixFeather(state: GameState): boolean {
+  if (state.run.currentHp > 0) return false;
+  if (!state.run.relics.includes('phoenix_feather')) return false;
+  state.run.relics = state.run.relics.filter((r) => r !== 'phoenix_feather');
+  state.run.currentHp = Math.max(1, Math.round(state.run.maxHp * 0.5));
+  logLine(state, 'Phoenix Feather ignites — revived at half HP! (consumed)');
+  notifyFloatingText(state.run.playerX, state.run.playerY, 'REVIVED', 'immune');
+  return true;
+}
+
 function runCheckPhase(state: GameState): void {
   // No loss condition can fire at the Hub: no enemies to deal damage, and the
   // timer never decrements there (runTickPhase above). Guarded explicitly
@@ -200,6 +301,7 @@ function runCheckPhase(state: GameState): void {
   if (state.run.currentFloor === HUB_FLOOR) return;
   if (lossPending || (state.run.turnsRemaining > 0 && state.run.currentHp > 0)) return;
   if (tryShatteredHourglass(state)) return;
+  if (tryPhoenixFeather(state)) return;
   lossPending = true;
   if (state.run.currentHp <= 0) {
     notifyDeath(PLAYER_ID, 'PLAYER', state.run.playerX, state.run.playerY, state.run.facing);
@@ -233,6 +335,11 @@ export function continueAfterDeath(state: GameState): void {
 
   state.ui.currentScreen = 'GAME';
   saveGame(state);
+  // Phase 20: write the fresh Hub run immediately — the on-disk snapshot from
+  // right before death fails loadRunSnapshot's currentHp>0 check anyway, but
+  // saving here means a reload before the next move resumes straight back
+  // into the Hub instead of falling through to TITLE for an extra click.
+  saveRunSnapshot(state);
 }
 
 // Hit-Stop & Screen Shake (Section 11 #1): the engine's first genuinely async
@@ -267,6 +374,17 @@ export async function resolvePlayerTurn(state: GameState, actionKind: PlayerActi
   }
   runEnemyPhase(state);
   runTickPhase(state, actionKind);
+  // Cheat Mode (Inventory toggle, testing/QA only): heal to full before the
+  // Check Phase can evaluate a loss — after Enemy/Tick Phase so it covers
+  // every HP-loss source in one place (bump attacks, Burn/Frost Hazard
+  // ticks, telegraph AOE damage) rather than hooking each individually.
+  if (state.persistent.cheatModeEnabled) state.run.currentHp = state.run.maxHp;
   runCheckPhase(state);
+  // Phase 20 (mobile background/reload survival): snapshot the live run after
+  // every turn so a discarded/reloaded tab can resume mid-floor instead of
+  // dropping back to TITLE. Saved unconditionally (Hub included, death/
+  // timeout included) — loadRunSnapshot's validation on the read side is what
+  // decides whether a given snapshot is actually resumable.
+  saveRunSnapshot(state);
   busy = false;
 }

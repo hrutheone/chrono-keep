@@ -12,18 +12,38 @@ import {
   COLOR_ENEMY_LIGHT,
   COLOR_ENEMY_MID,
   COLOR_FLASH,
+  COLOR_FIRE,
+  COLOR_FROST,
 } from './palette';
 import { TILE } from './mapgen';
+import { eliteAffixColor } from './content';
 import { spritesheet, SPRITE_PX } from './assets';
-import { SPRITES, type SpriteRef } from './sprites';
-import { PLAYER_ID, updateAnimations, getEntityVisual, getDeathGhosts, getParticles } from './animation';
+import {
+  ACCESSORY_SPRITE_BY_NAME,
+  CONSUMABLE_SPRITE_BY_NAME,
+  POTION_SPRITE_BY_NAME,
+  RELIC_SPRITE_BY_EFFECT,
+  SPRITES,
+  WEAPON_SPRITE_BY_NAME,
+  type SpriteRef,
+} from './sprites';
+import { PLAYER_ID, updateAnimations, getEntityVisual, getDeathGhosts, getParticles, getBeams } from './animation';
 import type { GhostVisual } from './animation';
 import { drawGlyphText, getFloatingTexts, measureGlyphText, type FloatKind } from './floatingText';
 import type { GameState, Enemy } from './types';
 
-export const TILE_SIZE = 8;
-export const VIEWPORT_TILES_W = 30; // 240 / 8
-export const VIEWPORT_TILES_H = 20; // 160 / 8
+// Matches assets.ts's SPRITE_PX (new-spritesheet.png is 16px/tile) so every
+// draw is a single clean scale instead of a downscale-then-upscale blur.
+export const TILE_SIZE = 16;
+// Tiles-in-view, derived from the active canvas resolution (desktop 480x320
+// = 30x20, mobile portrait 240x240 = 15x15 — main.ts's VIEW_W/VIEW_H vs.
+// MOBILE_VIEW_W/MOBILE_VIEW_H). renderWorld recomputes these from its
+// viewW/viewH parameters at the top of every frame — safe as a module-level
+// `let` since rendering is always synchronous, one frame at a time (same
+// precedent as turnController.ts's `busy`).
+export let VIEWPORT_TILES_W = 30;
+export let VIEWPORT_TILES_H = 20;
+
 
 const FLOAT_COLOR: Record<FloatKind, string> = {
   damage: COLOR_LIGHT,
@@ -44,17 +64,18 @@ export function drawTile(
   dx: number,
   dy: number,
   flipX = false,
+  size = TILE_SIZE,
 ): void {
   const sx = col * SPRITE_PX;
   const sy = row * SPRITE_PX;
   if (flipX) {
     ctx.save();
-    ctx.translate(dx + TILE_SIZE, dy);
+    ctx.translate(dx + size, dy);
     ctx.scale(-1, 1);
-    ctx.drawImage(spritesheet, sx, sy, SPRITE_PX, SPRITE_PX, 0, 0, TILE_SIZE, TILE_SIZE);
+    ctx.drawImage(spritesheet, sx, sy, SPRITE_PX, SPRITE_PX, 0, 0, size, size);
     ctx.restore();
   } else {
-    ctx.drawImage(spritesheet, sx, sy, SPRITE_PX, SPRITE_PX, dx, dy, TILE_SIZE, TILE_SIZE);
+    ctx.drawImage(spritesheet, sx, sy, SPRITE_PX, SPRITE_PX, dx, dy, size, size);
   }
 }
 
@@ -74,6 +95,7 @@ function drawTileFlash(
   dx: number,
   dy: number,
   flipX = false,
+  size = TILE_SIZE,
 ): void {
   scratchCtx.globalCompositeOperation = 'source-over';
   scratchCtx.clearRect(0, 0, SPRITE_PX, SPRITE_PX);
@@ -83,18 +105,18 @@ function drawTileFlash(
   scratchCtx.fillRect(0, 0, SPRITE_PX, SPRITE_PX);
   if (flipX) {
     ctx.save();
-    ctx.translate(dx + TILE_SIZE, dy);
+    ctx.translate(dx + size, dy);
     ctx.scale(-1, 1);
-    ctx.drawImage(scratch, 0, 0, SPRITE_PX, SPRITE_PX, 0, 0, TILE_SIZE, TILE_SIZE);
+    ctx.drawImage(scratch, 0, 0, SPRITE_PX, SPRITE_PX, 0, 0, size, size);
     ctx.restore();
   } else {
-    ctx.drawImage(scratch, 0, 0, SPRITE_PX, SPRITE_PX, dx, dy, TILE_SIZE, TILE_SIZE);
+    ctx.drawImage(scratch, 0, 0, SPRITE_PX, SPRITE_PX, dx, dy, size, size);
   }
 }
 
-function drawRef(ctx: CanvasRenderingContext2D, ref: SpriteRef, dx: number, dy: number, flipX = false, flash = false): void {
-  if (flash) drawTileFlash(ctx, ref.col, ref.row, dx, dy, flipX);
-  else drawTile(ctx, ref.col, ref.row, dx, dy, flipX);
+function drawRef(ctx: CanvasRenderingContext2D, ref: SpriteRef, dx: number, dy: number, flipX = false, flash = false, size = TILE_SIZE): void {
+  if (flash) drawTileFlash(ctx, ref.col, ref.row, dx, dy, flipX, size);
+  else drawTile(ctx, ref.col, ref.row, dx, dy, flipX, size);
 }
 
 const TILE_REFS: Partial<Record<number, SpriteRef>> = {
@@ -105,6 +127,7 @@ const TILE_REFS: Partial<Record<number, SpriteRef>> = {
   [TILE.SHORTCUT_GATE]: SPRITES.SHORTCUT_GATE,
   [TILE.BOSS_GATE]: SPRITES.BOSS_GATE,
   [TILE.FIRE_HAZARD]: SPRITES.FIRE_HAZARD,
+  [TILE.FROST_HAZARD]: SPRITES.FROST_HAZARD,
   [TILE.SHOP_TERMINAL]: SPRITES.SHOP_TERMINAL,
 };
 
@@ -119,7 +142,18 @@ const ENEMY_REFS: Record<Enemy['kind'], SpriteRef> = {
   CINDER_SHAMAN: SPRITES.CINDER_SHAMAN,
   VOLT_HOUND: SPRITES.VOLT_HOUND,
   FROST_SENTINEL: SPRITES.FROST_SENTINEL,
+  INFERNO_GOLEM: SPRITES.INFERNO_GOLEM,
+  STORM_CALLER: SPRITES.STORM_CALLER,
+  GLACIAL_KNIGHT: SPRITES.GLACIAL_KNIGHT,
 };
+
+// Carry-over polish: Mini-Bosses and the Chrono-Lich read as a 16x16
+// composite (2x the regular 8x8 tile) instead of needing dedicated "big"
+// spritesheet art — same cell, drawn larger, anchored to the bottom-center
+// of its tile so it grows upward/outward rather than shifting the entity's
+// actual (tile-based) position.
+const BIG_ENEMY_KINDS = new Set<Enemy['kind']>(['INFERNO_GOLEM', 'STORM_CALLER', 'GLACIAL_KNIGHT', 'CHRONO_LICH']);
+const BIG_TILE_SIZE = TILE_SIZE * 2;
 
 // Fun & Feel #2: world-item pickups read as their own kind instead of one
 // generic chest icon (ANCHOR keeps its own dedicated sprite, drawn separately).
@@ -130,6 +164,17 @@ const WORLD_ITEM_REFS: Partial<Record<string, SpriteRef>> = {
   CONSUMABLE: SPRITES.CONSUMABLE,
   TIME_SHARD: SPRITES.TIME_SHARD,
   ANCHOR: SPRITES.ANCHOR,
+  RELIC: SPRITES.RELIC,
+};
+
+// Same per-item lookup menus.ts's Inventory grid uses — a dropped Rusty
+// Sword and a dropped Excalibur read as different icons on the floor, not
+// just "a weapon", same as the RELIC-per-effect precedent right below.
+const WORLD_ITEM_REFS_BY_NAME: Partial<Record<string, Record<string, SpriteRef>>> = {
+  WEAPON: WEAPON_SPRITE_BY_NAME,
+  ACCESSORY: ACCESSORY_SPRITE_BY_NAME,
+  POTION: POTION_SPRITE_BY_NAME,
+  CONSUMABLE: CONSUMABLE_SPRITE_BY_NAME,
 };
 
 function clamp(v: number, lo: number, hi: number): number {
@@ -182,6 +227,8 @@ function drawGhost(ctx: CanvasRenderingContext2D, ghost: GhostVisual, px: number
 
 /** Renders the full game world for the current frame: tiles, items, enemies, player. */
 export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, viewW: number, viewH: number): void {
+  VIEWPORT_TILES_W = viewW / TILE_SIZE;
+  VIEWPORT_TILES_H = viewH / TILE_SIZE;
   updateAnimations(state);
 
   ctx.fillStyle = COLOR_BG;
@@ -213,19 +260,48 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     if (ref) drawRef(ctx, ref, sx * TILE_SIZE, sy * TILE_SIZE);
   }
 
-  // Chrono-Lich Time-Blast telegraph (Section 11): a pulsing warning tile,
-  // reusing the enemy-alarm red rather than adding a new accent color.
+  // Telegraphed AOE warning tiles (Section 11; Phase 14 generalized this to
+  // 3 payloads): a pulsing warning tile, color-coded so a Fire/Frost AOE
+  // reads distinctly from the Chrono-Lich's Time-Blast at a glance.
   if (state.dungeon.telegraphTiles.length > 0) {
     const pulse = 0.35 + 0.25 * Math.sin(performance.now() / 120);
-    ctx.fillStyle = COLOR_ENEMY_LIGHT;
     ctx.globalAlpha = pulse;
     for (const t of state.dungeon.telegraphTiles) {
       const sx = t.x - cam.x;
       const sy = t.y - cam.y;
       if (sx < 0 || sx >= VIEWPORT_TILES_W || sy < 0 || sy >= VIEWPORT_TILES_H) continue;
+      ctx.fillStyle = t.payload === 'fire_aoe' ? COLOR_FIRE : t.payload === 'chill_pulse' ? COLOR_FROST : COLOR_ENEMY_LIGHT;
       ctx.fillRect(sx * TILE_SIZE, sy * TILE_SIZE, TILE_SIZE, TILE_SIZE);
     }
     ctx.globalAlpha = 1;
+  }
+
+  // Beams (Skill/Attack VFX): an instant line flash simultaneous with a
+  // ranged hit — drawn as a thin rect strip along the tiles between from/to.
+  for (const b of getBeams()) {
+    const x1 = (b.fromX - cam.x) * TILE_SIZE + TILE_SIZE / 2;
+    const y1 = (b.fromY - cam.y) * TILE_SIZE + TILE_SIZE / 2;
+    const x2 = (b.toX - cam.x) * TILE_SIZE + TILE_SIZE / 2;
+    const y2 = (b.toY - cam.y) * TILE_SIZE + TILE_SIZE / 2;
+    ctx.strokeStyle = b.color;
+    ctx.globalAlpha = b.alpha;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(Math.round(x1), Math.round(y1));
+    ctx.lineTo(Math.round(x2), Math.round(y2));
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  // Phase 19 Cursed Rift: a coordinate marker, not a `tiles` grid entry
+  // (types.ts's dungeon.riftX/Y comment) — drawn the same way as a
+  // WorldItem, on top of the ordinary FLOOR tile underneath it.
+  if (state.dungeon.riftX !== null && state.dungeon.riftY !== null) {
+    const sx = state.dungeon.riftX - cam.x;
+    const sy = state.dungeon.riftY - cam.y;
+    if (sx >= 0 && sx < VIEWPORT_TILES_W && sy >= 0 && sy < VIEWPORT_TILES_H) {
+      drawRef(ctx, SPRITES.CURSED_RIFT, sx * TILE_SIZE, sy * TILE_SIZE);
+    }
   }
 
   for (const wi of state.dungeon.items) {
@@ -235,7 +311,14 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     // Fun & Feel #2: a chest still marks a not-yet-rerolled Dynamic Chest Loot
     // spot (its identity isn't decided until pickup), but everything else
     // reads as its own kind at a glance instead of one generic box icon.
-    const ref = wi.chestLoot ? SPRITES.CHEST : (WORLD_ITEM_REFS[wi.item.kind] ?? SPRITES.CHEST);
+    // Phase 19 Carry-over polish: a dropped RELIC reads as its own specific
+    // icon (RELIC_SPRITE_BY_EFFECT), matching the Relic Tray's icon for the
+    // same relic once picked up, instead of one generic RELIC sprite for all 15.
+    const ref = wi.chestLoot
+      ? SPRITES.CHEST
+      : wi.item.kind === 'RELIC' && wi.item.effect
+        ? (RELIC_SPRITE_BY_EFFECT[wi.item.effect] ?? SPRITES.RELIC)
+        : (WORLD_ITEM_REFS_BY_NAME[wi.item.kind]?.[wi.item.name] ?? WORLD_ITEM_REFS[wi.item.kind] ?? SPRITES.CHEST);
     drawRef(ctx, ref, sx * TILE_SIZE, sy * TILE_SIZE);
   }
 
@@ -247,8 +330,42 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     const visual = getEntityVisual(e.id, e.x, e.y);
     const px = Math.round((visual.tileX - cam.x) * TILE_SIZE);
     const py = Math.round((visual.tileY - cam.y) * TILE_SIZE);
-    if (e.hp < e.maxHp) drawHealthBar(ctx, px, py, e.hp, e.maxHp);
-    drawRef(ctx, ENEMY_REFS[e.kind], px, py, false, visual.flashing);
+
+    // Phase 19 Elite Affixes: [Colossal] draws 1.5x scale (same bottom-center
+    // anchor technique as the Mini-Boss 2x composite — Mini-Bosses never
+    // roll an affix, so `big`/`colossal` can't both be true for one enemy).
+    const colossal = e.affix === 'colossal';
+    const big = BIG_ENEMY_KINDS.has(e.kind);
+    const size = colossal ? TILE_SIZE * 1.5 : big ? BIG_TILE_SIZE : TILE_SIZE;
+    const drawPx = big || colossal ? px - (size - TILE_SIZE) / 2 : px;
+    const drawPy = big || colossal ? py - (size - TILE_SIZE) : py;
+
+    if (e.hp < e.maxHp) drawHealthBar(ctx, px, drawPy, e.hp, e.maxHp);
+
+    // [Blinking] renders translucent; every OTHER affix except [Colossal]/
+    // [Shielded] (handled by size/ring instead) gets a pulsing colored aura
+    // via shadowBlur/shadowColor — save/restore keeps it from leaking into
+    // whatever draws next (tiles, other enemies, particles).
+    ctx.save();
+    if (e.affix === 'blinking') {
+      ctx.globalAlpha = 0.5;
+    } else if (e.affix && e.affix !== 'colossal' && e.affix !== 'shielded') {
+      ctx.shadowColor = eliteAffixColor(e.affix);
+      ctx.shadowBlur = 10;
+    }
+    drawRef(ctx, ENEMY_REFS[e.kind], drawPx, drawPy, false, visual.flashing, size);
+    ctx.restore();
+
+    // [Shielded]: a ring overlay while hits remain, instead of an aura.
+    if (e.affix === 'shielded' && e.shieldedHitsLeft) {
+      ctx.save();
+      ctx.strokeStyle = eliteAffixColor('shielded');
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(drawPx + size / 2, drawPy + size / 2, size / 2 + 1, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 
   for (const ghost of getDeathGhosts()) {
@@ -263,12 +380,13 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
   const playerPy = Math.round((playerVisual.tileY - cam.y) * TILE_SIZE);
   drawPlayer(ctx, state.run.facing, playerPx, playerPy, playerVisual.flashing);
 
-  // 1-Bit Pixel Particles (Section 11): drawn on top of sprites.
-  ctx.fillStyle = COLOR_ENEMY_LIGHT;
+  // 1-Bit Pixel Particles (Section 11; Skill/Attack VFX added per-particle
+  // color): drawn on top of sprites.
   for (const p of getParticles()) {
     const sx = (p.x - cam.x) * TILE_SIZE;
     const sy = (p.y - cam.y) * TILE_SIZE;
     if (sx < -2 || sx >= viewW + 2 || sy < -2 || sy >= viewH + 2) continue;
+    ctx.fillStyle = p.color;
     ctx.globalAlpha = p.alpha;
     ctx.fillRect(Math.round(sx), Math.round(sy), 1, 1);
   }

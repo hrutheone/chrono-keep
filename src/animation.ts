@@ -5,6 +5,7 @@
 // notifyDeath) for events whose intent can't be read back out of a diff.
 // Nothing here ever mutates GameState — render.ts is the only reader.
 
+import { COLOR_ENEMY_LIGHT } from './palette';
 import type { Enemy, GameState } from './types';
 
 const MOVE_MS = 120;
@@ -122,13 +123,18 @@ interface Particle {
   vy: number;
   start: number;
   life: number; // ms
+  color: string;
 }
 
 const particles: Particle[] = [];
 const PARTICLE_MAX = 200; // hard cap so a chain of kills can't grow this unbounded
 
-/** Scatters 10-15 single-pixel particles outward from (x, y) — an enemy death burst. */
-export function spawnDeathParticles(x: number, y: number): void {
+/** Scatters 10-15 single-pixel particles outward from (x, y), in `color`
+ * (default: the enemy-alarm red, for the original death-burst use). Shared
+ * primitive — `spawnDeathParticles` is the death-specific call site,
+ * `spawnEffectParticles` (below) the same thing under a name that reads
+ * right for skill/attack VFX. */
+export function spawnDeathParticles(x: number, y: number, color: string = COLOR_ENEMY_LIGHT): void {
   const now = performance.now();
   const count = 10 + Math.floor(Math.random() * 6);
   for (let i = 0; i < count && particles.length < PARTICLE_MAX; i++) {
@@ -141,14 +147,20 @@ export function spawnDeathParticles(x: number, y: number): void {
       vy: Math.sin(angle) * speed,
       start: now,
       life: 300 + Math.random() * 250,
+      color,
     });
   }
 }
+
+/** Skill/Attack VFX: same burst as `spawnDeathParticles`, named for its
+ * actual call sites (a skill cast, not a kill). */
+export const spawnEffectParticles = spawnDeathParticles;
 
 export interface ParticleVisual {
   x: number;
   y: number;
   alpha: number;
+  color: string;
 }
 
 /** Resolved render-space position + fade for every live particle this frame. */
@@ -163,7 +175,54 @@ export function getParticles(): ParticleVisual[] {
       continue;
     }
     const tSec = t / 1000;
-    out.push({ x: p.x + p.vx * tSec, y: p.y + p.vy * tSec, alpha: 1 - t / p.life });
+    out.push({ x: p.x + p.vx * tSec, y: p.y + p.vy * tSec, alpha: 1 - t / p.life, color: p.color });
+  }
+  return out;
+}
+
+// Beams (Skill/Attack VFX): an instant line flash simultaneous with a ranged
+// hit (Volt-Turret today; Storm-Caller's Chain Bolt next phase) — distinct
+// from dungeon.telegraphTiles, which is a multi-turn advance warning, not a
+// same-instant flash.
+const BEAM_MS = 180;
+interface Beam {
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+  color: string;
+  start: number;
+}
+const beams: Beam[] = [];
+const BEAM_MAX = 30;
+
+/** Flashes a line from (fromX, fromY) to (toX, toY) (tile-space, inclusive of both ends). */
+export function notifyBeam(fromX: number, fromY: number, toX: number, toY: number, color: string): void {
+  if (beams.length >= BEAM_MAX) beams.shift();
+  beams.push({ fromX, fromY, toX, toY, color, start: performance.now() });
+}
+
+export interface BeamVisual {
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+  color: string;
+  alpha: number;
+}
+
+/** Resolved fade for every live beam this frame. */
+export function getBeams(): BeamVisual[] {
+  const now = performance.now();
+  const out: BeamVisual[] = [];
+  for (let i = beams.length - 1; i >= 0; i--) {
+    const b = beams[i];
+    const t = (now - b.start) / BEAM_MS;
+    if (t >= 1) {
+      beams.splice(i, 1);
+      continue;
+    }
+    out.push({ fromX: b.fromX, fromY: b.fromY, toX: b.toX, toY: b.toY, color: b.color, alpha: 1 - t });
   }
   return out;
 }

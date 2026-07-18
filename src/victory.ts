@@ -2,7 +2,7 @@
 // Echo bonus, updates persistent stats, and shows the VICTORY screen.
 
 import { awardEchoes } from './echoes';
-import { saveGame } from './persistence';
+import { clearRunSnapshot, saveGame } from './persistence';
 import { playVictorySfx } from './audio';
 import type { GameState } from './types';
 
@@ -13,4 +13,11 @@ export function triggerVictory(state: GameState): void {
   state.ui.currentScreen = 'VICTORY';
   playVictorySfx();
   saveGame(state);
+  // Phase 20: a run snapshot saved here would still validate (alive, Floor
+  // 99, turns remaining) and, on resume, rebuild the boss arena via
+  // enterBossFloor — respawning an already-defeated Chrono-Lich instead of
+  // showing VICTORY. Cleared rather than saved; a reload on this screen
+  // falls through to TITLE, same as pre-Phase-20 behavior (wins/stats are
+  // already banked above via saveGame).
+  clearRunSnapshot();
 }
