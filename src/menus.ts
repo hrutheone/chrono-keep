@@ -29,7 +29,7 @@ import {
   CONSUMABLE_SPRITE_BY_NAME,
   POTION_SPRITE_BY_NAME,
   RELIC_SPRITE_BY_EFFECT,
-  SKILL_SPRITE_BY_ELEMENT,
+  SKILL_SPRITE_BY_ID,
   SPRITES,
   WEAPON_SPRITE_BY_NAME,
   type SpriteRef,
@@ -69,8 +69,8 @@ import {
   weaponHpBonus,
 } from './inventory';
 import { useConsumable } from './consumables';
-import type { EnemyKind } from './content';
-import type { Accessory, Consumable, Element, GameState, Item, Weapon } from './types';
+import type { EnemyKind, SkillId } from './content';
+import type { Accessory, Consumable, GameState, Item, Weapon } from './types';
 
 // Tile-icon Inventory: every individual Weapon/Accessory/Potion/Consumable
 // has its own sprite (sprites.ts's *_SPRITE_BY_NAME, keyed by Item.name) —
@@ -99,8 +99,8 @@ function iconStyleForItem(item: Item, size: number): string {
   return spriteCssStyle(ref, size);
 }
 
-function iconStyleForSkill(skill: { element: Element }, size: number): string {
-  return spriteCssStyle(SKILL_SPRITE_BY_ELEMENT[skill.element], size);
+function iconStyleForSkill(skillId: string, size: number): string {
+  return spriteCssStyle(SKILL_SPRITE_BY_ID[skillId as SkillId], size);
 }
 
 let lastScreen: GameState['ui']['currentScreen'] | null = null;
@@ -444,7 +444,7 @@ function renderInventoryTab(state: GameState): string {
       const titleAttr = lore ? ` title="${lore.replace(/"/g, '&quot;')}"` : '';
       const selected = i === selectedInvIndex ? ' selected' : '';
       const countBadge = item.count && item.count > 1 ? `<span class="item-count">x${item.count}</span>` : '';
-      return `<button class="inv-slot${selected}" data-action="select-item" data-index="${i}"${titleAttr} aria-label="${item.name}"><span class="item-icon" style="${iconStyleForItem(item, INV_ICON_SIZE)}"></span>${countBadge}</button>`;
+      return `<button class="inv-slot${selected}" data-action="select-item" data-index="${i}"${titleAttr} aria-label="${item.name}"><span class="item-icon" style="${iconStyleForItem(item, INV_ICON_SIZE)}"></span><span class="slot-name">${item.name}</span>${countBadge}</button>`;
     })
     .join('');
 
@@ -491,7 +491,7 @@ function renderSkillDetail(state: GameState, skillId: string | null): string {
   if (!skillId) return '<div class="item-detail item-detail-empty">Tap a Skill below to see its effect.</div>';
   const skill = SKILLS[skillId];
   const level = state.persistent.skills[skillId] ?? 0;
-  const iconStyle = iconStyleForSkill(skill, DETAIL_ICON_SIZE);
+  const iconStyle = iconStyleForSkill(skillId, DETAIL_ICON_SIZE);
 
   if (level === 0) {
     return `
@@ -540,7 +540,7 @@ function renderSkillsTab(state: GameState): string {
       const skill = SKILLS[id];
       const locked = (state.persistent.skills[id] ?? 0) === 0;
       const selected = id === selectedSkillId ? ' selected' : '';
-      const iconStyle = iconStyleForSkill(skill, INV_ICON_SIZE);
+      const iconStyle = iconStyleForSkill(id, INV_ICON_SIZE);
       return `<button class="inv-slot${locked ? ' locked' : ''}${selected}" data-action="select-skill" data-skill="${id}" aria-label="${skill.name}"><span class="item-icon" style="${iconStyle}"></span><span class="slot-name">${skill.name}</span></button>`;
     })
     .join('');

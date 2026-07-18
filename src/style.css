@@ -325,8 +325,12 @@ body {
   font-size: 10px;
 }
 
+/* Capped so wide desktop canvases still render as a narrow vertical card,
+ * matching mobile — #screen-overlay.active's flex centering fills the rest
+ * with plain background on either side. */
 .menu {
   width: 100%;
+  max-width: 480px;
   height: 100%;
   padding: 10px 12px;
   display: flex;
@@ -477,18 +481,9 @@ body {
   overflow-y: auto;
 }
 
-/* Mobile Inventory rework: a slot is a single tap-to-select button — no
- * per-slot lore text (that's what was inflating the grid past the viewport)
- * and no instant equip/use/drop on tap (a stray tap on a crowded touch grid
- * used to cost the player gear or a consumable). Selecting shows the item in
- * the fixed-height .item-detail panel below, with explicit Use/Drop buttons.
- *
- * Slot Zone redesign: aspect-ratio:1 keeps every slot square at any grid
- * width (row height derives from the grid's own column width) instead of
- * the old fixed/minmax row height, which could leave slots taller than
- * wide. Chronofacts/Skill/Bestiary also show a short name (.slot-name)
- * under the icon — flex-direction:column stacks icon-over-label; Inventory
- * never adds a .slot-name span, so its slots still just center the icon. */
+/* A slot is a tap-to-select button; selecting shows detail in the fixed
+ * .item-detail panel below instead of acting instantly. aspect-ratio keeps
+ * it square at any grid width. flex-direction:column stacks icon-over-label. */
 .inv-slot {
   position: relative;
   aspect-ratio: 1 / 1;
@@ -506,9 +501,7 @@ body {
   opacity: 0.45;
 }
 
-/* Chronofacts/Skill/Bestiary's short in-slot name (Inventory has none — its
- * slots stay icon-only, matching the reference layout). 2-line clamp so a
- * long name (e.g. "Blizzard Wave") never grows the square slot. */
+/* 2-line clamp so a long name never grows the square slot. */
 .slot-name {
   font-size: 8px;
   line-height: 1.15;

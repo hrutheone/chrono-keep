@@ -1,21 +1,7 @@
-// Sprite Registry (GDD Section 4): every drawable maps to one {col, row} cell
-// of assets/new-spritesheet.png (a Kenney-style RPG/UI icon pack — 16x16
-// tiles, tightly packed, 49 columns x 22 rows). Source rect: sx = col * 16,
-// sy = row * 16, 16x16. Re-pointing an entity's art is a data edit here,
-// never a code edit.
-//
-// New-spritesheet migration: the project switched from the old 8x8
-// Micro-Roguelike sheet (128x80, 16x10) to this bigger 16x16 icon pack
-// (784x352, 49x22) — assets.ts's SPRITE_PX and this file's SHEET_COLS/
-// SHEET_ROWS were updated to match, and every {col, row} below was re-picked
-// from scratch (the old coordinates point at completely different art on
-// this sheet). This pack skews toward UI icons, terrain, and a handful of
-// humanoid "bust" portraits + 3-color critter sprites rather than the old
-// sheet's one-distinct-silhouette-per-monster cast, so several entries below
-// are a loose thematic fit (documented per entry) rather than a literal
-// match to the name/kind — swap freely, same as the old sheet invited.
+// Every drawable maps to a {col, row} cell of assets/new-spritesheet.png
+// (16x16 tiles, 49x22). Source rect: sx = col*16, sy = row*16.
 
-import type { Element } from './types';
+import type { SkillId } from './content';
 
 export interface SpriteRef {
   col: number;
@@ -30,18 +16,14 @@ export const SPRITES = {
   PLAYER: { col: 28, row: 0 }, // wide-brim-hat adventurer bust
 
   // --- Enemies (kinds in types.ts) ---
-  // The sheet has no per-monster silhouettes (skeleton/bat/ghost/etc.) — it
-  // has one column (24) of robed/hooded "caster" busts, one column (25-31)
-  // of plain humanoid busts, a handful of animals, and a 3-color (blue/
-  // yellow/green) critter repeated across a few columns. Enemies below pull
-  // from whichever reads closest to their GDD flavor.
+  // No per-monster silhouettes on this sheet — picks below are a loose
+  // thematic fit, not literal matches.
   BONE_GRUNT: { col: 27, row: 6 }, // slender bust, arms visible — reads skeletal
   EMBER_BAT: { col: 18, row: 8 }, // small yellow critter (closest warm color to "red")
   VOLT_TURRET: { col: 18, row: 7 }, // same critter in blue — reads electric/squat
   FROST_WRAITH: { col: 24, row: 8 }, // hollow/outline humanoid — genuinely ghostly
   TIME_WEAVER: { col: 24, row: 0 }, // robed, hooded, arms down
   CHRONO_LICH: { col: 38, row: 11 }, // clean front-facing skull icon
-  // Phase 11 roster (GDD Section 6C).
   BONE_KNIGHT: { col: 30, row: 6 }, // blocky bust with mechanical arms — armored
   CINDER_SHAMAN: { col: 24, row: 1 }, // robed bust, arms raised mid-cast
   VOLT_HOUND: { col: 28, row: 7 }, // horse — the sheet's only four-legged beast
@@ -70,36 +52,42 @@ export const SPRITES = {
   CONSUMABLE: { col: 39, row: 8 }, // wand/rod shape
   TIME_SHARD: { col: 39, row: 12 }, // hourglass
   ANCHOR: { col: 32, row: 11 }, // golden key ("pins" the Biome)
-  // Generic fallback only — every Relic actually drops/renders with its own
-  // per-effect icon (RELIC_SPRITE_BY_EFFECT below), used by render.ts's
-  // WorldItem loop and hud.ts's Relic Tray alike. Same cell as
-  // executioners_coin below, matching the old sheet's own precedent.
+  // Fallback only — each Relic has its own icon via RELIC_SPRITE_BY_EFFECT below.
   RELIC: { col: 41, row: 3 }, // gold coin
 } as const satisfies Record<string, SpriteRef>;
 
 export type SpriteName = keyof typeof SPRITES;
 
-// Menu redesign (Skill tab grid): the sheet has no per-skill art, so every
-// Skill shares one icon with its Element instead — reusing cells the
-// codebase already assigns that flavor to elsewhere, rather than picking new
-// unverified cells: FIRE_HAZARD/FROST_HAZARD's hazard-tile flame/droplet,
-// VOLT_TURRET's critter ("reads electric" per its own comment above),
-// TIME_SHARD's hourglass for CHRONO, and WEAPON's sword for PHYSICAL.
-export const SKILL_SPRITE_BY_ELEMENT: Record<Element, SpriteRef> = {
-  PHYSICAL: SPRITES.WEAPON,
-  FIRE: SPRITES.FIRE_HAZARD,
-  VOLT: SPRITES.VOLT_TURRET,
-  FROST: SPRITES.FROST_HAZARD,
-  CHRONO: SPRITES.TIME_SHARD,
+// One distinct icon per Skill — loose thematic fit, same as everything else here.
+export const SKILL_SPRITE_BY_ID: Record<SkillId, SpriteRef> = {
+  dash: { col: 24, row: 12 }, // arrow — forward burst
+  cleave: { col: 24, row: 11 }, // slash
+  flame_arc: SPRITES.FIRE_HAZARD,
+  static_shift: { col: 26, row: 12 }, // 4-way arrows — teleport
+  ice_aegis: SPRITES.FROST_HAZARD,
+  bash: { col: 35, row: 2 }, // hammer (Mythril Hammer's cell)
+  dragoon_jump: { col: 33, row: 21 }, // rocket — launch upward
+  blizzard_wave: { col: 27, row: 12 }, // snowflake bloom
+  meteor: { col: 15, row: 10 }, // flame (gunpowder_flask's 2nd flame cell)
+  chakra: { col: 25, row: 12 }, // plus — restore HP
+  recall: SPRITES.TIME_SHARD,
+  dark_wave: { col: 25, row: 11 }, // crescent slash
+  reflect_barrier: { col: 43, row: 12 }, // glowing orb (hourglass_shard's cell) — ward
+  vanish: { col: 29, row: 11 }, // eye slash
+  omnislash: { col: 26, row: 11 }, // double slash — multi-hit
+  mug: SPRITES.RELIC, // gold coin — steal
+  haste: { col: 34, row: 21 }, // rocket (2nd pose)
+  provoke: { col: 27, row: 11 }, // starburst — shout
+  scourge: { col: 15, row: 18 }, // icicle
+  lancet: SPRITES.VOLT_TURRET,
+  holy: { col: 44, row: 11 }, // cross-circle
+  defuse: { col: 30, row: 11 }, // X — negate
+  slow: { col: 30, row: 12 }, // sparse snowflake
+  aura: { col: 35, row: 11 }, // concentric circles
+  ultima: { col: 34, row: 12 }, // skull
 };
 
-// Phase 19 Relic Tray + world-drop icons: one distinct cell per Chronofact,
-// keyed by the same `effect` string content.ts's RELICS registry and
-// `run.relics` both use — picked for a loose thematic fit (a coin for
-// Executioner's Coin, hearts for the HP-themed relics, a gear for Static
-// Generator, a glove for Duelist's Glove, ...) rather than anything
-// definitive; swap freely, this is exactly the kind of "adjust to taste"
-// pick the header comment above describes.
+// One icon per Chronofact effect, keyed by the same `effect` string content.ts uses.
 export const RELIC_SPRITE_BY_EFFECT: Record<string, SpriteRef> = {
   gunpowder_flask: { col: 15, row: 10 }, // orange flame (2nd variant)
   executioners_coin: { col: 41, row: 3 }, // gold coin
@@ -118,21 +106,8 @@ export const RELIC_SPRITE_BY_EFFECT: Record<string, SpriteRef> = {
   time_eaters_jaw: { col: 39, row: 12 }, // hourglass (Time Shard's own cell)
 };
 
-// Per-item icons (keyed by the item's own `name` field, exactly as written in
-// content.ts's WEAPONS/ACCESSORIES/POTIONS/CONSUMABLES registries) — one
-// sprite per individual item, not just per Item.kind. menus.ts's inventory
-// grid/detail panel looks a name up here first, falling back to SPRITES'
-// kind-level generic (WEAPON/ACCESSORY/POTION/CONSUMABLE above) only if a
-// name is ever missing (shouldn't happen — every catalog entry has an entry
-// below, kept in the same order as its content.ts registry so the two stay
-// easy to diff against each other).
-//
-// The sheet has 26 grey sword/dagger-shaped cells, which happens to be
-// exactly enough for the 23 sword-flavored + 2 dagger weapons below (one
-// cell spare) — every WEAPON entry is a genuinely distinct cell, no reuse.
-// Same for POTION/CONSUMABLE. ACCESSORY reuses a couple of ring/pendant/gem
-// cells across two entries apiece (19 items, ~12 distinct jewelry-shaped
-// cells) — documented inline where it happens.
+// Keyed by Item.name — one distinct cell per weapon/potion/consumable.
+// Falls back to SPRITES' kind-level generic if a name is ever missing.
 export const WEAPON_SPRITE_BY_NAME: Record<string, SpriteRef> = {
   // --- Early game (F1-F20) ---
   'Rusty Sword': { col: 32, row: 2 },
@@ -193,7 +168,7 @@ export const ACCESSORY_SPRITE_BY_NAME: Record<string, SpriteRef> = {
   "Paladin's Mantle": { col: 37, row: 1 }, // brown robe/sleeves
   'Battery Cell': { col: 44, row: 4 }, // grey battery/canister
   'Kindling Pouch': { col: 45, row: 3 }, // brown pouch
-  'Capacitor Ring': { col: 45, row: 6 }, // yellow pendant (shared design w/ Ember Pendant, different color already used above so this is its own cell)
+  'Capacitor Ring': { col: 45, row: 6 }, // yellow pendant, same design as Ember Pendant
   'Permafrost Vial': { col: 42, row: 11 }, // blue potion outline
   'Vampire Tooth': { col: 32, row: 12 }, // grey bone
   'Shattered Hourglass': { col: 41, row: 12 }, // grey hourglass outline
