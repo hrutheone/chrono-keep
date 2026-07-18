@@ -452,18 +452,25 @@ body {
   border-color: #ff4444;
 }
 
-/* The grid is the one part of the Inventory screen that actually scrolls —
- * min-height:0 + overflow-y:auto (matching .skill-list's identical fix)
- * clips it to its flex-allocated box instead of the default min-height:auto
- * letting it grow past that box and visually spill into .item-detail below
- * (a real bug on mobile portrait's column layout: the grid's 5 rows don't
- * fit the short remaining viewport height, and without this it just
- * overflowed the pane's bottom edge and overlapped the detail panel instead
- * of scrolling). */
+/* The grid is the one part of the Inventory/Chronofacts/Skill/Bestiary tabs
+ * that actually scrolls — min-height:0 + overflow-y:auto clips it to its
+ * flex-allocated box instead of the default min-height:auto letting it grow
+ * past that box and visually spill into .item-detail below (a real bug on
+ * mobile portrait's column layout: a tall grid doesn't fit the short
+ * remaining viewport height, and without this it just overflowed the pane's
+ * bottom edge and overlapped the detail panel instead of scrolling).
+ *
+ * Slot Zone redesign: always 5 columns wide (Inventory's 25 slots make a
+ * fixed 5x5; Chronofacts/Skill/Bestiary are the same 5-wide grid with as
+ * many rows as they need). align-content:start keeps rows pinned to their
+ * own aspect-ratio-square height (see .inv-slot below) instead of the
+ * default stretch spreading any leftover flex space across rows, which
+ * would otherwise un-square a grid with fewer than a full screenful of
+ * entries (e.g. Chronofacts early in a run). */
 .inventory-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  grid-auto-rows: minmax(20px, 1fr);
+  align-content: start;
   gap: 4px;
   flex: 1;
   min-height: 0;
@@ -474,14 +481,46 @@ body {
  * per-slot lore text (that's what was inflating the grid past the viewport)
  * and no instant equip/use/drop on tap (a stray tap on a crowded touch grid
  * used to cost the player gear or a consumable). Selecting shows the item in
- * the fixed-height .item-detail panel below, with explicit Use/Drop buttons. */
+ * the fixed-height .item-detail panel below, with explicit Use/Drop buttons.
+ *
+ * Slot Zone redesign: aspect-ratio:1 keeps every slot square at any grid
+ * width (row height derives from the grid's own column width) instead of
+ * the old fixed/minmax row height, which could leave slots taller than
+ * wide. Chronofacts/Skill/Bestiary also show a short name (.slot-name)
+ * under the icon — flex-direction:column stacks icon-over-label; Inventory
+ * never adds a .slot-name span, so its slots still just center the icon. */
 .inv-slot {
   position: relative;
+  aspect-ratio: 1 / 1;
   border: 1px solid var(--color-mid);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 2px;
   text-align: center;
+  overflow: hidden;
+}
+
+.inv-slot.locked {
+  opacity: 0.45;
+}
+
+/* Chronofacts/Skill/Bestiary's short in-slot name (Inventory has none — its
+ * slots stay icon-only, matching the reference layout). 2-line clamp so a
+ * long name (e.g. "Blizzard Wave") never grows the square slot. */
+.slot-name {
+  font-size: 8px;
+  line-height: 1.15;
+  color: var(--color-light);
+  opacity: 0.85;
+  width: 100%;
+  padding: 0 2px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
 }
 
 /* Tile-icon Inventory rework: width/height/background-image/-position/-size
@@ -530,16 +569,19 @@ body {
   display: none;
 }
 
+/* Info/Action panel (Slot Zone redesign): a fixed height, identical across
+ * all four tabs (Inventory/Chronofacts/Skill/Bestiary) and across selection
+ * states (empty placeholder vs. a populated item) — Chronofacts/Bestiary
+ * always render an empty .item-detail-actions (no buttons of their own) so
+ * switching tabs never shifts the Close button below. flex-shrink:0 keeps
+ * .menu-tab-body's flex distribution from squeezing it even so. */
 .item-detail {
+  height: 132px;
   border: 1px solid var(--color-mid);
   padding: 6px 8px;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  /* Never let .menu-tab-body's flex distribution squeeze this — it's the
-   * whole reason Use/Drop need to stay reachable, so it and the Close
-   * button below it always keep their natural height even if the grid
-   * above is tight on space. */
   flex-shrink: 0;
 }
 
@@ -583,16 +625,18 @@ body {
 }
 
 /* Bounded height + its own scrollbar: a long lore string (some run 200+
- * characters) used to just grow .item-detail's total height with no cap,
- * pushing the Equip/Melt buttons further down each time and shrinking
- * .inventory-grid above by however much room that took — the buttons'
- * position/size should stay put regardless of description length, so the
- * description scrolls internally instead of the whole dialog reflowing. */
+ * characters, or a 3-line Skill effect / Bestiary stat block) used to just
+ * grow .item-detail's total height with no cap, pushing the action row
+ * further down each time. Now that .item-detail has a fixed height,
+ * flex:1/min-height:0 makes this the one part that absorbs it — the
+ * description scrolls internally instead of the panel reflowing. */
 .item-detail-lore {
   color: var(--color-mid);
   opacity: 1;
   font-style: italic;
-  max-height: 4.5em;
+  line-height: 1.35;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -605,10 +649,15 @@ body {
   font-size: 12px;
 }
 
+/* min-height reserves one button-row's worth of space even when empty
+ * (Chronofacts/Bestiary render no buttons here) — this is what keeps
+ * .item-detail's total height identical whether a tab has actions or not. */
 .item-detail-actions {
   display: flex;
   gap: 6px;
   margin-top: 2px;
+  min-height: 20px;
+  flex-shrink: 0;
 }
 
 .item-detail-actions button {
@@ -618,35 +667,6 @@ body {
 
 .item-detail-actions .melt-btn {
   opacity: 0.7;
-}
-
-/* Phase 18: 25 skills (5 original + the 20-skill roster) run well past a
- * fixed-height menu — the list itself scrolls, flex:1/min-height:0 so it's
- * the one part that shrinks/scrolls inside .menu-tab-body's column, while
- * the tab row above and Close button/hint below stay pinned and reachable
- * (the same "don't let content push the Close button off-screen" fix the
- * Inventory grid got in Phase 11h). */
-.skill-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-}
-
-.skill-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.skill-row.locked {
-  opacity: 0.5;
-}
-
-.skill-name {
-  flex: 1;
 }
 
 .menu-hint {
@@ -798,29 +818,6 @@ body {
 
 .tab-btn {
   flex: 1 1 30%;
-}
-
-.bestiary-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  overflow-y: auto;
-}
-
-.bestiary-row.unknown {
-  opacity: 0.5;
-  font-style: italic;
-}
-
-.bestiary-name {
-  font-weight: bold;
-  color: var(--color-light);
-}
-
-.bestiary-lore {
-  opacity: 0.85;
-  font-style: italic;
-  margin-top: 2px;
 }
 
 /* Confirm overlay (Fun & Feel #6) — replaces window.confirm() */
@@ -981,13 +978,11 @@ body {
     min-width: 44px;
   }
 
-  .inventory-grid {
-    grid-auto-rows: minmax(48px, 1fr);
-  }
-
-  .inv-slot {
-    min-height: 48px;
-    font-size: 14px;
+  /* .inv-slot's aspect-ratio (base rule) already keeps slots square at any
+   * grid width — no mobile override needed for slot sizing. Only the in-slot
+   * name label is bumped up for touch legibility. */
+  .slot-name {
+    font-size: 11px;
   }
 
   /* No hover on touch — the equipped Weapon/Accessory lore (only 2 of these,
@@ -1003,13 +998,19 @@ body {
     margin-top: -2px;
   }
 
+  /* Bigger fixed height to fit mobile's larger font + 44px-tall action
+   * buttons (.menu button's mobile min-height above) without clipping. */
   .item-detail {
     font-size: 14px;
+    height: 200px;
+  }
+
+  .item-detail-actions {
+    min-height: 44px;
   }
 
   .shop-row,
-  .help-row,
-  .skill-row {
+  .help-row {
     flex-direction: column;
     align-items: stretch;
     gap: 6px;
@@ -1017,8 +1018,7 @@ body {
     border-bottom: 1px solid var(--color-mid);
   }
 
-  .shop-row button,
-  .skill-row button {
+  .shop-row button {
     width: 100%;
   }
 
@@ -1031,7 +1031,7 @@ body {
     min-width: 0;
   }
 
-  .bestiary-lore,
+  .item-detail-lore,
   .framing,
   .confirm-message {
     line-height: 1.7;

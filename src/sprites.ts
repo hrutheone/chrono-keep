@@ -15,6 +15,8 @@
 // are a loose thematic fit (documented per entry) rather than a literal
 // match to the name/kind — swap freely, same as the old sheet invited.
 
+import type { Element } from './types';
+
 export interface SpriteRef {
   col: number;
   row: number;
@@ -76,6 +78,20 @@ export const SPRITES = {
 } as const satisfies Record<string, SpriteRef>;
 
 export type SpriteName = keyof typeof SPRITES;
+
+// Menu redesign (Skill tab grid): the sheet has no per-skill art, so every
+// Skill shares one icon with its Element instead — reusing cells the
+// codebase already assigns that flavor to elsewhere, rather than picking new
+// unverified cells: FIRE_HAZARD/FROST_HAZARD's hazard-tile flame/droplet,
+// VOLT_TURRET's critter ("reads electric" per its own comment above),
+// TIME_SHARD's hourglass for CHRONO, and WEAPON's sword for PHYSICAL.
+export const SKILL_SPRITE_BY_ELEMENT: Record<Element, SpriteRef> = {
+  PHYSICAL: SPRITES.WEAPON,
+  FIRE: SPRITES.FIRE_HAZARD,
+  VOLT: SPRITES.VOLT_TURRET,
+  FROST: SPRITES.FROST_HAZARD,
+  CHRONO: SPRITES.TIME_SHARD,
+};
 
 // Phase 19 Relic Tray + world-drop icons: one distinct cell per Chronofact,
 // keyed by the same `effect` string content.ts's RELICS registry and

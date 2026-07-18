@@ -29,6 +29,7 @@ import {
   CONSUMABLE_SPRITE_BY_NAME,
   POTION_SPRITE_BY_NAME,
   RELIC_SPRITE_BY_EFFECT,
+  SKILL_SPRITE_BY_ELEMENT,
   SPRITES,
   WEAPON_SPRITE_BY_NAME,
   type SpriteRef,
@@ -69,7 +70,7 @@ import {
 } from './inventory';
 import { useConsumable } from './consumables';
 import type { EnemyKind } from './content';
-import type { Accessory, Consumable, GameState, Item, Weapon } from './types';
+import type { Accessory, Consumable, Element, GameState, Item, Weapon } from './types';
 
 // Tile-icon Inventory: every individual Weapon/Accessory/Potion/Consumable
 // has its own sprite (sprites.ts's *_SPRITE_BY_NAME, keyed by Item.name) —
@@ -98,6 +99,10 @@ function iconStyleForItem(item: Item, size: number): string {
   return spriteCssStyle(ref, size);
 }
 
+function iconStyleForSkill(skill: { element: Element }, size: number): string {
+  return spriteCssStyle(SKILL_SPRITE_BY_ELEMENT[skill.element], size);
+}
+
 let lastScreen: GameState['ui']['currentScreen'] | null = null;
 
 // Unified Menu (Status/Inventory/Chronofacts/Skill/Bestiary/Settings&Help):
@@ -118,6 +123,12 @@ let selectedInvIndex: number | null = null;
 // above, since relics have no Use/Melt action of their own. Reset alongside
 // selectedInvIndex whenever the Menu is (re)entered.
 let selectedRelicEffect: string | null = null;
+
+// Skill/Bestiary tab grids (Menu redesign): same tap-to-select-then-see-
+// detail shape as the Bag/Chronofacts grids above. Reset alongside
+// selectedInvIndex/selectedRelicEffect whenever the Menu is (re)entered.
+let selectedSkillId: string | null = null;
+let selectedBestiaryKind: EnemyKind | null = null;
 
 // Fun & Feel #6: replaces window.confirm()'s native dialog with a styled
 // overlay. `returnScreen` is captured at call time so Cancel goes back to
@@ -380,7 +391,8 @@ function renderRelicDetail(effect: string | null): string {
           ${stat ? `<div class="item-detail-stat">${stat}</div>` : ''}
         </div>
       </div>
-      ${lore ? `<div class="item-detail-lore">${lore}</div>` : ''}
+      <div class="item-detail-lore">${lore ?? ''}</div>
+      <div class="item-detail-actions"></div>
     </div>`;
 }
 
@@ -454,7 +466,7 @@ function renderChronofactsTab(state: GameState): string {
         .map((effect) => {
           const ref = RELIC_SPRITE_BY_EFFECT[effect] ?? SPRITES.RELIC;
           const selected = effect === selectedRelicEffect ? ' selected' : '';
-          return `<button class="inv-slot${selected}" data-action="select-relic" data-relic="${effect}" aria-label="${relicName(effect)}"><span class="item-icon" style="${spriteCssStyle(ref, INV_ICON_SIZE)}"></span></button>`;
+          return `<button class="inv-slot${selected}" data-action="select-relic" data-relic="${effect}" aria-label="${relicName(effect)}"><span class="item-icon" style="${spriteCssStyle(ref, INV_ICON_SIZE)}"></span><span class="slot-name">${relicName(effect)}</span></button>`;
         })
         .join('')
     : '<div class="stat-line">No Chronofacts held this run.</div>';
@@ -468,21 +480,68 @@ function renderChronofactsTab(state: GameState): string {
 
 const SKILL_SLOTS: readonly SkillSlot[] = ['Q', 'E', 'R', 'F'];
 
+/** Skill tab detail panel — mirrors renderItemDetail's shape (icon/name/stat
+ * header, scrollable lore, fixed-height actions row), but the "actions" are
+ * the four Q/E/R/F assign buttons instead of Equip/Melt. A locked (Lv0)
+ * skill still shows its identity (matching the old row-list's behavior,
+ * which named locked skills too) but no assign buttons — the empty
+ * `.item-detail-actions` keeps the panel's height identical to an unlocked
+ * skill's. */
+function renderSkillDetail(state: GameState, skillId: string | null): string {
+  if (!skillId) return '<div class="item-detail item-detail-empty">Tap a Skill below to see its effect.</div>';
+  const skill = SKILLS[skillId];
+  const level = state.persistent.skills[skillId] ?? 0;
+  const iconStyle = iconStyleForSkill(skill, DETAIL_ICON_SIZE);
+
+  if (level === 0) {
+    return `
+      <div class="item-detail">
+        <div class="item-detail-header">
+          <span class="item-detail-icon" style="${iconStyle}"></span>
+          <div class="item-detail-heading">
+            <div class="item-detail-name">${skill.name}</div>
+            <div class="item-detail-stat">LOCKED</div>
+          </div>
+        </div>
+        <div class="item-detail-lore">Unlock this Skill in the Upgrade Shop to assign it to a slot.</div>
+        <div class="item-detail-actions"></div>
+      </div>`;
+  }
+
+  const effect = SKILL_LEVEL_EFFECTS[skillId as keyof typeof SKILL_LEVEL_EFFECTS][level - 1];
+  const slotButtons = SKILL_SLOTS.map((slot) => {
+    const isActive = state.run.activeSkills[SLOT_INDEX[slot]] === skillId;
+    return `<button data-action="assign-skill" data-skill="${skillId}" data-slot="${slot}" ${isActive ? 'disabled' : ''}>${slot}</button>`;
+  }).join('');
+
+  return `
+    <div class="item-detail">
+      <div class="item-detail-header">
+        <span class="item-detail-icon" style="${iconStyle}"></span>
+        <div class="item-detail-heading">
+          <div class="item-detail-name">${skill.name}</div>
+          <div class="item-detail-stat">Lv${level} | ${skill.stamina} Stamina | ${titleCase(skill.element)}</div>
+        </div>
+      </div>
+      <div class="item-detail-lore">${effect}</div>
+      <div class="item-detail-actions">${slotButtons}</div>
+    </div>`;
+}
+
+/** Skill tab: a grid of every Skill (locked ones dimmed, still tappable to
+ * see the LOCKED state) + selected-skill detail panel — mirrors Inventory's
+ * grid+detail shape instead of the old flat row list. */
 function renderSkillsTab(state: GameState): string {
-  const rows = Object.entries(SKILLS)
-    .map(([id, skill]) => {
-      const level = state.persistent.skills[id] ?? 0;
-      if (level === 0) return `<div class="skill-row locked">${skill.name} — LOCKED</div>`;
-      const effect = SKILL_LEVEL_EFFECTS[id as keyof typeof SKILL_LEVEL_EFFECTS][level - 1];
-      const slotButtons = SKILL_SLOTS.map((slot) => {
-        const isActive = state.run.activeSkills[SLOT_INDEX[slot]] === id;
-        return `<button data-action="assign-skill" data-skill="${id}" data-slot="${slot}" ${isActive ? 'disabled' : ''}>Set ${slot}</button>`;
-      }).join('');
-      return `
-        <div class="skill-row">
-          <span class="skill-name">${skill.name} (Lv${level}, ${skill.stamina} Stam) — ${effect}</span>
-          ${slotButtons}
-        </div>`;
+  const ids = Object.keys(SKILLS);
+  if (selectedSkillId !== null && !ids.includes(selectedSkillId)) selectedSkillId = null;
+
+  const gridHtml = ids
+    .map((id) => {
+      const skill = SKILLS[id];
+      const locked = (state.persistent.skills[id] ?? 0) === 0;
+      const selected = id === selectedSkillId ? ' selected' : '';
+      const iconStyle = iconStyleForSkill(skill, INV_ICON_SIZE);
+      return `<button class="inv-slot${locked ? ' locked' : ''}${selected}" data-action="select-skill" data-skill="${id}" aria-label="${skill.name}"><span class="item-icon" style="${iconStyle}"></span><span class="slot-name">${skill.name}</span></button>`;
     })
     .join('');
 
@@ -490,25 +549,54 @@ function renderSkillsTab(state: GameState): string {
 
   return `
     <div class="menu-tab-body">
-      <div class="skill-list">${rows}</div>
       <div class="stat-line">Active — ${activeLine}</div>
+      <div class="inventory-grid">${gridHtml}</div>
+      ${renderSkillDetail(state, selectedSkillId)}
     </div>`;
 }
 
+/** Bestiary tab detail panel — same shape as the other tabs' detail panels;
+ * read-only (no actions of its own), so `.item-detail-actions` is rendered
+ * empty purely to keep this panel the same fixed height as the others. */
+function renderBestiaryDetail(kind: EnemyKind | null): string {
+  if (!kind) return '<div class="item-detail item-detail-empty">Tap a known enemy below to see its details.</div>';
+  const t = BESTIARY[kind];
+  return `
+    <div class="item-detail">
+      <div class="item-detail-header">
+        <span class="item-detail-icon" style="${spriteCssStyle(SPRITES[kind], DETAIL_ICON_SIZE)}"></span>
+        <div class="item-detail-heading">
+          <div class="item-detail-name">${ENEMY_NAME[kind]}</div>
+          <div class="item-detail-stat">HP ${t.hp} | ATK ${t.attack} | DEF ${t.defense} | ${titleCase(t.element)}</div>
+        </div>
+      </div>
+      <div class="item-detail-lore">${MONSTER_LORE[kind]}</div>
+      <div class="item-detail-actions"></div>
+    </div>`;
+}
+
+/** Bestiary tab: a grid of every known EnemyKind (undiscovered ones render as
+ * an inert "???" slot, matching Inventory's non-interactive `.inv-slot.empty`
+ * pattern) + selected-enemy detail panel. */
 function renderBestiaryTab(state: GameState): string {
   const known = new Set(state.persistent.bestiaryKnown);
-  const rows = (Object.keys(ENEMY_NAME) as EnemyKind[])
+  if (selectedBestiaryKind !== null && !known.has(selectedBestiaryKind)) selectedBestiaryKind = null;
+
+  const gridHtml = (Object.keys(ENEMY_NAME) as EnemyKind[])
     .map((kind) => {
-      if (!known.has(kind)) return `<div class="bestiary-row unknown">??? — not yet encountered</div>`;
-      const t = BESTIARY[kind];
-      return `
-        <div class="bestiary-row">
-          <div class="bestiary-name">${ENEMY_NAME[kind]} — HP ${t.hp} / ATK ${t.attack} / DEF ${t.defense} / ${t.element}</div>
-          <div class="bestiary-lore">${MONSTER_LORE[kind]}</div>
-        </div>`;
+      if (!known.has(kind)) {
+        return '<div class="inv-slot empty"><span class="slot-name">???</span></div>';
+      }
+      const selected = kind === selectedBestiaryKind ? ' selected' : '';
+      return `<button class="inv-slot${selected}" data-action="select-enemy" data-enemy="${kind}" aria-label="${ENEMY_NAME[kind]}"><span class="item-icon" style="${spriteCssStyle(SPRITES[kind], INV_ICON_SIZE)}"></span><span class="slot-name">${ENEMY_NAME[kind]}</span></button>`;
     })
     .join('');
-  return `<div class="menu-tab-body"><div class="bestiary-list">${rows}</div></div>`;
+
+  return `
+    <div class="menu-tab-body">
+      <div class="inventory-grid">${gridHtml}</div>
+      ${renderBestiaryDetail(selectedBestiaryKind)}
+    </div>`;
 }
 
 function renderUpgradeShop(state: GameState): string {
@@ -797,6 +885,8 @@ function render(state: GameState): void {
   if (screen === 'MENU' && lastScreen !== 'MENU') {
     selectedInvIndex = null;
     selectedRelicEffect = null;
+    selectedSkillId = null;
+    selectedBestiaryKind = null;
   }
   if (screen === 'TITLE') el.innerHTML = renderTitle(state);
   else if (screen === 'MENU') el.innerHTML = renderMenu(state);
@@ -849,11 +939,13 @@ export function initMenus(state: GameState): void {
   screenEl().addEventListener('click', (ev) => {
     const target = (ev.target as HTMLElement).closest<HTMLElement>('[data-action]');
     if (!target) return;
-    const { action, index, skill, slot, track, tab, floor, relic } = target.dataset;
+    const { action, index, skill, slot, track, tab, floor, relic, enemy } = target.dataset;
 
     if (action === 'select-item') selectedInvIndex = Number(index);
     else if (action === 'menu-tab') menuTab = (tab as MenuTabId) ?? 'status';
     else if (action === 'select-relic') selectedRelicEffect = relic ?? null;
+    else if (action === 'select-skill') selectedSkillId = skill ?? null;
+    else if (action === 'select-enemy') selectedBestiaryKind = (enemy as EnemyKind) ?? null;
     else if (action === 'use-selected' && selectedInvIndex !== null) {
       const item = state.run.inventory[selectedInvIndex];
       if (item?.kind === 'WEAPON' || item?.kind === 'ACCESSORY') equipItem(state, selectedInvIndex);
