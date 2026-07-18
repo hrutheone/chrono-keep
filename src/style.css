@@ -483,10 +483,15 @@ body {
 
 /* A slot is a tap-to-select button; selecting shows detail in the fixed
  * .item-detail panel below instead of acting instantly. aspect-ratio keeps
- * it square at any grid width. flex-direction:column stacks icon-over-label. */
+ * it square at any grid width, flex-direction:column stacks icon-over-label.
+ * min-width/min-height:0 override the grid item default of min-size:auto,
+ * which otherwise refuses to shrink a slot below its .slot-name label's
+ * intrinsic size on a short window — overlapping the row below it. */
 .inv-slot {
   position: relative;
   aspect-ratio: 1 / 1;
+  min-width: 0;
+  min-height: 0;
   border: 1px solid var(--color-mid);
   display: flex;
   flex-direction: column;
@@ -668,9 +673,22 @@ body {
   flex-shrink: 0;
 }
 
-/* Upgrade Shop overlay (Phase 5) */
 .upgrade-shop {
   overflow-y: auto;
+}
+
+.upgrade-shop h3 {
+  font-size: 11px;
+  opacity: 0.8;
+  margin: 6px 0 4px;
+  flex-shrink: 0;
+}
+
+/* Only 4 tracks — always fits one row, so unlike the Skills grid below it
+ * shouldn't flex-grow/scroll (that would stretch its slots off-square). */
+.shop-stat-grid {
+  flex: 0 0 auto;
+  overflow: visible;
 }
 
 .settings-row {
@@ -678,12 +696,6 @@ body {
   align-items: center;
   gap: 8px;
   margin-bottom: 6px;
-}
-
-.shop-section h3 {
-  font-size: 11px;
-  opacity: 0.8;
-  margin: 6px 0 4px;
 }
 
 .shop-row,

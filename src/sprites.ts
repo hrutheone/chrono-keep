@@ -2,6 +2,7 @@
 // (16x16 tiles, 49x22). Source rect: sx = col*16, sy = row*16.
 
 import type { SkillId } from './content';
+import type { StatTrack } from './shop';
 
 export interface SpriteRef {
   col: number;
@@ -18,18 +19,18 @@ export const SPRITES = {
   // --- Enemies (kinds in types.ts) ---
   // No per-monster silhouettes on this sheet — picks below are a loose
   // thematic fit, not literal matches.
-  BONE_GRUNT: { col: 27, row: 6 }, // slender bust, arms visible — reads skeletal
-  EMBER_BAT: { col: 18, row: 8 }, // small yellow critter (closest warm color to "red")
+  BONE_GRUNT: { col: 29, row: 6 }, // slender bust, arms visible — reads skeletal
+  EMBER_BAT: { col: 26, row: 8 }, // small yellow critter (closest warm color to "red")
   VOLT_TURRET: { col: 18, row: 7 }, // same critter in blue — reads electric/squat
   FROST_WRAITH: { col: 24, row: 8 }, // hollow/outline humanoid — genuinely ghostly
   TIME_WEAVER: { col: 24, row: 0 }, // robed, hooded, arms down
-  CHRONO_LICH: { col: 38, row: 11 }, // clean front-facing skull icon
+  CHRONO_LICH: { col: 29, row: 2 }, // clean front-facing skull icon
   BONE_KNIGHT: { col: 30, row: 6 }, // blocky bust with mechanical arms — armored
   CINDER_SHAMAN: { col: 24, row: 1 }, // robed bust, arms raised mid-cast
   VOLT_HOUND: { col: 28, row: 7 }, // horse — the sheet's only four-legged beast
   FROST_SENTINEL: { col: 24, row: 7 }, // plain solid grey bust — pale, statue-like
-  INFERNO_GOLEM: { col: 30, row: 5 }, // broad round-domed bust — bulky "hulk" shape
-  STORM_CALLER: { col: 24, row: 2 }, // robed bust, distinct floatier silhouette
+  INFERNO_GOLEM: { col: 28, row: 6 }, // broad round-domed bust — bulky "hulk" shape
+  STORM_CALLER: { col: 27, row: 3 }, // robed bust, distinct floatier silhouette
   GLACIAL_KNIGHT: { col: 31, row: 6 }, // bust with a slotted armor-plate torso
 
   // --- Terrain (TILE values in mapgen.ts) ---
@@ -85,6 +86,13 @@ export const SKILL_SPRITE_BY_ID: Record<SkillId, SpriteRef> = {
   slow: { col: 30, row: 12 }, // sparse snowflake
   aura: { col: 35, row: 11 }, // concentric circles
   ultima: { col: 34, row: 12 }, // skull
+};
+
+export const STAT_TRACK_SPRITE: Record<StatTrack, SpriteRef> = {
+  maxHpUpgrade: { col: 39, row: 10 }, // red heart
+  maxStamUpgrade: { col: 44, row: 10 }, // blue plus (Stamina Draught's cell)
+  turnBonusUpgrade: SPRITES.TIME_SHARD,
+  baseAtkUpgrade: SPRITES.WEAPON,
 };
 
 // One icon per Chronofact effect, keyed by the same `effect` string content.ts uses.

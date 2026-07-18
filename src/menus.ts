@@ -31,6 +31,7 @@ import {
   RELIC_SPRITE_BY_EFFECT,
   SKILL_SPRITE_BY_ID,
   SPRITES,
+  STAT_TRACK_SPRITE,
   WEAPON_SPRITE_BY_NAME,
   type SpriteRef,
 } from './sprites';
@@ -44,7 +45,6 @@ import { getMasterVolume, isMuted, playNewGameSfx, playWarpSfx, setMasterVolume,
 import {
   buySkillUpgrade,
   buyStatUpgrade,
-  MAX_SKILL_LEVEL,
   skillCost,
   skillLevel,
   STAT_TRACKS,
@@ -129,6 +129,11 @@ let selectedRelicEffect: string | null = null;
 // selectedInvIndex/selectedRelicEffect whenever the Menu is (re)entered.
 let selectedSkillId: string | null = null;
 let selectedBestiaryKind: EnemyKind | null = null;
+
+// Upgrade Shop grids: mutually exclusive with each other (selecting one
+// clears the other) since both share the single detail/action panel below.
+let selectedStatTrack: StatTrack | null = null;
+let selectedShopSkillId: string | null = null;
 
 // Fun & Feel #6: replaces window.confirm()'s native dialog with a styled
 // overlay. `returnScreen` is captured at call time so Cancel goes back to
@@ -599,33 +604,80 @@ function renderBestiaryTab(state: GameState): string {
     </div>`;
 }
 
-function renderUpgradeShop(state: GameState): string {
-  const statRows = STAT_TRACKS.map(({ track, label }) => {
+/** Upgrade Shop's shared detail/action panel — same shape as the Menu tabs'
+ * .item-detail, showing whichever of the Stat/Skill grids below is
+ * currently selected (the two are mutually exclusive). */
+function renderShopDetail(state: GameState): string {
+  if (selectedStatTrack) {
+    const track = selectedStatTrack;
+    const { label } = STAT_TRACKS.find((t) => t.track === track)!;
     const level = state.persistent[track];
-    const cost = statTrackCost(state, track as StatTrack);
+    const cost = statTrackCost(state, track);
     const maxed = cost === null;
-    const disabled = maxed || state.persistent.echoes < cost;
+    const disabled = maxed || state.persistent.echoes < (cost ?? 0);
     return `
-      <div class="shop-row">
-        <span class="shop-name">${label} — Lv${level}${maxed ? ' (MAX)' : ''}</span>
-        <button data-action="buy-stat" data-track="${track}" ${disabled ? 'disabled' : ''}>${maxed ? 'MAX' : `Buy (${cost})`}</button>
+      <div class="item-detail">
+        <div class="item-detail-header">
+          <span class="item-detail-icon" style="${spriteCssStyle(STAT_TRACK_SPRITE[track], DETAIL_ICON_SIZE)}"></span>
+          <div class="item-detail-heading">
+            <div class="item-detail-name">${shortStatLabel(label)}</div>
+            <div class="item-detail-stat">Lv${level}${maxed ? ' (MAX)' : ''}</div>
+          </div>
+        </div>
+        <div class="item-detail-lore">${label}</div>
+        <div class="item-detail-actions">
+          <button data-action="buy-stat" data-track="${track}" ${disabled ? 'disabled' : ''}>${maxed ? 'MAX' : `Buy (${cost})`}</button>
+        </div>
       </div>`;
+  }
+
+  if (selectedShopSkillId) {
+    const id = selectedShopSkillId;
+    const skill = SKILLS[id];
+    const level = skillLevel(state, id);
+    const cost = skillCost(state, id);
+    const maxed = cost === null;
+    const disabled = maxed || state.persistent.echoes < (cost ?? 0);
+    const buyLabel = maxed ? 'MAX' : level === 0 ? `Unlock (${cost})` : `Upgrade (${cost})`;
+    const nextEffect = maxed ? 'Fully upgraded.' : SKILL_LEVEL_EFFECTS[id as keyof typeof SKILL_LEVEL_EFFECTS][level];
+    return `
+      <div class="item-detail">
+        <div class="item-detail-header">
+          <span class="item-detail-icon" style="${iconStyleForSkill(id, DETAIL_ICON_SIZE)}"></span>
+          <div class="item-detail-heading">
+            <div class="item-detail-name">${skill.name}</div>
+            <div class="item-detail-stat">${level === 0 ? 'Locked' : `Lv${level}${maxed ? ' (MAX)' : ''}`}</div>
+          </div>
+        </div>
+        <div class="item-detail-lore">${nextEffect}</div>
+        <div class="item-detail-actions">
+          <button data-action="buy-skill" data-skill="${id}" ${disabled ? 'disabled' : ''}>${buyLabel}</button>
+        </div>
+      </div>`;
+  }
+
+  return '<div class="item-detail item-detail-empty">Tap a Stat or Skill below to see its cost.</div>';
+}
+
+/** Strips the "(+N/lvl)" suffix STAT_TRACKS' label carries for the shop
+ * row — the grid slot/detail heading want just "Max HP", not the full line. */
+function shortStatLabel(label: string): string {
+  return label.split(' (')[0];
+}
+
+function renderUpgradeShop(state: GameState): string {
+  const statGridHtml = STAT_TRACKS.map(({ track, label }) => {
+    const selected = track === selectedStatTrack ? ' selected' : '';
+    const iconStyle = spriteCssStyle(STAT_TRACK_SPRITE[track], INV_ICON_SIZE);
+    return `<button class="inv-slot${selected}" data-action="select-stat" data-track="${track}" aria-label="${label}"><span class="item-icon" style="${iconStyle}"></span><span class="slot-name">${shortStatLabel(label)}</span></button>`;
   }).join('');
 
-  const skillRows = Object.entries(SKILLS)
-    .map(([id, skill]) => {
-      const level = skillLevel(state, id);
-      const cost = skillCost(state, id);
-      const maxed = cost === null;
-      const disabled = maxed || state.persistent.echoes < cost;
-      const label = level === 0 ? `${skill.name} — Locked` : `${skill.name} — Lv${level}${level >= MAX_SKILL_LEVEL ? ' (MAX)' : ''}`;
-      const buyLabel = maxed ? 'MAX' : level === 0 ? `Unlock (${cost})` : `Upgrade (${cost})`;
-      const nextEffect = maxed ? '' : SKILL_LEVEL_EFFECTS[id as keyof typeof SKILL_LEVEL_EFFECTS][level];
-      return `
-        <div class="shop-row">
-          <span class="shop-name">${label}${nextEffect ? ` — next: ${nextEffect}` : ''}</span>
-          <button data-action="buy-skill" data-skill="${id}" ${disabled ? 'disabled' : ''}>${buyLabel}</button>
-        </div>`;
+  const skillGridHtml = Object.keys(SKILLS)
+    .map((id) => {
+      const skill = SKILLS[id];
+      const selected = id === selectedShopSkillId ? ' selected' : '';
+      const iconStyle = iconStyleForSkill(id, INV_ICON_SIZE);
+      return `<button class="inv-slot${selected}" data-action="select-shop-skill" data-skill="${id}" aria-label="${skill.name}"><span class="item-icon" style="${iconStyle}"></span><span class="slot-name">${skill.name}</span></button>`;
     })
     .join('');
 
@@ -638,14 +690,11 @@ function renderUpgradeShop(state: GameState): string {
     <div class="menu upgrade-shop">
       <h2>Upgrade Shop</h2>
       <div class="stat-line">Echoes: ${state.persistent.echoes}</div>
-      <div class="shop-section">
-        <h3>Stats</h3>
-        ${statRows}
-      </div>
-      <div class="shop-section">
-        <h3>Skills</h3>
-        ${skillRows}
-      </div>
+      <h3>Stats</h3>
+      <div class="inventory-grid shop-stat-grid">${statGridHtml}</div>
+      <h3>Skills</h3>
+      <div class="inventory-grid">${skillGridHtml}</div>
+      ${renderShopDetail(state)}
       <button class="continue-btn" data-action="shop-continue">${continueLabel}</button>
       <button class="new-game-btn" data-action="new-game">New Game (wipe save)</button>
       <div class="menu-hint">Esc: continue</div>
@@ -888,6 +937,10 @@ function render(state: GameState): void {
     selectedSkillId = null;
     selectedBestiaryKind = null;
   }
+  if (screen === 'UPGRADE_SHOP' && lastScreen !== 'UPGRADE_SHOP') {
+    selectedStatTrack = null;
+    selectedShopSkillId = null;
+  }
   if (screen === 'TITLE') el.innerHTML = renderTitle(state);
   else if (screen === 'MENU') el.innerHTML = renderMenu(state);
   else if (screen === 'UPGRADE_SHOP') el.innerHTML = renderUpgradeShop(state);
@@ -946,6 +999,13 @@ export function initMenus(state: GameState): void {
     else if (action === 'select-relic') selectedRelicEffect = relic ?? null;
     else if (action === 'select-skill') selectedSkillId = skill ?? null;
     else if (action === 'select-enemy') selectedBestiaryKind = (enemy as EnemyKind) ?? null;
+    else if (action === 'select-stat') {
+      selectedStatTrack = (track as StatTrack) ?? null;
+      selectedShopSkillId = null;
+    } else if (action === 'select-shop-skill') {
+      selectedShopSkillId = skill ?? null;
+      selectedStatTrack = null;
+    }
     else if (action === 'use-selected' && selectedInvIndex !== null) {
       const item = state.run.inventory[selectedInvIndex];
       if (item?.kind === 'WEAPON' || item?.kind === 'ACCESSORY') equipItem(state, selectedInvIndex);
