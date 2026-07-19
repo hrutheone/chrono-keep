@@ -32,7 +32,7 @@ import {
 } from './sprites';
 import { PLAYER_ID, updateAnimations, getEntityVisual, getDeathGhosts, getParticles, getBeams } from './animation';
 import { stepCameraLerp } from './camera';
-import type { GhostVisual } from './animation';
+import type { EntityVisual, GhostVisual } from './animation';
 import { drawGlyphText, getFloatingTexts, measureGlyphText, type FloatKind } from './floatingText';
 import type { GameState, Enemy } from './types';
 
@@ -283,6 +283,16 @@ function drawHealthBar(ctx: CanvasRenderingContext2D, px: number, py: number, hp
   ctx.fillRect(px, barY + 1, filled, 1);
 }
 
+const WALK_HOP_PX = 4;
+
+/** Vertical "hop" while an entity's spring-lerped visual position is still chasing its logical tile; 0 once it settles. */
+function walkHopOffsetY(logicalX: number, logicalY: number, visual: EntityVisual): number {
+  const isMoving = Math.abs(logicalX - visual.tileX) > 0.05 || Math.abs(logicalY - visual.tileY) > 0.05;
+  if (!isMoving) return 0;
+  const progress = (visual.tileX + visual.tileY) % 1;
+  return -Math.abs(Math.sin(progress * Math.PI)) * WALK_HOP_PX;
+}
+
 /** Draws one fading death ghost (enemy corpse or the player's death flash) with alpha. */
 function drawGhost(ctx: CanvasRenderingContext2D, ghost: GhostVisual, px: number, py: number): void {
   ctx.globalAlpha = ghost.alpha;
@@ -437,7 +447,7 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     const big = BIG_ENEMY_KINDS.has(e.kind);
     const size = colossal ? TILE_SIZE * 1.5 : big ? BIG_TILE_SIZE : TILE_SIZE;
     const drawPx = big || colossal ? px - (size - TILE_SIZE) / 2 : px;
-    const drawPy = big || colossal ? py - (size - TILE_SIZE) : py;
+    const drawPy = (big || colossal ? py - (size - TILE_SIZE) : py) + Math.round(walkHopOffsetY(e.x, e.y, visual));
 
     if (e.hp < e.maxHp) drawHealthBar(ctx, px, drawPy, e.hp, e.maxHp);
 
@@ -476,7 +486,9 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
 
   const playerVisual = getEntityVisual(PLAYER_ID, state.run.playerX, state.run.playerY);
   const playerPx = Math.round((playerVisual.tileX - camX) * TILE_SIZE);
-  const playerPy = Math.round((playerVisual.tileY - camY) * TILE_SIZE);
+  const playerPy =
+    Math.round((playerVisual.tileY - camY) * TILE_SIZE) +
+    Math.round(walkHopOffsetY(state.run.playerX, state.run.playerY, playerVisual));
   drawPlayer(ctx, state.run.facing, playerPx, playerPy, playerVisual.flashing);
 
   for (const p of getParticles()) {

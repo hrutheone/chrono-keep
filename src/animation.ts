@@ -7,9 +7,7 @@ const SPRING_RATE = 0.3; // fraction of remaining distance closed per frame
 const ATTACK_MS = 150;
 const HIT_FLASH_MS = 150;
 const DEATH_MS = 350;
-const IDLE_PERIOD_MS = 1600; // breathing cycle
 const ATTACK_LUNGE = 0.25; // tile-fractions
-const IDLE_BOB_PX = 2; // idle bob amplitude
 
 export const PLAYER_ID = '__player__';
 export type GhostKind = 'PLAYER' | Enemy['kind'];
@@ -34,7 +32,6 @@ interface Ghost {
 
 interface Track {
   hitFlashUntil: number;
-  idlePhase: number;
 }
 
 interface VisualPos {
@@ -56,7 +53,7 @@ export function resetVisualLerps(): void {
 function getTrack(id: string): Track {
   let t = tracks.get(id);
   if (!t) {
-    t = { hitFlashUntil: 0, idlePhase: Math.random() * IDLE_PERIOD_MS };
+    t = { hitFlashUntil: 0 };
     tracks.set(id, t);
   }
   return t;
@@ -252,10 +249,6 @@ export function getEntityVisual(id: string, logicalX: number, logicalY: number):
       tileX += pulse.dx * k;
       tileY += pulse.dy * k;
     }
-  } else if (id !== PLAYER_ID && pos.x === logicalX && pos.y === logicalY) {
-    // Idle bob vertical drift for breathing effect (enemies only — the player stays still).
-    const phase = ((now + track.idlePhase) % IDLE_PERIOD_MS) / IDLE_PERIOD_MS;
-    tileY += Math.sin(phase * Math.PI * 2) * (IDLE_BOB_PX / 8);
   }
 
   return { tileX, tileY, flashing: now < track.hitFlashUntil };
