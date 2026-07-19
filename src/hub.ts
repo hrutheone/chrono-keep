@@ -5,6 +5,8 @@ import { DUNGEON_SIZE, floorTurnLimit, resetRunForNewLoop } from './state';
 import { onFloorEntered } from './echoes';
 import { saveGame, saveRunSnapshot } from './persistence';
 import { SMUGGLER_MIN_LOOP_COUNT, SMUGGLER_SPAWN_CHANCE } from './content';
+import { resetVisualLerps } from './animation';
+import { resetCameraLerp } from './camera';
 import type { GameState } from './types';
 
 const N = DUNGEON_SIZE;
@@ -51,6 +53,8 @@ function buildHub(smugglerPresent: boolean): HubLayout {
 
 /** Installs the Hub into game state. */
 export function enterHub(state: GameState): void {
+  resetVisualLerps();
+  resetCameraLerp();
   state.run.smugglerPresent = state.persistent.loopCount > SMUGGLER_MIN_LOOP_COUNT && Math.random() < SMUGGLER_SPAWN_CHANCE;
   const hub = buildHub(state.run.smugglerPresent);
   state.run.currentFloor = HUB_FLOOR;

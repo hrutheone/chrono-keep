@@ -6,6 +6,13 @@ import { HUB_FLOOR } from './hub';
 import { isArenaFloor, miniBossRepeatNumber } from './arenas';
 import type { Element, GameState, StatusEffect } from './types';
 
+import biome1Url from '../audio/biome1.ogg';
+import biome2Url from '../audio/biome2.ogg';
+import biome3Url from '../audio/biome3.ogg';
+import biome4Url from '../audio/biome4.ogg';
+import bossUrl from '../audio/boss.ogg';
+import finalBossUrl from '../audio/final_boss.ogg';
+
 // Floor 99: hardcoded to avoid circular dependencies with bossArena.ts.
 const FINAL_BOSS_FLOOR = 99;
 
@@ -70,18 +77,21 @@ function ensureContext(): AudioContext {
     applyMasterGain();
     master.connect(ctx.destination);
 
-    // Music bus: allows independent muffling of music from SFX.
+    // Music bus: BGM buffers connect into musicFilter (dynamic biome muffling/tension),
+    // which feeds musicGain (fixed music-vs-SFX balance) into master.
     musicGain = ctx.createGain();
     musicGain.gain.value = 0.5;
     musicFilter = ctx.createBiquadFilter();
     musicFilter.type = 'lowpass';
     musicFilter.frequency.value = 20000; // effectively transparent
-    musicGain.connect(musicFilter);
-    musicFilter.connect(master);
+    musicFilter.connect(musicGain);
+    musicGain.connect(master);
 
     // Exposed for verification (Chrome DevTools MCP evaluate_script) and debugging.
     (window as unknown as { __chronoAudio: { ctx: AudioContext; master: GainNode; musicGain: GainNode; musicFilter: BiquadFilterNode } }).__chronoAudio =
       { ctx, master, musicGain, musicFilter };
+
+    void loadAllAudio();
   }
   if (ctx.state === 'suspended') void ctx.resume();
   return ctx;
@@ -426,220 +436,128 @@ export function playErrorSound(): void {
   tone({ freq: 150, duration: 0.15, type: 'sawtooth', gain: 0.16 });
 }
 
-// Music scheduler: seamlessly loops scheduled notes using a lookahead polling approach.
+// BGM: pre-rendered loops played through AudioBufferSourceNode, pitched/filtered per biome and situation.
 
-interface MusicNote {
-  freq: number;
-  duration: number; // seconds
-  time: number; // seconds from the loop's start
-  type: OscillatorType;
-  gain: number;
-}
-interface MusicTrack {
-  notes: MusicNote[];
-  loopLength: number; // seconds
-}
-
-const SCHEDULE_AHEAD_S = 0.15;
-const SCHEDULER_INTERVAL_MS = 25;
-
-const TITLE_THEME: MusicTrack = {
-  loopLength: 6,
-  notes: [
-    { freq: 220, duration: 1.8, time: 0, type: 'sine', gain: 0.1 },
-    { freq: 277.18, duration: 1.8, time: 1.5, type: 'sine', gain: 0.08 },
-    { freq: 164.81, duration: 2.2, time: 3, type: 'triangle', gain: 0.07 },
-    { freq: 196, duration: 1.8, time: 4.5, type: 'sine', gain: 0.08 },
-  ],
+const AUDIO_URLS: Record<string, string> = {
+  biome1: biome1Url,
+  biome2: biome2Url,
+  biome3: biome3Url,
+  biome4: biome4Url,
+  boss: bossUrl,
+  final_boss: finalBossUrl,
 };
 
-const GAME_THEME: MusicTrack = {
-  loopLength: 5,
-  notes: [
-    { freq: 130.81, duration: 2, time: 0, type: 'sine', gain: 0.08 },
-    { freq: 164.81, duration: 1.5, time: 2, type: 'sine', gain: 0.06 },
-    { freq: 146.83, duration: 2, time: 3, type: 'triangle', gain: 0.06 },
-  ],
-};
+const audioBuffers = new Map<string, AudioBuffer>();
+let audioLoadStarted = false;
 
-const GAME_THEME_TENSE: MusicTrack = {
-  loopLength: 2.4,
-  notes: [
-    { freq: 174.61, duration: 0.4, time: 0, type: 'square', gain: 0.07 },
-    { freq: 207.65, duration: 0.4, time: 0.6, type: 'square', gain: 0.07 },
-    { freq: 174.61, duration: 0.4, time: 1.2, type: 'square', gain: 0.07 },
-    { freq: 155.56, duration: 0.5, time: 1.8, type: 'sawtooth', gain: 0.08 },
-  ],
-};
-
-const BOSS_THEME: MusicTrack = {
-  loopLength: 3,
-  notes: [
-    { freq: 110, duration: 0.5, time: 0, type: 'sawtooth', gain: 0.12 },
-    { freq: 116.54, duration: 0.5, time: 0.5, type: 'sawtooth', gain: 0.1 },
-    { freq: 130.81, duration: 0.5, time: 1, type: 'sawtooth', gain: 0.12 },
-    { freq: 98, duration: 0.7, time: 1.5, type: 'square', gain: 0.1 },
-    { freq: 220, duration: 0.3, time: 2.2, type: 'square', gain: 0.08 },
-    { freq: 233.08, duration: 0.3, time: 2.6, type: 'square', gain: 0.08 },
-  ],
-};
-
-/** Unique final-boss theme. */
-const FINAL_BOSS_THEME: MusicTrack = {
-  loopLength: 2.2,
-  notes: [
-    { freq: 82.41, duration: 0.4, time: 0, type: 'sawtooth', gain: 0.14 },
-    { freq: 87.31, duration: 0.4, time: 0.4, type: 'sawtooth', gain: 0.12 },
-    { freq: 98, duration: 0.4, time: 0.8, type: 'sawtooth', gain: 0.14 },
-    { freq: 73.42, duration: 0.5, time: 1.2, type: 'square', gain: 0.13 },
-    { freq: 293.66, duration: 0.3, time: 1.7, type: 'square', gain: 0.1 },
-    { freq: 311.13, duration: 0.3, time: 2, type: 'square', gain: 0.1 },
-  ],
-};
-
-// Per-Biome ambience keyed to the biome's element.
-const ELEMENT_KEY_SHIFT: Record<Element, number> = {
-  PHYSICAL: 1,
-  FIRE: 1.12,
-  VOLT: 1.19,
-  FROST: 0.89,
-  CHRONO: 1.35,
-};
-
-function biomeElement(biome: number): Element {
-  if (biome === 1) return 'PHYSICAL';
-  if (biome === 2) return 'VOLT';
-  if (biome === 3) return 'FROST';
-  if (biome === 10) return 'CHRONO';
-  const theme = (biome - 4) % 3;
-  return theme === 0 ? 'FIRE' : theme === 1 ? 'VOLT' : 'FROST';
+/** Fetches and decodes every BGM track; safe to call once the AudioContext exists. */
+async function loadAllAudio(): Promise<void> {
+  if (audioLoadStarted || !ctx) return;
+  audioLoadStarted = true;
+  const decodeCtx = ctx;
+  await Promise.all(
+    Object.entries(AUDIO_URLS).map(async ([name, url]) => {
+      const res = await fetch(url);
+      const arrayBuffer = await res.arrayBuffer();
+      const buffer = await decodeCtx.decodeAudioData(arrayBuffer);
+      audioBuffers.set(name, buffer);
+    }),
+  );
 }
 
-function gameThemeForElement(element: Element): MusicTrack {
-  const shift = ELEMENT_KEY_SHIFT[element];
-  const type = ELEMENT_TYPE[element];
-  return { loopLength: GAME_THEME.loopLength, notes: GAME_THEME.notes.map((n) => ({ ...n, freq: n.freq * shift, type })) };
-}
+let activeSource: AudioBufferSourceNode | null = null;
+let activeTrackName: string | null = null;
 
-/** Boss theme with escalating pitch and tempo based on repeats. */
-function bossThemeForFloor(floor: number): MusicTrack {
-  const mk = miniBossRepeatNumber(floor);
-  if (mk === 0) return BOSS_THEME;
-  const pitchMult = 1 + mk * 0.12;
-  const tempoMult = 1 - mk * 0.1;
-  return {
-    loopLength: BOSS_THEME.loopLength * tempoMult,
-    notes: BOSS_THEME.notes.map((n) => ({ ...n, freq: n.freq * pitchMult, time: n.time * tempoMult })),
-  };
-}
+/** Starts looping `bufferName`; no-ops if it's already the active track (still-loading buffers are silently skipped). */
+function playTrack(bufferName: string): void {
+  if (!ctx || !musicFilter) return;
+  if (activeTrackName === bufferName && activeSource) return;
+  const buffer = audioBuffers.get(bufferName);
+  if (!buffer) return;
 
-// Dynamic track key based on generated theme configurations.
-type TrackKey = string;
-
-let schedulerTimer: number | null = null;
-let currentTrack: MusicTrack | null = null;
-let currentTrackKey: TrackKey | null = null;
-let trackStartTime = 0;
-let nextNoteIdx = 0;
-
-function scheduleNote(note: MusicNote, when: number): void {
-  if (!ctx || !musicGain) return;
-  const osc = ctx.createOscillator();
-  const g = ctx.createGain();
-  osc.type = note.type;
-  osc.frequency.setValueAtTime(note.freq, when);
-  g.gain.setValueAtTime(0.0001, when);
-  g.gain.linearRampToValueAtTime(note.gain, when + 0.03);
-  g.gain.exponentialRampToValueAtTime(0.0001, when + note.duration);
-  osc.connect(g);
-  g.connect(musicGain);
-  osc.start(when);
-  osc.stop(when + note.duration + 0.05);
-}
-
-function schedulerTick(): void {
-  if (!ctx || !currentTrack) return;
-  while (trackStartTime + currentTrack.notes[nextNoteIdx].time < ctx.currentTime + SCHEDULE_AHEAD_S) {
-    const note = currentTrack.notes[nextNoteIdx];
-    scheduleNote(note, trackStartTime + note.time);
-    nextNoteIdx += 1;
-    if (nextNoteIdx >= currentTrack.notes.length) {
-      nextNoteIdx = 0;
-      trackStartTime += currentTrack.loopLength;
-    }
+  if (activeSource) {
+    activeSource.stop();
+    activeSource.disconnect();
   }
-}
-
-function playTrack(key: TrackKey, track: MusicTrack): void {
-  if (!ctx) return;
-  currentTrack = track;
-  currentTrackKey = key;
-  nextNoteIdx = 0;
-  trackStartTime = ctx.currentTime + 0.05;
-  if (schedulerTimer === null) schedulerTimer = window.setInterval(schedulerTick, SCHEDULER_INTERVAL_MS);
+  const src = ctx.createBufferSource();
+  src.buffer = buffer;
+  src.loop = true;
+  src.connect(musicFilter);
+  src.start();
+  activeSource = src;
+  activeTrackName = bufferName;
 }
 
 function stopTrack(): void {
-  currentTrack = null;
-  currentTrackKey = null;
-  if (schedulerTimer !== null) {
-    clearInterval(schedulerTimer);
-    schedulerTimer = null;
+  if (activeSource) {
+    activeSource.stop();
+    activeSource.disconnect();
+    activeSource = null;
   }
+  activeTrackName = null;
 }
 
-let lastMuffled = false;
+let lastFilterTarget: number | null = null;
 
-/** Muffles background music. */
-function setMusicMuffled(muffled: boolean): void {
-  if (!ctx || !musicFilter || muffled === lastMuffled) return;
-  lastMuffled = muffled;
-  const target = muffled ? 700 : 20000;
+/** Ramps the music lowpass toward `target` Hz (idempotent while already heading there). */
+function rampMusicFilter(target: number): void {
+  if (!ctx || !musicFilter || target === lastFilterTarget) return;
+  lastFilterTarget = target;
   musicFilter.frequency.cancelScheduledValues(ctx.currentTime);
   musicFilter.frequency.linearRampToValueAtTime(target, ctx.currentTime + 0.2);
 }
 
-/** Updates music track based on game state. */
+interface BgmChoice {
+  track: string;
+  rate: number;
+  filter: number;
+}
+
+// Biomes 5-9 recycle biome2-4's tracks at a heavier, slower mix; Biome 10 settles on biome4.
+const HIGH_BIOME_CYCLE = ['biome2', 'biome3', 'biome4'] as const;
+
+/** Track/rate/filter for a procedural (non-arena, non-final-boss) floor. */
+function bgmForBiomeFloor(floor: number): BgmChoice {
+  if (floor === HUB_FLOOR) return { track: 'biome1', rate: 0.7, filter: 800 };
+  const biome = biomeOf(floor);
+  if (biome <= 4) return { track: `biome${biome}`, rate: 1.0, filter: 20000 };
+  if (biome <= 9) return { track: HIGH_BIOME_CYCLE[(biome - 5) % 3], rate: 0.85, filter: 3000 };
+  return { track: 'biome4', rate: 0.6, filter: 2000 };
+}
+
+/** Updates BGM track, playback rate, and filter based on game state. */
 export function updateMusicForState(state: GameState): void {
   if (!ctx) return; // Not unlocked yet.
 
   const screen = state.ui.currentScreen;
   const musicScreens = screen === 'GAME' || screen === 'MENU';
-  let desired: TrackKey | null = null;
-  let desiredTrack: MusicTrack | null = null;
+
+  let choice: BgmChoice | null = null;
 
   if (screen === 'TITLE') {
-    desired = 'title';
-    desiredTrack = TITLE_THEME;
-  } else if (musicScreens && state.run.currentFloor === HUB_FLOOR) {
-    // Always use the calm neutral track in the Hub.
-    desired = 'game_hub';
-    desiredTrack = GAME_THEME;
+    choice = { track: 'biome1', rate: 0.7, filter: 800 };
   } else if (musicScreens) {
     const floor = state.run.currentFloor;
     if (floor === FINAL_BOSS_FLOOR) {
-      desired = 'boss_final';
-      desiredTrack = FINAL_BOSS_THEME;
+      choice = { track: 'final_boss', rate: 1.0, filter: 20000 };
     } else if (isArenaFloor(floor)) {
-      const mk = miniBossRepeatNumber(floor);
-      desired = `boss_mk${mk}`;
-      desiredTrack = bossThemeForFloor(floor);
-    } else if (state.run.turnsRemaining < 20) {
-      desired = 'game_tense';
-      desiredTrack = GAME_THEME_TENSE;
+      choice = { track: 'boss', rate: 1.0 + miniBossRepeatNumber(floor) * 0.05, filter: 20000 };
     } else {
-      const element = biomeElement(biomeOf(floor));
-      desired = `game_${element}`;
-      desiredTrack = gameThemeForElement(element);
+      choice = bgmForBiomeFloor(floor);
+      if (floor !== HUB_FLOOR && state.run.turnsRemaining < 20) {
+        choice = { ...choice, rate: 1.3, filter: 20000 };
+      }
     }
   }
 
-  if (desired !== currentTrackKey) {
-    if (desired === null || desiredTrack === null) stopTrack();
-    else playTrack(desired, desiredTrack);
+  if (choice === null) {
+    stopTrack();
+  } else {
+    playTrack(choice.track);
+    if (activeSource) activeSource.playbackRate.value = choice.rate;
+    // Tactical muffling: the Menu always ducks the filter regardless of the underlying track's own value.
+    rampMusicFilter(screen === 'MENU' ? 500 : choice.filter);
   }
-
-  setMusicMuffled(screen === 'MENU');
 }
 
 // --- The Anxiety Clock ---
@@ -731,7 +649,7 @@ export function debugAudioState(): {
   masterGain: number | null;
   masterVolume: number;
   muted: boolean;
-  musicTrack: TrackKey | null;
+  musicTrack: string | null;
   musicFilterFreq: number | null;
   anxietyClockActive: boolean;
   anxietyThreshold: AnxietyThreshold | null;
@@ -743,7 +661,7 @@ export function debugAudioState(): {
     masterGain: master?.gain.value ?? null,
     masterVolume,
     muted,
-    musicTrack: currentTrackKey,
+    musicTrack: activeTrackName,
     musicFilterFreq: musicFilter?.frequency.value ?? null,
     anxietyClockActive: anxietyStateRef !== null,
     anxietyThreshold: lastAnxietyThreshold,

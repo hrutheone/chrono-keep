@@ -3,7 +3,7 @@
 import { COLOR_ENEMY_LIGHT } from './palette';
 import type { Enemy, GameState } from './types';
 
-const MOVE_MS = 120;
+const SPRING_RATE = 0.3; // fraction of remaining distance closed per frame
 const ATTACK_MS = 150;
 const HIT_FLASH_MS = 150;
 const DEATH_MS = 350;
@@ -15,8 +15,6 @@ export const PLAYER_ID = '__player__';
 export type GhostKind = 'PLAYER' | Enemy['kind'];
 
 interface Snapshot {
-  x: number;
-  y: number;
   hp: number;
 }
 
@@ -35,53 +33,59 @@ interface Ghost {
 }
 
 interface Track {
-  fromX: number;
-  fromY: number;
-  toX: number;
-  toY: number;
-  moveStart: number;
   hitFlashUntil: number;
   idlePhase: number;
+}
+
+interface VisualPos {
+  x: number;
+  y: number;
 }
 
 const snapshots = new Map<string, Snapshot>();
 const tracks = new Map<string, Track>();
 const attacks = new Map<string, AttackPulse>();
 const ghosts = new Map<string, Ghost>();
+const visualPositions = new Map<string, VisualPos>();
 
-function getTrack(id: string, x: number, y: number): Track {
+/** Clears all entity visual-lerp state; call on floor/hub transitions to avoid a cross-map swoosh. */
+export function resetVisualLerps(): void {
+  visualPositions.clear();
+}
+
+function getTrack(id: string): Track {
   let t = tracks.get(id);
   if (!t) {
-    t = { fromX: x, fromY: y, toX: x, toY: y, moveStart: 0, hitFlashUntil: 0, idlePhase: Math.random() * IDLE_PERIOD_MS };
+    t = { hitFlashUntil: 0, idlePhase: Math.random() * IDLE_PERIOD_MS };
     tracks.set(id, t);
   }
   return t;
 }
 
-function updateOne(id: string, x: number, y: number, hp: number, now: number): void {
-  const prev = snapshots.get(id);
-  const track = getTrack(id, x, y);
-
-  if (prev && (prev.x !== x || prev.y !== y)) {
-    track.fromX = prev.x;
-    track.fromY = prev.y;
-    track.toX = x;
-    track.toY = y;
-    track.moveStart = now;
+function getVisualPos(id: string, x: number, y: number): VisualPos {
+  let pos = visualPositions.get(id);
+  if (!pos) {
+    pos = { x, y };
+    visualPositions.set(id, pos);
   }
-  if (prev && hp < prev.hp) track.hitFlashUntil = now + HIT_FLASH_MS;
+  return pos;
+}
 
-  snapshots.set(id, { x, y, hp });
+function updateOne(id: string, hp: number, now: number): void {
+  const prev = snapshots.get(id);
+  const track = getTrack(id);
+  if (prev && hp < prev.hp) track.hitFlashUntil = now + HIT_FLASH_MS;
+  snapshots.set(id, { hp });
 }
 
 /** Call once per render frame, before drawing, with the live player + enemies. */
 export function updateAnimations(state: GameState): void {
   const now = performance.now();
-  updateOne(PLAYER_ID, state.run.playerX, state.run.playerY, state.run.currentHp, now);
+  updateOne(PLAYER_ID, state.run.currentHp, now);
 
   const liveIds = new Set([PLAYER_ID]);
   for (const e of state.dungeon.enemies) {
-    updateOne(e.id, e.x, e.y, e.hp, now);
+    updateOne(e.id, e.hp, now);
     liveIds.add(e.id);
   }
 
@@ -90,6 +94,7 @@ export function updateAnimations(state: GameState): void {
       snapshots.delete(id);
       tracks.delete(id);
       attacks.delete(id);
+      visualPositions.delete(id);
     }
   }
 
@@ -225,11 +230,17 @@ export interface EntityVisual {
 /** Resolved render-space position + flash state for one live entity this frame. */
 export function getEntityVisual(id: string, logicalX: number, logicalY: number): EntityVisual {
   const now = performance.now();
-  const track = getTrack(id, logicalX, logicalY);
+  const track = getTrack(id);
+  const pos = getVisualPos(id, logicalX, logicalY);
 
-  const moveT = track.moveStart === 0 ? 1 : Math.min(1, (now - track.moveStart) / MOVE_MS);
-  let tileX = track.fromX + (track.toX - track.fromX) * moveT;
-  let tileY = track.fromY + (track.toY - track.fromY) * moveT;
+  // Spring lerp: chase the logical (grid-snapped) position, closing 30% of the gap each frame.
+  if (Math.abs(logicalX - pos.x) < 0.01) pos.x = logicalX;
+  else pos.x += (logicalX - pos.x) * SPRING_RATE;
+  if (Math.abs(logicalY - pos.y) < 0.01) pos.y = logicalY;
+  else pos.y += (logicalY - pos.y) * SPRING_RATE;
+
+  let tileX = pos.x;
+  let tileY = pos.y;
 
   const pulse = attacks.get(id);
   if (pulse) {
@@ -241,8 +252,8 @@ export function getEntityVisual(id: string, logicalX: number, logicalY: number):
       tileX += pulse.dx * k;
       tileY += pulse.dy * k;
     }
-  } else if (moveT >= 1) {
-    // Idle bob vertical drift for breathing effect.
+  } else if (id !== PLAYER_ID && pos.x === logicalX && pos.y === logicalY) {
+    // Idle bob vertical drift for breathing effect (enemies only — the player stays still).
     const phase = ((now + track.idlePhase) % IDLE_PERIOD_MS) / IDLE_PERIOD_MS;
     tileY += Math.sin(phase * Math.PI * 2) * (IDLE_BOB_PX / 8);
   }

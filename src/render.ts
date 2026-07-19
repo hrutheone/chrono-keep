@@ -31,6 +31,7 @@ import {
   type SpriteRef,
 } from './sprites';
 import { PLAYER_ID, updateAnimations, getEntityVisual, getDeathGhosts, getParticles, getBeams } from './animation';
+import { stepCameraLerp } from './camera';
 import type { GhostVisual } from './animation';
 import { drawGlyphText, getFloatingTexts, measureGlyphText, type FloatKind } from './floatingText';
 import type { GameState, Enemy } from './types';
@@ -302,7 +303,9 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
   ctx.fillStyle = COLOR_BG;
   ctx.fillRect(0, 0, viewW, viewH);
 
-  const cam = computeCamera(state);
+  const targetCam = computeCamera(state);
+  const { x: camX, y: camY } = stepCameraLerp(targetCam.x, targetCam.y);
+
   const { tiles, width, height } = state.dungeon;
   // Hand-authored floors (Hub, Mini-Boss/Final-Boss Arenas) stay plain — no Biome tint or floor decor.
   const isFixedLayoutFloor =
@@ -312,32 +315,40 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
   const biomeIndex = Math.min(9, Math.max(0, Math.floor((state.run.currentFloor - 1) / 10)));
   const wallTint = isFixedLayoutFloor ? null : BIOME_WALL_TINTS[biomeIndex];
 
-  for (let y = 0; y < VIEWPORT_TILES_H; y++) {
-    const ty = cam.y + y;
+  // The camera is fractional now, so render one extra tile at each edge to avoid black cut-offs.
+  const startX = Math.floor(camX);
+  const endX = Math.floor(camX + VIEWPORT_TILES_W) + 1;
+  const startY = Math.floor(camY);
+  const endY = Math.floor(camY + VIEWPORT_TILES_H) + 1;
+
+  for (let ty = startY; ty <= endY; ty++) {
     if (ty < 0 || ty >= height) continue;
     const row = tiles[ty];
-    for (let x = 0; x < VIEWPORT_TILES_W; x++) {
-      const tx = cam.x + x;
+    for (let tx = startX; tx <= endX; tx++) {
       if (tx < 0 || tx >= width) continue;
+      // Math.round preserves crisp pixel art edges.
+      const screenX = Math.round((tx - camX) * TILE_SIZE);
+      const screenY = Math.round((ty - camY) * TILE_SIZE);
+
       if (row[tx] === TILE.WALL) {
         const { ref, rot } = wallVariantAt(state, tx, ty);
-        drawTintedRef(ctx, ref, x * TILE_SIZE, y * TILE_SIZE, wallTint, rot);
+        drawTintedRef(ctx, ref, screenX, screenY, wallTint, rot);
         continue;
       }
       if (row[tx] === TILE.TREE) {
         const stage = eternityTreeStage(state.persistent.unlockedAnchors.length);
-        drawRef(ctx, TREE_STAGE_SPRITES[stage], x * TILE_SIZE, y * TILE_SIZE);
+        drawRef(ctx, TREE_STAGE_SPRITES[stage], screenX, screenY);
         continue;
       }
       const ref = TILE_REFS[row[tx]];
-      if (ref) drawRef(ctx, ref, x * TILE_SIZE, y * TILE_SIZE);
+      if (ref) drawRef(ctx, ref, screenX, screenY);
       if (!isFixedLayoutFloor && row[tx] === TILE.FLOOR) {
         const seed = Math.sin(tx * 12.9898 + ty * 78.233 + state.run.currentFloor) * 43758.5453;
         const rand = seed - Math.floor(seed);
         const decor = rand < 0.1 ? DECOR_DIRT[Math.floor((rand / 0.1) * DECOR_DIRT.length)] : rand > 0.9 ? DECOR_GRASS[Math.floor(((rand - 0.9) / 0.1) * DECOR_GRASS.length)] : null;
         if (decor) {
           ctx.globalAlpha = 0.15;
-          drawRef(ctx, decor, x * TILE_SIZE, y * TILE_SIZE);
+          drawRef(ctx, decor, screenX, screenY);
           ctx.globalAlpha = 1;
         }
       }
@@ -346,16 +357,18 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
 
   // Overlay expiring tiles.
   for (const t of state.dungeon.expiringTiles) {
-    const sx = t.x - cam.x;
-    const sy = t.y - cam.y;
-    if (sx < 0 || sx >= VIEWPORT_TILES_W || sy < 0 || sy >= VIEWPORT_TILES_H) continue;
+    const tileSx = t.x - camX;
+    const tileSy = t.y - camY;
+    if (tileSx < -1 || tileSx >= VIEWPORT_TILES_W + 1 || tileSy < -1 || tileSy >= VIEWPORT_TILES_H + 1) continue;
+    const sx = Math.round(tileSx * TILE_SIZE);
+    const sy = Math.round(tileSy * TILE_SIZE);
     if (t.tileType === TILE.WALL) {
       const { ref, rot } = wallVariantAt(state, t.x, t.y);
-      drawTintedRef(ctx, ref, sx * TILE_SIZE, sy * TILE_SIZE, wallTint, rot);
+      drawTintedRef(ctx, ref, sx, sy, wallTint, rot);
       continue;
     }
     const ref = TILE_REFS[t.tileType];
-    if (ref) drawRef(ctx, ref, sx * TILE_SIZE, sy * TILE_SIZE);
+    if (ref) drawRef(ctx, ref, sx, sy);
   }
 
   // Draw telegraphs.
@@ -363,21 +376,21 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     const pulse = 0.35 + 0.25 * Math.sin(performance.now() / 120);
     ctx.globalAlpha = pulse;
     for (const t of state.dungeon.telegraphTiles) {
-      const sx = t.x - cam.x;
-      const sy = t.y - cam.y;
-      if (sx < 0 || sx >= VIEWPORT_TILES_W || sy < 0 || sy >= VIEWPORT_TILES_H) continue;
+      const tileSx = t.x - camX;
+      const tileSy = t.y - camY;
+      if (tileSx < -1 || tileSx >= VIEWPORT_TILES_W + 1 || tileSy < -1 || tileSy >= VIEWPORT_TILES_H + 1) continue;
       ctx.fillStyle = t.payload === 'fire_aoe' ? COLOR_FIRE : t.payload === 'chill_pulse' ? COLOR_FROST : COLOR_ENEMY_LIGHT;
-      ctx.fillRect(sx * TILE_SIZE, sy * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+      ctx.fillRect(Math.round(tileSx * TILE_SIZE), Math.round(tileSy * TILE_SIZE), TILE_SIZE, TILE_SIZE);
     }
     ctx.globalAlpha = 1;
   }
 
   // Draw ranged hit beams.
   for (const b of getBeams()) {
-    const x1 = (b.fromX - cam.x) * TILE_SIZE + TILE_SIZE / 2;
-    const y1 = (b.fromY - cam.y) * TILE_SIZE + TILE_SIZE / 2;
-    const x2 = (b.toX - cam.x) * TILE_SIZE + TILE_SIZE / 2;
-    const y2 = (b.toY - cam.y) * TILE_SIZE + TILE_SIZE / 2;
+    const x1 = (b.fromX - camX) * TILE_SIZE + TILE_SIZE / 2;
+    const y1 = (b.fromY - camY) * TILE_SIZE + TILE_SIZE / 2;
+    const x2 = (b.toX - camX) * TILE_SIZE + TILE_SIZE / 2;
+    const y2 = (b.toY - camY) * TILE_SIZE + TILE_SIZE / 2;
     ctx.strokeStyle = b.color;
     ctx.globalAlpha = b.alpha;
     ctx.lineWidth = 1;
@@ -390,34 +403,34 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
 
   // Draw Cursed Rift.
   if (state.dungeon.riftX !== null && state.dungeon.riftY !== null) {
-    const sx = state.dungeon.riftX - cam.x;
-    const sy = state.dungeon.riftY - cam.y;
-    if (sx >= 0 && sx < VIEWPORT_TILES_W && sy >= 0 && sy < VIEWPORT_TILES_H) {
-      drawRef(ctx, SPRITES.CURSED_RIFT, sx * TILE_SIZE, sy * TILE_SIZE);
+    const tileSx = state.dungeon.riftX - camX;
+    const tileSy = state.dungeon.riftY - camY;
+    if (tileSx >= -1 && tileSx < VIEWPORT_TILES_W + 1 && tileSy >= -1 && tileSy < VIEWPORT_TILES_H + 1) {
+      drawRef(ctx, SPRITES.CURSED_RIFT, Math.round(tileSx * TILE_SIZE), Math.round(tileSy * TILE_SIZE));
     }
   }
 
   for (const wi of state.dungeon.items) {
-    const sx = wi.x - cam.x;
-    const sy = wi.y - cam.y;
-    if (sx < 0 || sx >= VIEWPORT_TILES_W || sy < 0 || sy >= VIEWPORT_TILES_H) continue;
+    const tileSx = wi.x - camX;
+    const tileSy = wi.y - camY;
+    if (tileSx < -1 || tileSx >= VIEWPORT_TILES_W + 1 || tileSy < -1 || tileSy >= VIEWPORT_TILES_H + 1) continue;
     // Draw items/chests.
     const ref = wi.chestLoot
       ? SPRITES.CHEST
       : wi.item.kind === 'RELIC' && wi.item.effect
         ? (RELIC_SPRITE_BY_EFFECT[wi.item.effect] ?? SPRITES.RELIC)
         : (WORLD_ITEM_REFS_BY_NAME[wi.item.kind]?.[wi.item.name] ?? WORLD_ITEM_REFS[wi.item.kind] ?? SPRITES.CHEST);
-    drawRef(ctx, ref, sx * TILE_SIZE, sy * TILE_SIZE);
+    drawRef(ctx, ref, Math.round(tileSx * TILE_SIZE), Math.round(tileSy * TILE_SIZE));
   }
 
   for (const e of state.dungeon.enemies) {
-    const sx = e.x - cam.x;
-    const sy = e.y - cam.y;
-    if (sx < 0 || sx >= VIEWPORT_TILES_W || sy < 0 || sy >= VIEWPORT_TILES_H) continue;
+    const tileSx = e.x - camX;
+    const tileSy = e.y - camY;
+    if (tileSx < -1 || tileSx >= VIEWPORT_TILES_W + 1 || tileSy < -1 || tileSy >= VIEWPORT_TILES_H + 1) continue;
 
     const visual = getEntityVisual(e.id, e.x, e.y);
-    const px = Math.round((visual.tileX - cam.x) * TILE_SIZE);
-    const py = Math.round((visual.tileY - cam.y) * TILE_SIZE);
+    const px = Math.round((visual.tileX - camX) * TILE_SIZE);
+    const py = Math.round((visual.tileY - camY) * TILE_SIZE);
 
     // Scale logic.
     const colossal = e.affix === 'colossal';
@@ -455,20 +468,20 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
   }
 
   for (const ghost of getDeathGhosts()) {
-    const sx = ghost.tileX - cam.x;
-    const sy = ghost.tileY - cam.y;
-    if (sx < -1 || sx >= VIEWPORT_TILES_W || sy < -1 || sy >= VIEWPORT_TILES_H) continue;
+    const sx = ghost.tileX - camX;
+    const sy = ghost.tileY - camY;
+    if (sx < -1 || sx >= VIEWPORT_TILES_W + 1 || sy < -1 || sy >= VIEWPORT_TILES_H + 1) continue;
     drawGhost(ctx, ghost, Math.round(sx * TILE_SIZE), Math.round(sy * TILE_SIZE));
   }
 
   const playerVisual = getEntityVisual(PLAYER_ID, state.run.playerX, state.run.playerY);
-  const playerPx = Math.round((playerVisual.tileX - cam.x) * TILE_SIZE);
-  const playerPy = Math.round((playerVisual.tileY - cam.y) * TILE_SIZE);
+  const playerPx = Math.round((playerVisual.tileX - camX) * TILE_SIZE);
+  const playerPy = Math.round((playerVisual.tileY - camY) * TILE_SIZE);
   drawPlayer(ctx, state.run.facing, playerPx, playerPy, playerVisual.flashing);
 
   for (const p of getParticles()) {
-    const sx = (p.x - cam.x) * TILE_SIZE;
-    const sy = (p.y - cam.y) * TILE_SIZE;
+    const sx = (p.x - camX) * TILE_SIZE;
+    const sy = (p.y - camY) * TILE_SIZE;
     if (sx < -2 || sx >= viewW + 2 || sy < -2 || sy >= viewH + 2) continue;
     ctx.fillStyle = p.color;
     ctx.globalAlpha = p.alpha;
@@ -479,8 +492,8 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
   // Drawn last, always on top.
   for (const f of getFloatingTexts()) {
     const width = measureGlyphText(f.text);
-    const px = (f.x - cam.x) * TILE_SIZE + (TILE_SIZE - width) / 2;
-    const py = (f.y - cam.y) * TILE_SIZE - 6;
+    const px = (f.x - camX) * TILE_SIZE + (TILE_SIZE - width) / 2;
+    const py = (f.y - camY) * TILE_SIZE - 6;
     if (px < -width || px >= viewW || py < -6 || py >= viewH) continue;
     ctx.globalAlpha = f.alpha;
     drawGlyphText(ctx, f.text, Math.round(px), Math.round(py), FLOAT_COLOR[f.kind]);

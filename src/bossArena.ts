@@ -1,9 +1,11 @@
 // Floor 99 arena for Chrono-Lich fight.
 
-import { createEnemy, scaleEnemyForNgPlus } from './content';
+import { createEnemy, discoverEnemy, scaleEnemyForNgPlus } from './content';
 import { resetChronoLichEncounter } from './enemyAI';
 import { TILE } from './mapgen';
 import { DUNGEON_SIZE, floorTurnLimit } from './state';
+import { resetVisualLerps } from './animation';
+import { resetCameraLerp } from './camera';
 import type { Enemy, GameState, WorldItem } from './types';
 
 const N = DUNGEON_SIZE;
@@ -58,6 +60,8 @@ function buildArena(): BossFloor {
 
 /** Installs the boss arena into game state. */
 export function enterBossFloor(state: GameState): void {
+  resetVisualLerps();
+  resetCameraLerp();
   const floor = buildArena();
   resetChronoLichEncounter(BOSS_ID);
   state.run.currentFloor = FINAL_BOSS_FLOOR;
@@ -76,7 +80,10 @@ export function enterBossFloor(state: GameState): void {
   state.dungeon.riftY = null;
   state.dungeon.tiles = floor.tiles;
   state.dungeon.enemies = floor.enemies;
-  for (const enemy of state.dungeon.enemies) scaleEnemyForNgPlus(enemy, state.persistent.ngPlusLevel);
+  for (const enemy of state.dungeon.enemies) {
+    scaleEnemyForNgPlus(enemy, state.persistent.ngPlusLevel);
+    discoverEnemy(state, enemy.kind);
+  }
   state.dungeon.items = floor.items;
   state.dungeon.expiringTiles = [];
   state.dungeon.telegraphTiles = [];

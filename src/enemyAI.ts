@@ -1,6 +1,6 @@
 // Enemy Phase and AI behavior.
 
-import { createEnemy, ENEMY_NAME, scaleEnemyForNgPlus } from './content';
+import { createEnemy, discoverEnemy, ENEMY_NAME, scaleEnemyForNgPlus } from './content';
 import type { EnemyKind } from './content';
 import { applyPlayerStatus, enemyAttackPlayer, killEnemy } from './combat';
 import { isWalkableAt, TILE } from './mapgen';
@@ -61,8 +61,7 @@ function wakeIfNear(state: GameState, enemy: Enemy): void {
   if (dist <= WAKE_RADIUS) {
     enemy.awake = true;
     logLine(state, `${ENEMY_NAME[enemy.kind]} wakes up!`);
-    // Bestiary tracker.
-    if (!state.persistent.bestiaryKnown.includes(enemy.kind)) state.persistent.bestiaryKnown.push(enemy.kind);
+    discoverEnemy(state, enemy.kind);
   }
 }
 

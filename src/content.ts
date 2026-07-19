@@ -1,4 +1,4 @@
-import type { Accessory, Consumable, Element, Enemy, Item, Weapon } from './types';
+import type { Accessory, Consumable, Element, Enemy, GameState, Item, Weapon } from './types';
 
 export type EnemyKind = Enemy['kind'];
 type Rng = () => number;
@@ -101,6 +101,11 @@ export const ENEMY_NAME: Record<EnemyKind, string> = {
   VOID_SPIRIT: 'Void-Spirit',
   GLACIAL_MONOLITH: 'Glacial-Monolith',
 };
+
+/** Marks an enemy kind as seen for the Bestiary tab. */
+export function discoverEnemy(state: GameState, kind: EnemyKind): void {
+  if (!state.persistent.bestiaryKnown.includes(kind)) state.persistent.bestiaryKnown.push(kind);
+}
 
 export const MONSTER_LORE: Record<EnemyKind, string> = {
   BONE_GRUNT:

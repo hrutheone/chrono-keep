@@ -1,8 +1,10 @@
 // Mini-Boss Arenas: fixed, hand-authored layouts for boss floors.
 
-import { createEnemy, scaleEnemyForNgPlus } from './content';
+import { createEnemy, discoverEnemy, scaleEnemyForNgPlus } from './content';
 import { TILE } from './mapgen';
 import { DUNGEON_SIZE, floorTurnLimit } from './state';
+import { resetVisualLerps } from './animation';
+import { resetCameraLerp } from './camera';
 import type { GameState } from './types';
 
 const N = DUNGEON_SIZE;
@@ -98,6 +100,8 @@ const ARENA_FEATURES: Partial<Record<MiniBossKind, (layout: ArenaLayout) => void
 
 /** Installs the Arena at `floor` into game state. */
 export function enterArenaFloor(state: GameState, floor: number): void {
+  resetVisualLerps();
+  resetCameraLerp();
   const layout = buildRoom();
   const kind = archetypeForFloor(floor);
   ARENA_FEATURES[kind]?.(layout);
@@ -109,6 +113,7 @@ export function enterArenaFloor(state: GameState, floor: number): void {
   boss.attack = Math.round(boss.attack * mult.attack);
   boss.awake = true; // No sneaking up on a mini-boss.
   scaleEnemyForNgPlus(boss, state.persistent.ngPlusLevel);
+  discoverEnemy(state, boss.kind);
 
   state.run.currentFloor = floor;
   state.run.turnsRemaining = floorTurnLimit(state);

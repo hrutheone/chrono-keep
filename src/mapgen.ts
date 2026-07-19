@@ -3,6 +3,8 @@
 import type { Enemy, GameState, WorldItem } from './types';
 import { DUNGEON_SIZE, floorTurnLimit } from './state';
 import { hash, mulberry32 } from './rng';
+import { resetVisualLerps } from './animation';
+import { resetCameraLerp } from './camera';
 import {
   applyEliteAffixStats,
   createEnemy,
@@ -458,6 +460,8 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
 
 /** Generates the floor from the save seed and installs it into the game state. */
 export function enterFloor(state: GameState, floorNumber: number): GeneratedFloor {
+  resetVisualLerps();
+  resetCameraLerp();
   const floor = generateFloor(state.persistent.rngSeed, floorNumber);
   state.run.currentFloor = floorNumber;
   state.run.turnsRemaining = floorTurnLimit(state);

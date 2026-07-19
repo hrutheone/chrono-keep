@@ -1048,6 +1048,8 @@ const ALL_SCREENS = new Set<GameState['ui']['currentScreen']>([
   'VICTORY',
 ]);
 
+const SCROLL_CONTAINER_SELECTOR = '.skill-branch-scroll, .upgrade-shop-scroll';
+
 function render(state: GameState): void {
   const el = screenEl();
   const screen = state.ui.currentScreen;
@@ -1065,6 +1067,8 @@ function render(state: GameState): void {
     selectedShopSkillId = null;
     selectedUpgradeId = null;
   }
+  // Re-rendering rebuilds the tab body, which would otherwise snap its scroll container back to the top.
+  const prevScrollTop = el.querySelector(SCROLL_CONTAINER_SELECTOR)?.scrollTop;
   if (screen === 'TITLE') el.innerHTML = renderTitle(state);
   else if (screen === 'MENU') el.innerHTML = renderMenu(state);
   else if (screen === 'UPGRADE_SHOP') el.innerHTML = renderUpgradeShop(state);
@@ -1075,6 +1079,10 @@ function render(state: GameState): void {
   else if (screen === 'DEATH') el.innerHTML = renderDeath(state);
   else if (screen === 'VICTORY') el.innerHTML = renderVictory(state);
   else el.innerHTML = '';
+  if (prevScrollTop != null) {
+    const scrollEl = el.querySelector(SCROLL_CONTAINER_SELECTOR);
+    if (scrollEl) scrollEl.scrollTop = prevScrollTop;
+  }
   lastScreen = screen;
 }
 
