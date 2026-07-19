@@ -820,7 +820,7 @@ const CHEST_POOL_B3: ChestRoll[] = [
   (id) => createConsumable('ICE_BARRICADE_SCROLL', id),
   (id) => createConsumable('RECALL_RUNE', id),
   (id) => createConsumable('ECHO_GEODE', id),
-  // Rare chest-loot source for Chronofacts.
+  // Rare chest-loot source for Relics.
   (id) => createRelicItemByEffect(RELIC_EFFECT_KEYS[Math.floor(Math.random() * RELIC_EFFECT_KEYS.length)], id),
 ];
 

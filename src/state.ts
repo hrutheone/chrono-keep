@@ -160,7 +160,7 @@ export function resetRunForNewLoop(state: GameState, startFloor = 1): void {
   state.run.tempDefBonus = 0;
   state.run.tempDefBonusTurns = 0;
   state.run.statusImmuneTurns = 0;
-  // Chronofacts are run-scoped.
+  // Relics are run-scoped.
   state.run.relics = [];
   state.run.staticGenSteps = 0;
   state.run.staticGenCharged = false;

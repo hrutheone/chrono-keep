@@ -127,7 +127,7 @@ const KILL_TURN_REFUND: Partial<Record<string, number>> = { kill_refund_turn: 1,
 // Bosses exempt from execute passives.
 const BOSS_KINDS = new Set<Enemy['kind']>(['INFERNO_GOLEM', 'STORM_CALLER', 'GLACIAL_KNIGHT', 'CHRONO_LICH']);
 
-// --- Chronofact/Elite Affix combat hooks ---
+// --- Relic/Elite Affix combat hooks ---
 const EXECUTIONERS_COIN_THRESHOLD = 0.3;
 const EXECUTIONERS_COIN_MULT = 1.5;
 const DUELISTS_GLOVE_RADIUS = 5;

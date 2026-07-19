@@ -101,7 +101,7 @@ function iconStyleForSkill(skillId: string, size: number): string {
 
 let lastScreen: GameState['ui']['currentScreen'] | null = null;
 
-export type MenuTabId = 'status' | 'inventory' | 'chronofacts' | 'skill' | 'bestiary' | 'settings';
+export type MenuTabId = 'status' | 'inventory' | 'relics' | 'skill' | 'bestiary' | 'settings';
 let menuTab: MenuTabId = 'status';
 
 let selectedInvIndex: number | null = null;
@@ -357,7 +357,7 @@ function renderItemDetail(state: GameState, item: Item | undefined): string {
 
 /** Renders relic detail panel. */
 function renderRelicDetail(effect: string | null): string {
-  if (!effect) return '<div class="item-detail item-detail-empty">Tap a Chronofact below to see its effect.</div>';
+  if (!effect) return '<div class="item-detail item-detail-empty">Tap a Relic below to see its effect.</div>';
   const ref = RELIC_SPRITE_BY_EFFECT[effect] ?? SPRITES.RELIC;
   const stat = relicEffectText(effect);
   const lore = relicLore(effect);
@@ -449,8 +449,8 @@ function renderInventoryTab(state: GameState): string {
     </div>`;
 }
 
-/** Chronofacts tab: a grid of held relics + selected-relic detail panel. */
-function renderChronofactsTab(state: GameState): string {
+/** Relics tab: a grid of held relics + selected-relic detail panel. */
+function renderRelicsTab(state: GameState): string {
   if (selectedRelicEffect !== null && !state.run.relics.includes(selectedRelicEffect)) selectedRelicEffect = null;
 
   const gridHtml = state.run.relics.length
@@ -461,7 +461,7 @@ function renderChronofactsTab(state: GameState): string {
           return `<button class="inv-slot${selected}" data-action="select-relic" data-relic="${effect}" aria-label="${relicName(effect)}"><span class="item-icon" style="${spriteCssStyle(ref, INV_ICON_SIZE)}"></span><span class="slot-name">${relicName(effect)}</span></button>`;
         })
         .join('')
-    : '<div class="stat-line">No Chronofacts held this run.</div>';
+    : '<div class="stat-line">No Relics held this run.</div>';
 
   return `
     <div class="menu-tab-body">
@@ -771,10 +771,10 @@ function resolveRiftPact(state: GameState, accept: boolean): void {
     const relic = pickRandomUnheldRelic(state.run.relics);
     if (relic) {
       state.run.relics.push(relic);
-      logLine(state, `The pact is sealed. Chronofact acquired: ${relicName(relic)}!`);
+      logLine(state, `The pact is sealed. Relic acquired: ${relicName(relic)}!`);
     } else {
       awardEchoes(state, 25, 'Cursed Rift (all Relics held)');
-      logLine(state, 'The pact is sealed, but every Chronofact is already yours — +25 Echoes instead.');
+      logLine(state, 'The pact is sealed, but every Relic is already yours — +25 Echoes instead.');
     }
   } else {
     logLine(state, 'You step back from the Rift, pact undone.');
@@ -840,7 +840,7 @@ function renderSettingsTab(state: GameState): string {
 const TAB_DEFS: readonly { id: MenuTabId; label: string }[] = [
   { id: 'status', label: 'Status' },
   { id: 'inventory', label: 'Inv' },
-  { id: 'chronofacts', label: 'Chronofacts' },
+  { id: 'relics', label: 'Relics' },
   { id: 'skill', label: 'Skill' },
   { id: 'bestiary', label: 'Bestiary' },
   { id: 'settings', label: 'Settings' },
@@ -851,7 +851,7 @@ function renderMenu(state: GameState): string {
   const body =
     menuTab === 'status' ? renderStatusTab(state)
     : menuTab === 'inventory' ? renderInventoryTab(state)
-    : menuTab === 'chronofacts' ? renderChronofactsTab(state)
+    : menuTab === 'relics' ? renderRelicsTab(state)
     : menuTab === 'skill' ? renderSkillsTab(state)
     : menuTab === 'bestiary' ? renderBestiaryTab(state)
     : renderSettingsTab(state);

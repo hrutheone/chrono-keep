@@ -849,7 +849,7 @@ body {
 }
 
 /* Menu tab row (Fun & Feel #1, #5; Next-Task.md unified Menu) — 6 tabs now
- * (Status/Inv/Chronofacts/Skill/Bestiary/Settings) vs. the old max of 2.
+ * (Status/Inv/Relics/Skill/Bestiary/Settings) vs. the old max of 2.
  * `flex: 1 1 30%` (not plain `flex: 1`, which lets flex-basis:0 shrink every
  * button down to its 44px min-width mobile touch-target floor before ever
  * wrapping — 6 * 44px comfortably fits one row, just with unreadably

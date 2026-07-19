@@ -131,7 +131,7 @@ export function updateHud(state: GameState): void {
   statusEl.textContent = STATUS_LABEL[run.status];
   statusEl.className = `status-icon status-${run.status.toLowerCase()}`;
 
-  // Icon strip for held Chronofacts.
+  // Icon strip for held Relics.
   el('relic-tray').innerHTML = run.relics
     .map((effect) => {
       const ref = RELIC_SPRITE_BY_EFFECT[effect] ?? SPRITES.RELIC;

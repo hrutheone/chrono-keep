@@ -243,7 +243,7 @@ export function pickupItemsAt(state: GameState, x: number, y: number): void {
         logLine(state, `Already carrying ${item.name} — +10 Echoes instead.`);
       } else {
         state.run.relics.push(effect);
-        logLine(state, `Chronofact acquired: ${item.name}!`);
+        logLine(state, `Relic acquired: ${item.name}!`);
         playUnlockSfx();
       }
       continue;
