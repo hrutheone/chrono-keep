@@ -1073,6 +1073,18 @@ const LATE_TIER_WEAPON_KEYS: WeaponKey[] = [
   'DEATHBRINGER', 'APOCALYPSE', 'MASAMUNE',
 ];
 
+const MID_TIER_WEAPON_KEYS: WeaponKey[] = [
+  'THUNDER_ROD', 'IFRITS_BLADE', 'ELVEN_BOW', 'BLOOD_SWORD', 'CORAL_SWORD',
+  'DARK_KNIGHTS_BLADE', 'ASSASSINS_DAGGER', 'FLAMBERGE', 'TRIDENT', 'BIO_BLADE',
+  'MURASAME', 'GALE_BOW', 'KOTETSU', 'DIAMOND_MACE',
+];
+
+/** Rolls a random weapon strictly from the Mid Tier (F21-50) pool. */
+export function rollMidTierWeapon(id: string): Weapon {
+  const key = MID_TIER_WEAPON_KEYS[Math.floor(Math.random() * MID_TIER_WEAPON_KEYS.length)];
+  return createWeapon(key, id);
+}
+
 /** Rolls a random weapon strictly from the Late Tier (F51-99) pool. */
 export function rollLateTierWeapon(id: string): Weapon {
   const key = LATE_TIER_WEAPON_KEYS[Math.floor(Math.random() * LATE_TIER_WEAPON_KEYS.length)];
@@ -1094,3 +1106,35 @@ export const TIME_SHARD_DROP_CHANCE = 0.25;
 export function createTimeShard(id: string): Item {
   return { id, kind: 'TIME_SHARD', name: 'Time Shard', value: 5 };
 }
+
+// --- The Eternity Tree (Hub decoration) ---
+export const ETERNITY_TREE_FLAVOR: readonly string[] = [
+  'A frail seedling.',
+  'It is growing.',
+  'A strong temporal tree.',
+  'It blooms across stabilized time!',
+];
+
+/** Growth stage (0-3) from how many Biomes have been anchored. */
+export function eternityTreeStage(unlockedAnchorCount: number): 0 | 1 | 2 | 3 {
+  if (unlockedAnchorCount >= 9) return 3;
+  if (unlockedAnchorCount >= 6) return 2;
+  if (unlockedAnchorCount >= 3) return 1;
+  return 0;
+}
+
+// --- The Temporal Smuggler (Hub random encounter) ---
+export type SmugglerOfferId = 'relic' | 'weapon' | 'potion';
+export interface SmugglerOffer {
+  id: SmugglerOfferId;
+  label: string;
+  cost: number;
+  description: string;
+}
+export const SMUGGLER_OFFERS: readonly SmugglerOffer[] = [
+  { id: 'relic', label: 'Smuggled Relic', cost: 100, description: 'A random Relic, for this run.' },
+  { id: 'weapon', label: 'Sharpened Edge', cost: 50, description: 'Replaces your equipped weapon with a random Mid Tier one.' },
+  { id: 'potion', label: 'Lifeblood', cost: 75, description: 'A Max Potion, added to your inventory.' },
+];
+export const SMUGGLER_SPAWN_CHANCE = 0.3;
+export const SMUGGLER_MIN_LOOP_COUNT = 2;

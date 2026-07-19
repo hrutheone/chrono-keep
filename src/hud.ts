@@ -49,6 +49,7 @@ const HINT_STRIP: Record<GameState['ui']['currentScreen'], string> = {
   UPGRADE_SHOP: 'Click: Buy · Esc: Continue',
   SHORTCUT_GATE: 'Click: Warp · Esc: Cancel',
   CURSED_RIFT: 'Click: Accept/Decline',
+  SMUGGLER: 'Click: Buy · Esc: Leave',
   CONFIRM: 'Click Proceed/Cancel',
   DEATH: 'Esc: Continue',
   VICTORY: 'Esc: Continue',

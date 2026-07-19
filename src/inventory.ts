@@ -188,7 +188,7 @@ export function hasAlchemistsBelt(state: GameState): boolean {
 }
 
 /** Grant item. */
-function grantItem(state: GameState, x: number, y: number, item: Item, chestLoot: boolean): boolean {
+export function grantItem(state: GameState, x: number, y: number, item: Item, chestLoot: boolean): boolean {
   if (item.kind === 'POTION' || item.kind === 'CONSUMABLE') {
     const stack = state.run.inventory.find((i) => i.name === item.name);
     if (stack) {

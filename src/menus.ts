@@ -10,13 +10,16 @@ import {
   SKILL_BRANCHES,
   SKILL_LEVEL_EFFECTS,
   SKILLS,
+  SMUGGLER_OFFERS,
   WEAPON_EFFECT_LABEL,
+  createPotion,
   itemMeltValue,
   loreForItem,
   pickRandomUnheldRelic,
   relicEffectText,
   relicLore,
   relicName,
+  rollMidTierWeapon,
   skillRequirementLabel,
 } from './content';
 import { spriteCssStyle } from './assets';
@@ -39,7 +42,20 @@ import { logLine } from './turns';
 import { awardEchoes } from './echoes';
 import { resetRunForNewLoop, resetToNewGame, rerollSeedKeepProgress } from './state';
 import { enterShatteringTutorial, isShatteringTutorial } from './shattering';
-import { getMasterVolume, isMuted, playErrorSound, playHoverSound, playNewGameSfx, playSelectSound, playWarpSfx, setMasterVolume, toggleMuted } from './audio';
+import {
+  getMasterVolume,
+  isMuted,
+  playEquipSfx,
+  playErrorSound,
+  playHoverSound,
+  playNewGameSfx,
+  playSelectSound,
+  playUnlockSfx,
+  playWarpSfx,
+  setMasterVolume,
+  toggleMuted,
+} from './audio';
+import { TILE } from './mapgen';
 import {
   buyOneTimeUpgrade,
   buySkillUpgrade,
@@ -62,8 +78,10 @@ import {
   accessoryStamBonus,
   equipItem,
   equipWeaponSlot2,
+  grantItem,
   meltItem,
   isThreatNearby,
+  reforgeWeapon,
   swapActiveWeapon,
   totalAtk,
   totalDef,
@@ -75,7 +93,7 @@ import {
   weaponHpBonus,
 } from './inventory';
 import { useConsumable } from './consumables';
-import type { EnemyKind, SkillId } from './content';
+import type { EnemyKind, SkillId, SmugglerOfferId } from './content';
 import type { Accessory, Consumable, GameState, Item, Weapon } from './types';
 
 const BY_NAME_FOR_KIND: Partial<Record<Item['kind'], Record<string, SpriteRef>>> = {
@@ -792,6 +810,73 @@ function resolveRiftPact(state: GameState, accept: boolean): void {
   saveGame(state);
 }
 
+/** Renders the Temporal Smuggler modal. */
+function renderSmuggler(state: GameState): string {
+  const rows = SMUGGLER_OFFERS.map((offer) => {
+    const disabled = state.persistent.echoes < offer.cost ? 'disabled' : '';
+    return `
+      <div class="shop-row">
+        <span class="shop-name">${offer.label} (${offer.cost}) — ${offer.description}</span>
+        <button data-action="smuggler-buy" data-offer="${offer.id}" ${disabled}>Buy</button>
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="menu cursed-rift-menu">
+      <h2>A Cloaked Figure Beckons...</h2>
+      <div class="stat-line">"Echoes only. One deal, then I vanish."</div>
+      ${rows}
+      <button class="continue-btn close-btn" data-action="close-menu">Leave</button>
+      <div class="menu-hint">Esc: leave</div>
+    </div>`;
+}
+
+/** Removes the (one) Smuggler tile from the Hub grid, reverting it to Floor. */
+function removeSmugglerTile(state: GameState): void {
+  for (let y = 0; y < state.dungeon.height; y++) {
+    for (let x = 0; x < state.dungeon.width; x++) {
+      if (state.dungeon.tiles[y][x] === TILE.SMUGGLER) {
+        state.dungeon.tiles[y][x] = TILE.FLOOR;
+        return;
+      }
+    }
+  }
+}
+
+/** Resolves a Smuggler purchase — a one-time, current-run-only offer. */
+function resolveSmugglerPurchase(state: GameState, offerId: SmugglerOfferId): void {
+  const offer = SMUGGLER_OFFERS.find((o) => o.id === offerId);
+  if (!offer || state.persistent.echoes < offer.cost) {
+    logLine(state, 'Not enough Echoes.');
+    playErrorSound();
+    return;
+  }
+
+  if (offerId === 'relic') {
+    const relic = pickRandomUnheldRelic(state.run.relics);
+    if (!relic) {
+      logLine(state, 'You already carry every Relic — the Smuggler has nothing new to offer.');
+      return;
+    }
+    state.run.relics.push(relic);
+    logLine(state, `The Smuggler hands over a Relic: ${relicName(relic)}!`);
+    playUnlockSfx();
+  } else if (offerId === 'weapon') {
+    const weapon = rollMidTierWeapon(`smuggler-weapon-${state.persistent.loopCount}`);
+    reforgeWeapon(state, weapon);
+    logLine(state, `The Smuggler sharpens your edge: ${weapon.name}!`);
+    playEquipSfx();
+  } else {
+    const potion = createPotion('MAX_POTION', `smuggler-potion-${state.persistent.loopCount}`);
+    grantItem(state, state.run.playerX, state.run.playerY, potion, false);
+  }
+
+  state.persistent.echoes -= offer.cost;
+  removeSmugglerTile(state);
+  state.ui.currentScreen = 'GAME';
+  saveGame(state);
+}
+
 const HELP_ROWS: readonly [string, string, string][] = [
   ['W/A/S/D or Arrows', 'Move / bump-attack (sets facing)', 'GAME'],
   ['Space', 'Brace / pass turn (+1 DEF until your next turn)', 'GAME'],
@@ -952,6 +1037,7 @@ const ALL_SCREENS = new Set<GameState['ui']['currentScreen']>([
   'UPGRADE_SHOP',
   'SHORTCUT_GATE',
   'CURSED_RIFT',
+  'SMUGGLER',
   'CONFIRM',
   'DEATH',
   'VICTORY',
@@ -979,6 +1065,7 @@ function render(state: GameState): void {
   else if (screen === 'UPGRADE_SHOP') el.innerHTML = renderUpgradeShop(state);
   else if (screen === 'SHORTCUT_GATE') el.innerHTML = renderShortcutGate(state);
   else if (screen === 'CURSED_RIFT') el.innerHTML = renderCursedRift();
+  else if (screen === 'SMUGGLER') el.innerHTML = renderSmuggler(state);
   else if (screen === 'CONFIRM') el.innerHTML = renderConfirm();
   else if (screen === 'DEATH') el.innerHTML = renderDeath(state);
   else if (screen === 'VICTORY') el.innerHTML = renderVictory(state);
@@ -1015,6 +1102,7 @@ export function initMenus(state: GameState): void {
         screen === 'UPGRADE_SHOP' ||
         screen === 'SHORTCUT_GATE' ||
         screen === 'CURSED_RIFT' ||
+        screen === 'SMUGGLER' ||
         screen === 'CONFIRM')
     ) {
       ev.preventDefault();
@@ -1028,7 +1116,7 @@ export function initMenus(state: GameState): void {
   screenEl().addEventListener('click', (ev) => {
     const target = (ev.target as HTMLElement).closest<HTMLElement>('[data-action]');
     if (!target) return;
-    const { action, index, skill, slot, track, tab, floor, relic, enemy, upgrade } = target.dataset;
+    const { action, index, skill, slot, track, tab, floor, relic, enemy, upgrade, offer } = target.dataset;
 
     if (action === 'select-item') {
       selectedInvIndex = Number(index);
@@ -1116,6 +1204,7 @@ export function initMenus(state: GameState): void {
     }
     else if (action === 'rift-accept') resolveRiftPact(state, true);
     else if (action === 'rift-decline') resolveRiftPact(state, false);
+    else if (action === 'smuggler-buy') resolveSmugglerPurchase(state, offer as SmugglerOfferId);
     else if (action === 'close-menu') {
       state.ui.currentScreen = 'GAME';
       playSelectSound();

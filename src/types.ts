@@ -80,6 +80,7 @@ export interface GameState {
     staticGenSteps: number;
     staticGenCharged: boolean;
     trollBloodCounter: number;
+    smugglerPresent: boolean;
   };
 
   dungeon: {
@@ -107,7 +108,7 @@ export interface GameState {
   };
 
   ui: {
-    currentScreen: 'TITLE' | 'GAME' | 'MENU' | 'UPGRADE_SHOP' | 'SHORTCUT_GATE' | 'CURSED_RIFT' | 'CONFIRM' | 'DEATH' | 'VICTORY';
+    currentScreen: 'TITLE' | 'GAME' | 'MENU' | 'UPGRADE_SHOP' | 'SHORTCUT_GATE' | 'CURSED_RIFT' | 'SMUGGLER' | 'CONFIRM' | 'DEATH' | 'VICTORY';
     log: string[];
   };
 }

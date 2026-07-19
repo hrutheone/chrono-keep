@@ -31,6 +31,9 @@ export const TILE = {
   FROST_HAZARD: 9,
   ECHO_WELL: 10,
   CHRONO_ANVIL: 11,
+  // Hub-only decorative/interactive tiles — never walkable, the player bumps them.
+  TREE: 12,
+  SMUGGLER: 13,
 } as const;
 
 /** Turn-budget guarantee: spawn -> Stairs within 40 walked tiles. */

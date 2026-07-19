@@ -13,7 +13,7 @@ import {
   BIOME_WALL_TINTS,
 } from './palette';
 import { TILE, effectiveTileAt } from './mapgen';
-import { eliteAffixColor } from './content';
+import { eliteAffixColor, eternityTreeStage } from './content';
 import { isArenaFloor } from './arenas';
 import { FINAL_BOSS_FLOOR } from './bossArena';
 import { HUB_FLOOR } from './hub';
@@ -26,6 +26,7 @@ import {
   POTION_SPRITE_BY_NAME,
   RELIC_SPRITE_BY_EFFECT,
   SPRITES,
+  TREE_STAGE_SPRITES,
   WEAPON_SPRITE_BY_NAME,
   type SpriteRef,
 } from './sprites';
@@ -149,6 +150,7 @@ const TILE_REFS: Partial<Record<number, SpriteRef>> = {
   [TILE.SHOP_TERMINAL]: SPRITES.SHOP_TERMINAL,
   [TILE.ECHO_WELL]: SPRITES.ECHO_WELL,
   [TILE.CHRONO_ANVIL]: SPRITES.CHRONO_ANVIL,
+  [TILE.SMUGGLER]: SPRITES.SMUGGLER,
 };
 
 // Wall autotiling: bitmask of which cardinal neighbors are also walls (N=1, E=2, S=4, W=8)
@@ -320,6 +322,11 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
       if (row[tx] === TILE.WALL) {
         const { ref, rot } = wallVariantAt(state, tx, ty);
         drawTintedRef(ctx, ref, x * TILE_SIZE, y * TILE_SIZE, wallTint, rot);
+        continue;
+      }
+      if (row[tx] === TILE.TREE) {
+        const stage = eternityTreeStage(state.persistent.unlockedAnchors.length);
+        drawRef(ctx, TREE_STAGE_SPRITES[stage], x * TILE_SIZE, y * TILE_SIZE);
         continue;
       }
       const ref = TILE_REFS[row[tx]];

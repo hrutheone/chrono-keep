@@ -4,6 +4,7 @@ import { enterFloor, TILE } from './mapgen';
 import { DUNGEON_SIZE, floorTurnLimit, resetRunForNewLoop } from './state';
 import { onFloorEntered } from './echoes';
 import { saveGame, saveRunSnapshot } from './persistence';
+import { SMUGGLER_MIN_LOOP_COUNT, SMUGGLER_SPAWN_CHANCE } from './content';
 import type { GameState } from './types';
 
 const N = DUNGEON_SIZE;
@@ -19,7 +20,7 @@ interface HubLayout {
 }
 
 /** Centered hub room layout. */
-function buildHub(): HubLayout {
+function buildHub(smugglerPresent: boolean): HubLayout {
   const tiles: number[][] = Array.from({ length: N }, () => new Array<number>(N).fill(TILE.VOID));
 
   const originX = Math.floor((N - HUB_W) / 2);
@@ -41,13 +42,17 @@ function buildHub(): HubLayout {
   const spawnY = originY + HUB_H - 2;
   tiles[originY + 2][originX + 2] = TILE.SHOP_TERMINAL;
   tiles[originY + 2][originX + HUB_W - 3] = TILE.SHORTCUT_GATE;
+  // The Eternity Tree — a fixed decorative corner, always present.
+  tiles[originY][originX] = TILE.TREE;
+  if (smugglerPresent) tiles[originY + 3][originX + 4] = TILE.SMUGGLER;
 
   return { tiles, spawnX, spawnY };
 }
 
 /** Installs the Hub into game state. */
 export function enterHub(state: GameState): void {
-  const hub = buildHub();
+  state.run.smugglerPresent = state.persistent.loopCount > SMUGGLER_MIN_LOOP_COUNT && Math.random() < SMUGGLER_SPAWN_CHANCE;
+  const hub = buildHub(state.run.smugglerPresent);
   state.run.currentFloor = HUB_FLOOR;
   state.run.turnsRemaining = floorTurnLimit(state);
   state.run.playerX = hub.spawnX;

@@ -12,7 +12,7 @@ import { isTurnBusy, resolvePlayerTurn } from './turnController';
 import { isRunOver, logLine } from './turns';
 import { playBlockedSfx, playEquipSfx, playMoveSfx, playPotionSfx } from './audio';
 import { saveRunSnapshot } from './persistence';
-import { rollLateTierWeapon } from './content';
+import { ETERNITY_TREE_FLAVOR, eternityTreeStage, rollLateTierWeapon } from './content';
 import type { GameState } from './types';
 
 type Facing = GameState['run']['facing'];
@@ -89,6 +89,23 @@ function tryChronoAnvil(state: GameState, x: number, y: number): void {
   playEquipSfx();
 }
 
+/** Bumping the Eternity Tree or the Temporal Smuggler blocks movement instead of walking onto them. */
+function tryHubBump(state: GameState, nx: number, ny: number): boolean {
+  if (state.run.currentFloor !== HUB_FLOOR) return false;
+  const tile = effectiveTileAt(state, nx, ny);
+  if (tile === TILE.TREE) {
+    const stage = eternityTreeStage(state.persistent.unlockedAnchors.length);
+    logLine(state, ETERNITY_TREE_FLAVOR[stage]);
+    playBlockedSfx();
+    return true;
+  }
+  if (tile === TILE.SMUGGLER) {
+    state.ui.currentScreen = 'SMUGGLER';
+    return true;
+  }
+  return false;
+}
+
 /** Try Cursed Rift interaction. */
 function tryRiftInteraction(state: GameState): boolean {
   if (state.dungeon.riftX === null) return false;
@@ -145,6 +162,8 @@ export function tryMove(state: GameState, dx: number, dy: number, facing: Facing
     playerAttackEnemy(state, rangedTarget);
     return resolvePlayerTurn(state, 'attack');
   }
+
+  if (tryHubBump(state, nx, ny)) return Promise.resolve();
 
   if (!isWalkableAt(state, nx, ny)) {
     // Handle Vanish charge.

@@ -88,6 +88,7 @@ export function createNewGameState(): GameState {
       staticGenSteps: 0,
       staticGenCharged: false,
       trollBloodCounter: 0,
+      smugglerPresent: false,
     },
 
     dungeon: {
@@ -169,4 +170,5 @@ export function resetRunForNewLoop(state: GameState, startFloor = 1): void {
   state.run.staticGenSteps = 0;
   state.run.staticGenCharged = false;
   state.run.trollBloodCounter = 0;
+  state.run.smugglerPresent = false;
 }

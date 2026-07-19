@@ -58,6 +58,7 @@ export const SPRITES = {
   CURSED_RIFT: { col: 13, row: 17 }, // dark red brick pattern — ominous texture
   ECHO_WELL: { col: 8, row: 5 }, // solid glowing-blue pool tile
   CHRONO_ANVIL: { col: 48, row: 4 }, // same solid brown block used for the Giant's Anvil relic
+  SMUGGLER: { col: 26, row: 1 }, // hooded bust, distinct silhouette from every other NPC/enemy
 
   // --- World-item pickups ---
   CHEST: { col: 8, row: 6 }, // brown chest with a latch
@@ -84,6 +85,14 @@ export const DECOR_GRASS: SpriteRef[] = [
   { col: 5, row: 0 },
   { col: 6, row: 0 },
   { col: 7, row: 0 },
+];
+
+// Eternity Tree growth stages (0-3), indexed by eternityTreeStage() in content.ts.
+export const TREE_STAGE_SPRITES: readonly SpriteRef[] = [
+  { col: 0, row: 2 }, // frail seedling — sparse sprouts
+  { col: 2, row: 2 }, // growing — fuller sprout
+  { col: 0, row: 1 }, // strong temporal tree — solid pine
+  { col: 4, row: 2 }, // blooming — full canopy with visible trunk
 ];
 
 // Skill icons.
