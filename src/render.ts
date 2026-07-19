@@ -175,7 +175,7 @@ const WALL_VARIANT_BY_MASK: Record<number, WallVariant> = {
   14: { ref: SPRITES.WALL_T, rot: 1 }, // E+S+W
   13: { ref: SPRITES.WALL_T, rot: 2 }, // S+W+N
   11: { ref: SPRITES.WALL_T, rot: 3 }, // W+N+E
-  15: { ref: SPRITES.WALL, rot: 0 }, // N+E+S+W, fully interior — plain wall, WALL_CROSS punches a visible hole here
+  15: { ref: SPRITES.WALL_CROSS, rot: 0 }, // N+E+S+W, fully interior — CROSS's edges stay solid against mismatched neighbors; WALL's E/W taper (meant for a floor-flanked pillar) shows as a hole here
 };
 
 const WALL_NEIGHBOR_OFFSETS: readonly [number, number, number][] = [
