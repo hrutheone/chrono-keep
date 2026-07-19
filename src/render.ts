@@ -112,12 +112,15 @@ function drawRef(ctx: CanvasRenderingContext2D, ref: SpriteRef, dx: number, dy: 
   else drawTile(ctx, ref.col, ref.row, dx, dy, flipX, size, rotQuarters);
 }
 
-/** Draws a wall sprite over a solid core fill (so thick-wall interiors don't show gaps through the outline art), then washes with the Biome's tint if any. */
+/** Draws a wall sprite washed with the current Biome's tint (untinted Biome 1 falls back to plain drawTile). */
 function drawTintedRef(ctx: CanvasRenderingContext2D, ref: SpriteRef, dx: number, dy: number, tint: string | null, rotQuarters = 0): void {
+  if (!tint) {
+    drawTile(ctx, ref.col, ref.row, dx, dy, false, TILE_SIZE, rotQuarters);
+    return;
+  }
+
   scratchCtx.globalCompositeOperation = 'source-over';
   scratchCtx.clearRect(0, 0, SPRITE_PX, SPRITE_PX);
-  scratchCtx.fillStyle = '#222222';
-  scratchCtx.fillRect(0, 0, SPRITE_PX, SPRITE_PX);
 
   scratchCtx.save();
   if (rotQuarters > 0) {
@@ -128,11 +131,9 @@ function drawTintedRef(ctx: CanvasRenderingContext2D, ref: SpriteRef, dx: number
   scratchCtx.drawImage(spritesheet, ref.col * SPRITE_PX, ref.row * SPRITE_PX, SPRITE_PX, SPRITE_PX, 0, 0, SPRITE_PX, SPRITE_PX);
   scratchCtx.restore();
 
-  if (tint) {
-    scratchCtx.globalCompositeOperation = 'source-atop';
-    scratchCtx.fillStyle = tint;
-    scratchCtx.fillRect(0, 0, SPRITE_PX, SPRITE_PX);
-  }
+  scratchCtx.globalCompositeOperation = 'source-atop';
+  scratchCtx.fillStyle = tint;
+  scratchCtx.fillRect(0, 0, SPRITE_PX, SPRITE_PX);
 
   ctx.drawImage(scratch, 0, 0, SPRITE_PX, SPRITE_PX, dx, dy, TILE_SIZE, TILE_SIZE);
 }
