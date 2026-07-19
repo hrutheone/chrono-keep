@@ -10,7 +10,7 @@ import { loadAudioSettings, loadPersistent, loadRunSnapshot, saveRunSnapshot } f
 import { renderWorld, TILE_SIZE } from './render';
 import { installInput } from './movement';
 import { installSkillInput } from './skills';
-import { initAudio, installAudioControls, setMasterVolume, setMuted, updateAnxietyClock, updateLowHealthHeartbeat, updateMusicForState } from './audio';
+import { initAudio, installAudioControls, setMasterVolume, setMuted, setMusicMuted, setMusicVolume, updateAnxietyClock, updateLowHealthHeartbeat, updateMusicForState } from './audio';
 import { initHud, updateHud } from './hud';
 import { initMenus, updateMenus } from './menus';
 import { installTouchControls } from './touchControls';
@@ -94,6 +94,8 @@ const savedAudio = loadAudioSettings();
 if (savedAudio) {
   setMasterVolume(savedAudio.volume);
   setMuted(savedAudio.muted);
+  setMusicVolume(savedAudio.musicVolume);
+  setMusicMuted(savedAudio.musicMuted);
 }
 
 initHud();

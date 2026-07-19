@@ -118,6 +118,8 @@ const AUDIO_SETTINGS_KEY = 'chrono-keep-audio-v1';
 export interface AudioSettings {
   volume: number;
   muted: boolean;
+  musicVolume: number;
+  musicMuted: boolean;
 }
 
 export function saveAudioSettings(settings: AudioSettings): void {
@@ -128,13 +130,19 @@ export function saveAudioSettings(settings: AudioSettings): void {
   }
 }
 
+/** Music fields are optional on the stored value so pre-BGM saves still load. */
 export function loadAudioSettings(): AudioSettings | null {
   try {
     const raw = localStorage.getItem(AUDIO_SETTINGS_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (typeof parsed !== 'object' || parsed === null || typeof parsed.volume !== 'number' || typeof parsed.muted !== 'boolean') return null;
-    return parsed as AudioSettings;
+    return {
+      volume: parsed.volume,
+      muted: parsed.muted,
+      musicVolume: typeof parsed.musicVolume === 'number' ? parsed.musicVolume : 0.5,
+      musicMuted: typeof parsed.musicMuted === 'boolean' ? parsed.musicMuted : false,
+    };
   } catch {
     return null;
   }

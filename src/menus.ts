@@ -44,7 +44,9 @@ import { resetRunForNewLoop, resetToNewGame, rerollSeedKeepProgress } from './st
 import { enterShatteringTutorial, isShatteringTutorial } from './shattering';
 import {
   getMasterVolume,
+  getMusicVolume,
   isMuted,
+  isMusicMuted,
   playEquipSfx,
   playErrorSound,
   playHoverSound,
@@ -53,7 +55,9 @@ import {
   playUnlockSfx,
   playWarpSfx,
   setMasterVolume,
+  setMusicVolume,
   toggleMuted,
+  toggleMusicMuted,
 } from './audio';
 import { TILE } from './mapgen';
 import {
@@ -907,6 +911,7 @@ function renderSettingsTab(state: GameState): string {
       `<div class="help-row"><span class="help-key">${key}</span><span class="help-action">${action}</span><span class="help-screen">${screen}</span></div>`,
   ).join('');
   const volumePct = Math.round(getMasterVolume() * 100);
+  const musicVolumePct = Math.round(getMusicVolume() * 100);
   return `
     <div class="menu-tab-body">
       <h2>Settings</h2>
@@ -915,6 +920,12 @@ function renderSettingsTab(state: GameState): string {
         <button data-action="volume-down">-</button>
         <span class="stat-line">Volume: ${isMuted() ? 'Muted' : `${volumePct}%`}</span>
         <button data-action="volume-up">+</button>
+      </div>
+      <div class="settings-row">
+        <button data-action="toggle-music-mute">${isMusicMuted() ? 'Unmute Music' : 'Mute Music'}</button>
+        <button data-action="music-volume-down">-</button>
+        <span class="stat-line">BGM Volume: ${isMusicMuted() ? 'Muted' : `${musicVolumePct}%`}</span>
+        <button data-action="music-volume-up">+</button>
       </div>
       <h2 class="dev-tools-heading">Developer Tools</h2>
       <div class="dev-tools-panel">
@@ -1191,10 +1202,17 @@ export function initMenus(state: GameState): void {
     }
     else if (action === 'toggle-mute') {
       toggleMuted();
-      saveAudioSettings({ volume: getMasterVolume(), muted: isMuted() });
+      saveAudioSettings({ volume: getMasterVolume(), muted: isMuted(), musicVolume: getMusicVolume(), musicMuted: isMusicMuted() });
     } else if (action === 'volume-down' || action === 'volume-up') {
       setMasterVolume(getMasterVolume() + (action === 'volume-up' ? 0.1 : -0.1));
-      saveAudioSettings({ volume: getMasterVolume(), muted: isMuted() });
+      saveAudioSettings({ volume: getMasterVolume(), muted: isMuted(), musicVolume: getMusicVolume(), musicMuted: isMusicMuted() });
+    }
+    else if (action === 'toggle-music-mute') {
+      toggleMusicMuted();
+      saveAudioSettings({ volume: getMasterVolume(), muted: isMuted(), musicVolume: getMusicVolume(), musicMuted: isMusicMuted() });
+    } else if (action === 'music-volume-down' || action === 'music-volume-up') {
+      setMusicVolume(getMusicVolume() + (action === 'music-volume-up' ? 0.1 : -0.1));
+      saveAudioSettings({ volume: getMasterVolume(), muted: isMuted(), musicVolume: getMusicVolume(), musicMuted: isMusicMuted() });
     }
     else if (action === 'buy-stat') buyStatUpgrade(state, track as StatTrack);
     else if (action === 'buy-skill') buySkillUpgrade(state, skill!);

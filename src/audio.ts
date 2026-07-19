@@ -25,6 +25,11 @@ let musicFilter: BiquadFilterNode | null = null;
 let masterVolume = 0.5;
 let muted = false;
 
+// BGM volume and mute: independent of the master bus, so players can duck/kill music
+// without losing SFX.
+let musicVolume = 0.5;
+let musicMuted = false;
+
 function applyMasterGain(): void {
   if (master) master.gain.value = muted ? 0 : masterVolume;
 }
@@ -52,6 +57,33 @@ export function isMuted(): boolean {
   return muted;
 }
 
+function applyMusicGain(): void {
+  if (musicGain) musicGain.gain.value = musicMuted ? 0 : musicVolume;
+}
+
+export function setMusicVolume(v: number): void {
+  musicVolume = Math.min(1, Math.max(0, v));
+  applyMusicGain();
+}
+
+export function setMusicMuted(m: boolean): void {
+  musicMuted = m;
+  applyMusicGain();
+}
+
+export function toggleMusicMuted(): boolean {
+  setMusicMuted(!musicMuted);
+  return musicMuted;
+}
+
+export function getMusicVolume(): number {
+  return musicVolume;
+}
+
+export function isMusicMuted(): boolean {
+  return musicMuted;
+}
+
 /** M: toggle mute. [ / ]: volume down/up by 10%. Persisted on every change. */
 export function installAudioControls(): void {
   window.addEventListener('keydown', (ev) => {
@@ -65,7 +97,7 @@ export function installAudioControls(): void {
     } else {
       return;
     }
-    saveAudioSettings({ volume: getMasterVolume(), muted: isMuted() });
+    saveAudioSettings({ volume: getMasterVolume(), muted: isMuted(), musicVolume: getMusicVolume(), musicMuted: isMusicMuted() });
   });
 }
 
@@ -80,7 +112,7 @@ function ensureContext(): AudioContext {
     // Music bus: BGM buffers connect into musicFilter (dynamic biome muffling/tension),
     // which feeds musicGain (fixed music-vs-SFX balance) into master.
     musicGain = ctx.createGain();
-    musicGain.gain.value = 0.5;
+    applyMusicGain();
     musicFilter = ctx.createBiquadFilter();
     musicFilter.type = 'lowpass';
     musicFilter.frequency.value = 20000; // effectively transparent
