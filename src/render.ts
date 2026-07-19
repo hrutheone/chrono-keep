@@ -10,13 +10,19 @@ import {
   COLOR_FLASH,
   COLOR_FIRE,
   COLOR_FROST,
+  BIOME_WALL_TINTS,
 } from './palette';
 import { TILE, effectiveTileAt } from './mapgen';
 import { eliteAffixColor } from './content';
+import { isArenaFloor } from './arenas';
+import { FINAL_BOSS_FLOOR } from './bossArena';
+import { HUB_FLOOR } from './hub';
 import { spritesheet, SPRITE_PX } from './assets';
 import {
   ACCESSORY_SPRITE_BY_NAME,
   CONSUMABLE_SPRITE_BY_NAME,
+  DECOR_DIRT,
+  DECOR_GRASS,
   POTION_SPRITE_BY_NAME,
   RELIC_SPRITE_BY_EFFECT,
   SPRITES,
@@ -103,6 +109,32 @@ function drawTileFlash(
 function drawRef(ctx: CanvasRenderingContext2D, ref: SpriteRef, dx: number, dy: number, flipX = false, flash = false, size = TILE_SIZE, rotQuarters = 0): void {
   if (flash) drawTileFlash(ctx, ref.col, ref.row, dx, dy, flipX, size);
   else drawTile(ctx, ref.col, ref.row, dx, dy, flipX, size, rotQuarters);
+}
+
+/** Draws a wall sprite washed with the current Biome's tint (untinted Biome 1 falls back to plain drawTile). */
+function drawTintedRef(ctx: CanvasRenderingContext2D, ref: SpriteRef, dx: number, dy: number, tint: string | null, rotQuarters = 0): void {
+  if (!tint) {
+    drawTile(ctx, ref.col, ref.row, dx, dy, false, TILE_SIZE, rotQuarters);
+    return;
+  }
+
+  scratchCtx.globalCompositeOperation = 'source-over';
+  scratchCtx.clearRect(0, 0, SPRITE_PX, SPRITE_PX);
+
+  scratchCtx.save();
+  if (rotQuarters > 0) {
+    scratchCtx.translate(SPRITE_PX / 2, SPRITE_PX / 2);
+    scratchCtx.rotate((Math.PI / 2) * rotQuarters);
+    scratchCtx.translate(-SPRITE_PX / 2, -SPRITE_PX / 2);
+  }
+  scratchCtx.drawImage(spritesheet, ref.col * SPRITE_PX, ref.row * SPRITE_PX, SPRITE_PX, SPRITE_PX, 0, 0, SPRITE_PX, SPRITE_PX);
+  scratchCtx.restore();
+
+  scratchCtx.globalCompositeOperation = 'source-atop';
+  scratchCtx.fillStyle = tint;
+  scratchCtx.fillRect(0, 0, SPRITE_PX, SPRITE_PX);
+
+  ctx.drawImage(scratch, 0, 0, SPRITE_PX, SPRITE_PX, dx, dy, TILE_SIZE, TILE_SIZE);
 }
 
 const TILE_REFS: Partial<Record<number, SpriteRef>> = {
@@ -270,6 +302,13 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
 
   const cam = computeCamera(state);
   const { tiles, width, height } = state.dungeon;
+  // Hand-authored floors (Hub, Mini-Boss/Final-Boss Arenas) stay plain — no Biome tint or floor decor.
+  const isFixedLayoutFloor =
+    state.run.currentFloor === HUB_FLOOR ||
+    state.run.currentFloor === FINAL_BOSS_FLOOR ||
+    isArenaFloor(state.run.currentFloor);
+  const biomeIndex = Math.min(9, Math.max(0, Math.floor((state.run.currentFloor - 1) / 10)));
+  const wallTint = isFixedLayoutFloor ? null : BIOME_WALL_TINTS[biomeIndex];
 
   for (let y = 0; y < VIEWPORT_TILES_H; y++) {
     const ty = cam.y + y;
@@ -280,11 +319,21 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
       if (tx < 0 || tx >= width) continue;
       if (row[tx] === TILE.WALL) {
         const { ref, rot } = wallVariantAt(state, tx, ty);
-        drawTile(ctx, ref.col, ref.row, x * TILE_SIZE, y * TILE_SIZE, false, TILE_SIZE, rot);
+        drawTintedRef(ctx, ref, x * TILE_SIZE, y * TILE_SIZE, wallTint, rot);
         continue;
       }
       const ref = TILE_REFS[row[tx]];
       if (ref) drawRef(ctx, ref, x * TILE_SIZE, y * TILE_SIZE);
+      if (!isFixedLayoutFloor && row[tx] === TILE.FLOOR) {
+        const seed = Math.sin(tx * 12.9898 + ty * 78.233 + state.run.currentFloor) * 43758.5453;
+        const rand = seed - Math.floor(seed);
+        const decor = rand < 0.1 ? DECOR_DIRT[Math.floor((rand / 0.1) * DECOR_DIRT.length)] : rand > 0.9 ? DECOR_GRASS[Math.floor(((rand - 0.9) / 0.1) * DECOR_GRASS.length)] : null;
+        if (decor) {
+          ctx.globalAlpha = 0.15;
+          drawRef(ctx, decor, x * TILE_SIZE, y * TILE_SIZE);
+          ctx.globalAlpha = 1;
+        }
+      }
     }
   }
 
@@ -295,7 +344,7 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     if (sx < 0 || sx >= VIEWPORT_TILES_W || sy < 0 || sy >= VIEWPORT_TILES_H) continue;
     if (t.tileType === TILE.WALL) {
       const { ref, rot } = wallVariantAt(state, t.x, t.y);
-      drawTile(ctx, ref.col, ref.row, sx * TILE_SIZE, sy * TILE_SIZE, false, TILE_SIZE, rot);
+      drawTintedRef(ctx, ref, sx * TILE_SIZE, sy * TILE_SIZE, wallTint, rot);
       continue;
     }
     const ref = TILE_REFS[t.tileType];

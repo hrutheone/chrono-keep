@@ -73,6 +73,19 @@ export const SPRITES = {
 
 export type SpriteName = keyof typeof SPRITES;
 
+// Faint floor decor, scattered procedurally — never gameplay-relevant.
+export const DECOR_DIRT: SpriteRef[] = [
+  { col: 1, row: 0 },
+  { col: 2, row: 0 },
+  { col: 3, row: 0 },
+  { col: 4, row: 0 },
+];
+export const DECOR_GRASS: SpriteRef[] = [
+  { col: 5, row: 0 },
+  { col: 6, row: 0 },
+  { col: 7, row: 0 },
+];
+
 // Skill icons.
 export const SKILL_SPRITE_BY_ID: Record<SkillId, SpriteRef> = {
   dash: { col: 24, row: 12 }, // arrow — forward burst

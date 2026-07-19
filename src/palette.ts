@@ -36,3 +36,17 @@ export const ELEMENT_COLOR: Record<Element, string> = {
   FROST: COLOR_FROST,
   CHRONO: COLOR_CHRONO,
 };
+
+/** Per-Biome wall tint wash, indexed by biome 0-9. Biome 1 stays untinted. */
+export const BIOME_WALL_TINTS: (string | null)[] = [
+  null,
+  'rgba(255, 220, 0, 0.25)',
+  'rgba(0, 200, 255, 0.3)',
+  'rgba(255, 50, 0, 0.3)',
+  'rgba(150, 255, 0, 0.25)',
+  'rgba(100, 150, 255, 0.3)',
+  'rgba(255, 100, 0, 0.3)',
+  'rgba(0, 255, 200, 0.25)',
+  'rgba(255, 0, 100, 0.3)',
+  'rgba(150, 0, 255, 0.4)',
+];
