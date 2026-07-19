@@ -238,6 +238,11 @@ function warpFromGate(state: GameState, floor: number): void {
 
 /** Dev Warp: jumps straight to a target floor, reusing the real stairs-transition logic. */
 function devWarp(state: GameState): void {
+  if (isShatteringTutorial(state)) {
+    // Floor 99 has no stairs by design; warping out would skip the Awakening reset. Use Dev Kill instead.
+    logLine(state, 'Dev Tools: cannot warp out of the Shattering. Use Dev Kill to end it.');
+    return;
+  }
   const input = document.querySelector<HTMLInputElement>('#dev-warp-floor');
   const raw = Number(input?.value ?? 1);
   const floor = Math.max(1, Math.min(99, Number.isFinite(raw) ? Math.round(raw) : 1));

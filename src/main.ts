@@ -5,6 +5,7 @@ import { HUB_FLOOR, enterHub } from './hub';
 import { enterFloor } from './mapgen';
 import { FINAL_BOSS_FLOOR, enterBossFloor } from './bossArena';
 import { isArenaFloor, enterArenaFloor } from './arenas';
+import { isShatteringTutorial } from './shattering';
 import { loadAudioSettings, loadPersistent, loadRunSnapshot, saveRunSnapshot } from './persistence';
 import { renderWorld, TILE_SIZE } from './render';
 import { installInput } from './movement';
@@ -112,6 +113,14 @@ if (savedRun) {
   else enterFloor(state, floor);
   state.run = savedRun;
   state.ui.currentScreen = 'GAME';
+
+  // Off Floor 99 while still flagged as the Shattering means it was escaped without finishing (e.g. old Dev Warp bug) — force the Awakening reset.
+  if (floor !== FINAL_BOSS_FLOOR && isShatteringTutorial(state)) {
+    state.persistent.loopCount = 1;
+    state.persistent.skills = { dash: 1 };
+    state.persistent.skillLoadout = ['dash'];
+    state.run.activeSkills = ['dash'];
+  }
 } else {
   // Hub renders behind the TITLE overlay.
   enterHub(state);
