@@ -69,6 +69,9 @@ export function computeDamage(atk: number, def: number, attackerEl: Element, def
   const raw = Math.max(1, atk - def);
   const mult = elementalMultiplier(attackerEl, defenderEl);
   const modified = mult > 1 ? Math.ceil(raw * mult) : mult < 1 ? Math.floor(raw * mult) : raw;
+  // A Weakness hit is guaranteed to feel like one even against heavy armor (Math.max(1, atk-def) above
+  // can otherwise still round a 2x multiplier down to 1-2 versus a high-DEF target).
+  if (mult > 1) return Math.max(3, modified);
   return Math.max(1, modified);
 }
 

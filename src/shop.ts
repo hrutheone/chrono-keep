@@ -25,12 +25,18 @@ function standardTrackCost(level: number): number {
   return STANDARD_CURVE[STANDARD_CURVE.length - 1] + STANDARD_CURVE_STEP_AFTER * (level - STANDARD_CURVE.length + 1);
 }
 
-// Base ATK: mathematically the strongest stat, capped at 5 levels.
-const BASE_ATK_COSTS = [50, 150, 300, 600, 1200];
+// Base ATK: mathematically the strongest stat. Uncapped past Level 10, same as the Standard Curve.
+const BASE_ATK_CURVE = [50, 150, 300, 600, 1200, 2000, 3000, 4500, 6000, 8000];
+const BASE_ATK_STEP_AFTER = 2000;
+
+function baseAtkCost(level: number): number {
+  if (level < BASE_ATK_CURVE.length) return BASE_ATK_CURVE[level];
+  return BASE_ATK_CURVE[BASE_ATK_CURVE.length - 1] + BASE_ATK_STEP_AFTER * (level - BASE_ATK_CURVE.length + 1);
+}
 
 export function statTrackCost(state: GameState, track: StatTrack): number | null {
   const level = state.persistent[track];
-  if (track === 'baseAtkUpgrade') return level >= BASE_ATK_COSTS.length ? null : BASE_ATK_COSTS[level];
+  if (track === 'baseAtkUpgrade') return baseAtkCost(level);
   return standardTrackCost(level);
 }
 

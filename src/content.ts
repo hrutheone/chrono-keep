@@ -44,13 +44,13 @@ export const BESTIARY: Record<EnemyKind, EnemyTemplate> = {
   CLOCKWORK_SCARAB: { hp: 6, attack: 1, defense: 9, speed: 1, element: 'CHRONO' },
 
   DREAD_LEGION: { hp: 16, attack: 6, defense: 2, speed: 1, element: 'PHYSICAL' },
-  DOOM_GUARD: { hp: 28, attack: 7, defense: 7, speed: 1, element: 'PHYSICAL' },
+  DOOM_GUARD: { hp: 28, attack: 7, defense: 5, speed: 1, element: 'PHYSICAL' },
   ASH_FIEND: { hp: 12, attack: 7, defense: 0, speed: 2, element: 'FIRE' },
   HELLFIRE_MAGUS: { hp: 18, attack: 8, defense: 1, speed: 1, element: 'FIRE' },
   TESLA_COIL: { hp: 35, attack: 8, defense: 4, speed: 0, element: 'VOLT' },
   STORM_STALKER: { hp: 15, attack: 8, defense: 0, speed: 2, element: 'VOLT' },
   VOID_SPIRIT: { hp: 24, attack: 7, defense: 3, speed: 1, element: 'FROST' },
-  GLACIAL_MONOLITH: { hp: 28, attack: 7, defense: 6, speed: 0, element: 'FROST' },
+  GLACIAL_MONOLITH: { hp: 28, attack: 7, defense: 4, speed: 0, element: 'FROST' },
 };
 
 /** Aura glow color for Floor-41+ Tier-3 enemy variants. */
