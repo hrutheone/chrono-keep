@@ -579,9 +579,9 @@ function renderSkillsTab(state: GameState): string {
   const activeLine = SKILL_SLOTS.map((slot) => `${slot}: ${state.run.activeSkills[SLOT_INDEX[slot]] ?? '--'}`).join(' · ');
 
   return `
-    <div class="menu-tab-body">
+    <div class="menu-tab-body skill-tab-body">
       <div class="stat-line">Active — ${activeLine}</div>
-      ${renderSkillBranchGrid(state, selectedSkillId, 'select-skill')}
+      <div class="skill-branch-scroll">${renderSkillBranchGrid(state, selectedSkillId, 'select-skill')}</div>
       ${renderSkillDetail(state, selectedSkillId)}
     </div>`;
 }

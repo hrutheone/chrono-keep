@@ -742,6 +742,21 @@ body {
   overflow: visible;
 }
 
+/* Skill tab: same split as the Upgrade Shop — branches scroll, the detail
+ * panel below stays put instead of being buried at the bottom of the list. */
+.skill-tab-body {
+  overflow-y: hidden;
+}
+
+.skill-branch-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .settings-row {
   display: flex;
   align-items: center;
