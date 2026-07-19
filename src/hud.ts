@@ -8,6 +8,7 @@ import type { GameState, StatusEffect } from './types';
 
 const RELIC_ICON_SIZE = 16;
 const SKILL_ICON_SIZE = 18;
+const TOUCH_SKILL_ICON_SIZE = 28;
 
 // Warning radius for nearby elites.
 const ELITE_WARNING_RADIUS = 3;
@@ -26,6 +27,14 @@ const SKILL_SLOT_IDS: readonly [string, string][] = [
   ['skill-e', 'E'],
   ['skill-r', 'R'],
   ['skill-f', 'F'],
+];
+
+// Mobile action-pad buttons — same Q/E/R/F order as SKILL_SLOT_IDS.
+const TOUCH_SKILL_BTN_CLASS: readonly [string, string][] = [
+  ['skill-btn-q', 'Q'],
+  ['skill-btn-e', 'E'],
+  ['skill-btn-r', 'R'],
+  ['skill-btn-f', 'F'],
 ];
 
 function el(id: string): HTMLElement {
@@ -69,7 +78,7 @@ export function initHud(): void {
     <div class="hud-row">
       <span id="weapon-info" class="weapon-info">Unarmed</span>
     </div>
-    <div class="hud-row">
+    <div class="hud-row hud-row-skills">
       <span id="skill-q" class="skill-slot">Q: --</span>
       <span id="skill-e" class="skill-slot">E: --</span>
       <span id="skill-r" class="skill-slot">R: --</span>
@@ -150,6 +159,19 @@ export function updateHud(state: GameState): void {
     }
     const iconStyle = spriteCssStyle(SKILL_SPRITE_BY_ID[skillId as SkillId], SKILL_ICON_SIZE);
     el(elId).innerHTML = `${label}: <span class="skill-slot-icon" style="${iconStyle}"></span> Lv${state.persistent.skills[skillId] ?? 0}`;
+  });
+
+  // Mirror the same icons onto the mobile touch action-pad buttons.
+  TOUCH_SKILL_BTN_CLASS.forEach(([className, label], i) => {
+    const btn = document.querySelector<HTMLElement>(`#touch-controls .${className}`);
+    if (!btn) return;
+    const skillId = run.activeSkills[i];
+    if (!skillId) {
+      btn.innerHTML = label;
+      return;
+    }
+    const iconStyle = spriteCssStyle(SKILL_SPRITE_BY_ID[skillId as SkillId], TOUCH_SKILL_ICON_SIZE);
+    btn.innerHTML = `<span class="skill-slot-icon" style="${iconStyle}"></span>`;
   });
 
   // Hide bottom HUD while menu is open to prevent mobile overlay bleed.

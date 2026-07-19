@@ -117,6 +117,13 @@ let selectedSkillId: string | null = null;
 let selectedBestiaryKind: EnemyKind | null = null;
 let selectedStatTrack: StatTrack | null = null;
 let selectedShopSkillId: string | null = null;
+let selectedUpgradeId: OneTimeUpgradeId | null = null;
+
+const UPGRADE_ICON: Record<OneTimeUpgradeId, SpriteRef> = {
+  weaponSlot2: SPRITES.WEAPON,
+  accessorySlot2: SPRITES.ACCESSORY,
+  accessorySlot3: SPRITES.ACCESSORY,
+};
 
 interface PendingConfirm {
   message: string;
@@ -465,12 +472,24 @@ function renderChronofactsTab(state: GameState): string {
 
 const SKILL_SLOTS: readonly SkillSlot[] = ['Q', 'E', 'R', 'F'];
 
+/** Renders every level's effect line, bright for obtained levels, dim for ones not yet reached. */
+function renderSkillLevelEffects(skillId: string, level: number): string {
+  const effects = SKILL_LEVEL_EFFECTS[skillId as keyof typeof SKILL_LEVEL_EFFECTS];
+  return effects
+    .map((text, i) => {
+      const lvl = i + 1;
+      return `<div class="skill-level-effect ${level >= lvl ? 'active' : 'inactive'}">Lv${lvl}: ${text}</div>`;
+    })
+    .join('');
+}
+
 /** Renders Skill detail panel. */
 function renderSkillDetail(state: GameState, skillId: string | null): string {
   if (!skillId) return '<div class="item-detail item-detail-empty">Tap a Skill below to see its effect.</div>';
   const skill = SKILLS[skillId];
   const level = state.persistent.skills[skillId] ?? 0;
   const iconStyle = iconStyleForSkill(skillId, DETAIL_ICON_SIZE);
+  const effectLines = renderSkillLevelEffects(skillId, level);
 
   if (level === 0) {
     return `
@@ -482,12 +501,11 @@ function renderSkillDetail(state: GameState, skillId: string | null): string {
             <div class="item-detail-stat">LOCKED</div>
           </div>
         </div>
-        <div class="item-detail-lore">Unlock this Skill in the Upgrade Shop to assign it to a slot.</div>
+        <div class="item-detail-lore">${effectLines}<div class="skill-level-effect inactive">Unlock in the Upgrade Shop to assign it to a slot.</div></div>
         <div class="item-detail-actions"></div>
       </div>`;
   }
 
-  const effect = SKILL_LEVEL_EFFECTS[skillId as keyof typeof SKILL_LEVEL_EFFECTS][level - 1];
   const slotButtons = SKILL_SLOTS.map((slot) => {
     const isActive = state.run.activeSkills[SLOT_INDEX[slot]] === skillId;
     return `<button data-action="assign-skill" data-skill="${skillId}" data-slot="${slot}" ${isActive ? 'disabled' : ''}>${slot}</button>`;
@@ -502,7 +520,7 @@ function renderSkillDetail(state: GameState, skillId: string | null): string {
           <div class="item-detail-stat">Lv${level} | ${skill.stamina} Stamina | ${titleCase(skill.element)}</div>
         </div>
       </div>
-      <div class="item-detail-lore">${effect}</div>
+      <div class="item-detail-lore">${effectLines}</div>
       <div class="item-detail-actions">${slotButtons}</div>
     </div>`;
 }
@@ -622,7 +640,30 @@ function renderShopDetail(state: GameState): string {
       </div>`;
   }
 
-  return '<div class="item-detail item-detail-empty">Tap a Stat or Skill below to see its cost.</div>';
+  if (selectedUpgradeId) {
+    const upgrade = ONE_TIME_UPGRADES.find((u) => u.id === selectedUpgradeId)!;
+    const owned = state.persistent[upgrade.flag];
+    const available = oneTimeUpgradeAvailable(state, upgrade);
+    const disabled = owned || !available || state.persistent.echoes < upgrade.cost;
+    const buyLabel = owned ? 'OWNED' : !available ? 'LOCKED' : `Buy (${upgrade.cost})`;
+    const status = owned ? 'OWNED' : !available ? 'Requires Second Accessory Slot' : `Cost: ${upgrade.cost} Echoes`;
+    return `
+      <div class="item-detail">
+        <div class="item-detail-header">
+          <span class="item-detail-icon" style="${spriteCssStyle(UPGRADE_ICON[upgrade.id], DETAIL_ICON_SIZE)}"></span>
+          <div class="item-detail-heading">
+            <div class="item-detail-name">${upgrade.label}</div>
+            <div class="item-detail-stat">${status}</div>
+          </div>
+        </div>
+        <div class="item-detail-lore">Permanent — carries across every loop reset.</div>
+        <div class="item-detail-actions">
+          <button data-action="buy-upgrade" data-upgrade="${upgrade.id}" ${disabled ? 'disabled' : ''}>${buyLabel}</button>
+        </div>
+      </div>`;
+  }
+
+  return '<div class="item-detail item-detail-empty">Tap a Stat, Skill, or Upgrade below to see its cost.</div>';
 }
 
 function shortStatLabel(label: string): string {
@@ -648,16 +689,12 @@ function renderUpgradeShop(state: GameState): string {
   const continueLabel =
     state.run.currentFloor === HUB_FLOOR ? 'Close' : `Continue — Loop ${state.persistent.loopCount + 1}`;
 
-  const upgradeRows = ONE_TIME_UPGRADES.map((u) => {
+  const upgradeGridHtml = ONE_TIME_UPGRADES.map((u) => {
     const owned = state.persistent[u.flag];
     const available = oneTimeUpgradeAvailable(state, u);
-    const disabled = owned || !available || state.persistent.echoes < u.cost;
-    const buttonLabel = owned ? 'OWNED' : !available ? 'LOCKED' : `Buy (${u.cost})`;
-    return `
-      <div class="shop-row">
-        <span class="shop-name">${u.label}</span>
-        <button data-action="buy-upgrade" data-upgrade="${u.id}" ${disabled ? 'disabled' : ''}>${buttonLabel}</button>
-      </div>`;
+    const selected = u.id === selectedUpgradeId ? ' selected' : '';
+    const iconStyle = spriteCssStyle(UPGRADE_ICON[u.id], INV_ICON_SIZE);
+    return `<button class="inv-slot${owned || !available ? ' locked' : ''}${selected}" data-action="select-upgrade" data-upgrade="${u.id}" aria-label="${u.label}"><span class="item-icon" style="${iconStyle}"></span><span class="slot-name">${u.label}</span></button>`;
   }).join('');
 
   return `
@@ -666,11 +703,11 @@ function renderUpgradeShop(state: GameState): string {
       <div class="stat-line">Echoes: ${state.persistent.echoes}</div>
       <h3>Stats</h3>
       <div class="inventory-grid shop-stat-grid">${statGridHtml}</div>
-      <h3>Skills</h3>
-      <div class="inventory-grid">${skillGridHtml}</div>
-      ${renderShopDetail(state)}
       <h3>Upgrades</h3>
-      ${upgradeRows}
+      <div class="inventory-grid shop-stat-grid">${upgradeGridHtml}</div>
+      <h3>Skills</h3>
+      <div class="inventory-grid shop-stat-grid">${skillGridHtml}</div>
+      ${renderShopDetail(state)}
       <button class="continue-btn" data-action="shop-continue">${continueLabel}</button>
       <button class="new-game-btn" data-action="new-game">New Game (wipe save)</button>
       <div class="menu-hint">Esc: continue</div>
@@ -738,6 +775,7 @@ const HELP_ROWS: readonly [string, string, string][] = [
   ['W/A/S/D or Arrows', 'Move / bump-attack (sets facing)', 'GAME'],
   ['Space', 'Brace / pass turn (+1 DEF until your next turn)', 'GAME'],
   ['Q / E / R / F', 'Use the mapped skill toward facing', 'GAME'],
+  ['U', 'Open Menu -> Status tab (or close, if already there)', 'GAME, MENU'],
   ['I / Tab', 'Open Menu -> Inventory tab (or close, if already there)', 'GAME, MENU'],
   ['K', 'Open Menu -> Skill tab (or close, if already there)', 'GAME, MENU'],
   ['? / F1', 'Open Menu -> Settings & Help tab (or close, if already there)', 'any screen'],
@@ -748,7 +786,7 @@ const HELP_ROWS: readonly [string, string, string][] = [
   ['Walk into a Hub tile', 'Open the Shop Terminal or Shortcut Gate', 'GAME (Hub only)'],
   ['Walk into a Cursed Rift', 'Open the sacrifice-pact modal', 'GAME (procedural floors)'],
   ['Tap a Relic Tray icon', 'Show its name/lore in a tooltip', 'GAME'],
-  ['Touch D-Pad/buttons', 'Mirrors WASD/Space/Q/E/R/F on mobile; one MENU button opens the tabbed Menu', 'any screen'],
+  ['Touch D-Pad/action-pad', 'Mirrors WASD/Space/Q/E/R/F on mobile; STAT/INV/SKL buttons open the Menu directly on that tab', 'any screen'],
 ];
 
 /** Renders Settings tab. */
@@ -913,6 +951,7 @@ function render(state: GameState): void {
   if (screen === 'UPGRADE_SHOP' && lastScreen !== 'UPGRADE_SHOP') {
     selectedStatTrack = null;
     selectedShopSkillId = null;
+    selectedUpgradeId = null;
   }
   if (screen === 'TITLE') el.innerHTML = renderTitle(state);
   else if (screen === 'MENU') el.innerHTML = renderMenu(state);
@@ -945,6 +984,10 @@ export function initMenus(state: GameState): void {
       ev.preventDefault();
       openMenuTab(state, 'skill');
       render(state);
+    } else if (key === 'u' && (screen === 'GAME' || screen === 'MENU')) {
+      ev.preventDefault();
+      openMenuTab(state, 'status');
+      render(state);
     } else if (
       key === 'escape' &&
       (screen === 'MENU' ||
@@ -974,9 +1017,15 @@ export function initMenus(state: GameState): void {
     else if (action === 'select-stat') {
       selectedStatTrack = (track as StatTrack) ?? null;
       selectedShopSkillId = null;
+      selectedUpgradeId = null;
     } else if (action === 'select-shop-skill') {
       selectedShopSkillId = skill ?? null;
       selectedStatTrack = null;
+      selectedUpgradeId = null;
+    } else if (action === 'select-upgrade') {
+      selectedUpgradeId = (upgrade as OneTimeUpgradeId) ?? null;
+      selectedStatTrack = null;
+      selectedShopSkillId = null;
     }
     else if (action === 'use-selected' && selectedInvIndex !== null) {
       const item = state.run.inventory[selectedInvIndex];

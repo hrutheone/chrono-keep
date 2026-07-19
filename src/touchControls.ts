@@ -10,8 +10,10 @@ const BUTTON_KEYS: Record<string, string> = {
   'skill-e': 'e',
   'skill-r': 'r',
   'skill-f': 'f',
-  // Opens the menu.
-  'open-menu': 'i',
+  // Opens the Menu directly on a specific tab.
+  'open-status': 'u',
+  'open-inv': 'i',
+  'open-skill': 'k',
 };
 
 // Move buttons fire keydown/keyup pair for repeat-on-hold.
