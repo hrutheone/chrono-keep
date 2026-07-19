@@ -31,18 +31,24 @@ import {
 } from './sprites';
 import { HUB_FLOOR, enterHub, gateDestinations, warpToFloor } from './hub';
 import { clearRunSnapshot, clearSave, hasSave, saveAudioSettings, saveGame, saveRunSnapshot } from './persistence';
-import { continueAfterDeath } from './turnController';
+import { continueAfterDeath, resolvePlayerTurn } from './turnController';
+import { performDescend } from './movement';
 import { logLine } from './turns';
 import { awardEchoes } from './echoes';
 import { resetRunForNewLoop, resetToNewGame, rerollSeedKeepProgress } from './state';
+import { enterShatteringTutorial, isShatteringTutorial } from './shattering';
 import { getMasterVolume, isMuted, playNewGameSfx, playWarpSfx, setMasterVolume, toggleMuted } from './audio';
 import {
+  buyOneTimeUpgrade,
   buySkillUpgrade,
   buyStatUpgrade,
+  oneTimeUpgradeAvailable,
+  ONE_TIME_UPGRADES,
   skillCost,
   skillLevel,
   STAT_TRACKS,
   statTrackCost,
+  type OneTimeUpgradeId,
   type StatTrack,
 } from './shop';
 import {
@@ -52,12 +58,15 @@ import {
   accessoryHpBonus,
   accessoryStamBonus,
   equipItem,
+  equipWeaponSlot2,
   meltItem,
   isThreatNearby,
+  swapActiveWeapon,
   totalAtk,
   totalDef,
-  unequipAccessory,
+  unequipAccessorySlot,
   unequipWeapon,
+  unequipWeapon2,
   usePotion,
   weaponDefBonus,
   weaponHpBonus,
@@ -97,6 +106,12 @@ let menuTab: MenuTabId = 'status';
 
 let selectedInvIndex: number | null = null;
 let selectedRelicEffect: string | null = null;
+
+/** Keeps the selection on whatever shifted into this slot after a melt/use/equip removed an item. */
+function reselectAfterConsume(state: GameState, priorIndex: number): void {
+  const inv = state.run.inventory;
+  selectedInvIndex = inv.length === 0 ? null : Math.min(priorIndex, inv.length - 1);
+}
 
 let selectedSkillId: string | null = null;
 let selectedBestiaryKind: EnemyKind | null = null;
@@ -155,7 +170,8 @@ function startNewGame(state: GameState): void {
     clearSave();
     clearRunSnapshot();
     resetToNewGame(state);
-    enterHub(state);
+    // Loop 0 always opens on the Shattering — the fake-endgame vision fight.
+    enterShatteringTutorial(state);
     state.ui.currentScreen = 'GAME';
     playNewGameSfx();
     saveGame(state);
@@ -188,6 +204,34 @@ function warpFromGate(state: GameState, floor: number): void {
   warpToFloor(state, floor);
   state.ui.currentScreen = 'GAME';
   playWarpSfx();
+}
+
+// --- Developer Tools (Settings tab) ---
+
+/** Dev Warp: jumps straight to a target floor, reusing the real stairs-transition logic. */
+function devWarp(state: GameState): void {
+  const input = document.querySelector<HTMLInputElement>('#dev-warp-floor');
+  const raw = Number(input?.value ?? 1);
+  const floor = Math.max(1, Math.min(99, Number.isFinite(raw) ? Math.round(raw) : 1));
+  state.ui.currentScreen = 'GAME';
+  performDescend(state, floor);
+}
+
+function devAddEchoes(state: GameState): void {
+  state.persistent.echoes += 1000;
+  logLine(state, 'Dev Tools: +1000 Echoes.');
+  saveGame(state);
+}
+
+/** Dev Kill: forces the loss condition through the normal turn-resolution path. */
+function devForceDeath(state: GameState): void {
+  if (state.run.currentFloor === HUB_FLOOR) {
+    logLine(state, 'Dev Tools: no loss condition in the Hub.');
+    return;
+  }
+  state.run.currentHp = 0;
+  state.ui.currentScreen = 'GAME';
+  void resolvePlayerTurn(state, 'wait');
 }
 
 function titleCase(s: string): string {
@@ -225,17 +269,15 @@ function statBlockForItem(state: GameState, item: Item): string | null {
 
   if (item.kind === 'ACCESSORY') {
     const acc = item as Accessory;
-    const equipped = run.equippedAccessory;
-    const comparing = equipped !== null && equipped.id !== acc.id;
     const parts: string[] = [];
-    const statRow = (label: string, value: number, bonusOf: (a: Accessory | null) => number): void => {
+    const statRow = (label: string, value: number): void => {
       if (value === 0) return;
-      parts.push(`${label}: ${signed(value)}${comparing ? deltaMarker(value - bonusOf(equipped)) : ''}`);
+      parts.push(`${label}: ${signed(value)}`);
     };
-    statRow('DEF', accessoryDefBonus(acc), accessoryDefBonus);
-    statRow('Max HP', accessoryHpBonus(acc), accessoryHpBonus);
-    statRow('ATK', accessoryAtkBonus(acc), accessoryAtkBonus);
-    statRow('Max Stamina', accessoryStamBonus(acc), accessoryStamBonus);
+    statRow('DEF', accessoryDefBonus(acc));
+    statRow('Max HP', accessoryHpBonus(acc));
+    statRow('ATK', accessoryAtkBonus(acc));
+    statRow('Max Stamina', accessoryStamBonus(acc));
     const effect = ACCESSORY_EFFECT_LABEL[acc.passive];
     if (effect) parts.push(`Effect: ${effect}`);
     return parts.length ? parts.join(' | ') : null;
@@ -284,6 +326,10 @@ function renderItemDetail(state: GameState, item: Item | undefined): string {
   const stat = statBlockForItem(state, item);
   const countBadge = item.count && item.count > 1 ? ` <span class="item-count">x${item.count}</span>` : '';
   const meltTotal = itemMeltValue(item) * (item.count && item.count > 1 ? item.count : 1);
+  const stashBtn =
+    item.kind === 'WEAPON' && state.persistent.weaponSlot2Unlocked
+      ? '<button data-action="stash-weapon">Stash (Slot 2)</button>'
+      : '';
   return `
     <div class="item-detail">
       <div class="item-detail-header">
@@ -296,6 +342,7 @@ function renderItemDetail(state: GameState, item: Item | undefined): string {
       ${lore ? `<div class="item-detail-lore">${lore}</div>` : ''}
       <div class="item-detail-actions">
         <button data-action="use-selected">${useLabelForItem(item)}</button>
+        ${stashBtn}
         <button class="melt-btn" data-action="melt-selected">Melt (+${meltTotal})</button>
       </div>
     </div>`;
@@ -321,14 +368,39 @@ function renderRelicDetail(effect: string | null): string {
     </div>`;
 }
 
+/** Renders one weapon/accessory equip-slot row. */
+function renderGearSlot(
+  state: GameState,
+  label: string,
+  item: Weapon | Accessory | null,
+  unequipAction: string,
+): string {
+  const lore = item ? loreForItem(item.name) : undefined;
+  const stat = item ? statBlockForItem(state, item) : undefined;
+  const titleAttr = lore ? ` title="${lore.replace(/"/g, '&quot;')}"` : '';
+  return `
+    <div class="equip-slot-wrap">
+      <button class="equip-slot${item ? ' equipped' : ''}" data-action="${unequipAction}"${titleAttr}>${label}: ${item ? item.name : 'None'}${item ? ' <span class="equipped-badge">EQUIPPED</span>' : ''}</button>
+      ${stat ? `<div class="equip-stat">${stat}</div>` : ''}
+      ${lore ? `<div class="equip-lore">${lore}</div>` : ''}
+    </div>`;
+}
+
 /** Renders Status tab. */
 function renderStatusTab(state: GameState): string {
-  const { run } = state;
+  const { run, persistent } = state;
   const danger = isThreatNearby(state);
-  const weaponLore = run.equippedWeapon ? loreForItem(run.equippedWeapon.name) : undefined;
-  const accessoryLore = run.equippedAccessory ? loreForItem(run.equippedAccessory.name) : undefined;
-  const weaponStat = run.equippedWeapon ? statBlockForItem(state, run.equippedWeapon) : undefined;
-  const accessoryStat = run.equippedAccessory ? statBlockForItem(state, run.equippedAccessory) : undefined;
+
+  const weaponSlots = renderGearSlot(state, 'Weapon', run.equippedWeapon, 'unequip-weapon') +
+    (persistent.weaponSlot2Unlocked
+      ? renderGearSlot(state, 'Weapon (Slot 2)', run.equippedWeapon2, 'unequip-weapon2') +
+        `<button class="swap-weapon-btn" data-action="swap-weapon" ${!run.equippedWeapon && !run.equippedWeapon2 ? 'disabled' : ''}>Swap Active Weapon</button>`
+      : '');
+
+  const accessorySlots =
+    renderGearSlot(state, 'Accessory', run.equippedAccessory, 'unequip-accessory-1') +
+    (persistent.accessorySlot2Unlocked ? renderGearSlot(state, 'Accessory (Slot 2)', run.equippedAccessory2, 'unequip-accessory-2') : '') +
+    (persistent.accessorySlot3Unlocked ? renderGearSlot(state, 'Accessory (Slot 3)', run.equippedAccessory3, 'unequip-accessory-3') : '');
 
   return `
     <div class="menu-tab-body">
@@ -338,16 +410,8 @@ function renderStatusTab(state: GameState): string {
       <div class="stat-line">Total ATK: ${totalAtk(state)}</div>
       <div class="stat-line">Total DEF: ${totalDef(state)}${run.braced ? ' (Braced)' : ''}</div>
       <div class="stat-line">Status: ${run.status === 'NONE' ? 'Normal' : run.status}</div>
-      <div class="equip-slot-wrap">
-        <button class="equip-slot${run.equippedWeapon ? ' equipped' : ''}" data-action="unequip-weapon"${weaponLore ? ` title="${weaponLore.replace(/"/g, '&quot;')}"` : ''}>Weapon: ${run.equippedWeapon ? run.equippedWeapon.name : 'None'}${run.equippedWeapon ? ' <span class="equipped-badge">EQUIPPED</span>' : ''}</button>
-        ${weaponStat ? `<div class="equip-stat">${weaponStat}</div>` : ''}
-        ${weaponLore ? `<div class="equip-lore">${weaponLore}</div>` : ''}
-      </div>
-      <div class="equip-slot-wrap">
-        <button class="equip-slot${run.equippedAccessory ? ' equipped' : ''}" data-action="unequip-accessory"${accessoryLore ? ` title="${accessoryLore.replace(/"/g, '&quot;')}"` : ''}>Accessory: ${run.equippedAccessory ? run.equippedAccessory.name : 'None'}${run.equippedAccessory ? ' <span class="equipped-badge">EQUIPPED</span>' : ''}</button>
-        ${accessoryStat ? `<div class="equip-stat">${accessoryStat}</div>` : ''}
-        ${accessoryLore ? `<div class="equip-lore">${accessoryLore}</div>` : ''}
-      </div>
+      ${weaponSlots}
+      ${accessorySlots}
       ${danger ? '<div class="danger-banner">DANGER — actions cost 1 turn</div>' : ''}
     </div>`;
 }
@@ -584,6 +648,18 @@ function renderUpgradeShop(state: GameState): string {
   const continueLabel =
     state.run.currentFloor === HUB_FLOOR ? 'Close' : `Continue — Loop ${state.persistent.loopCount + 1}`;
 
+  const upgradeRows = ONE_TIME_UPGRADES.map((u) => {
+    const owned = state.persistent[u.flag];
+    const available = oneTimeUpgradeAvailable(state, u);
+    const disabled = owned || !available || state.persistent.echoes < u.cost;
+    const buttonLabel = owned ? 'OWNED' : !available ? 'LOCKED' : `Buy (${u.cost})`;
+    return `
+      <div class="shop-row">
+        <span class="shop-name">${u.label}</span>
+        <button data-action="buy-upgrade" data-upgrade="${u.id}" ${disabled ? 'disabled' : ''}>${buttonLabel}</button>
+      </div>`;
+  }).join('');
+
   return `
     <div class="menu upgrade-shop">
       <h2>Upgrade Shop</h2>
@@ -593,6 +669,8 @@ function renderUpgradeShop(state: GameState): string {
       <h3>Skills</h3>
       <div class="inventory-grid">${skillGridHtml}</div>
       ${renderShopDetail(state)}
+      <h3>Upgrades</h3>
+      ${upgradeRows}
       <button class="continue-btn" data-action="shop-continue">${continueLabel}</button>
       <button class="new-game-btn" data-action="new-game">New Game (wipe save)</button>
       <div class="menu-hint">Esc: continue</div>
@@ -689,9 +767,21 @@ function renderSettingsTab(state: GameState): string {
         <span class="stat-line">Volume: ${isMuted() ? 'Muted' : `${volumePct}%`}</span>
         <button data-action="volume-up">+</button>
       </div>
-      <button class="cheat-toggle${state.persistent.cheatModeEnabled ? ' active' : ''}" data-action="toggle-cheat-mode">
-        Cheat Mode: ${state.persistent.cheatModeEnabled ? 'ON' : 'OFF'}
-      </button>
+      <h2 class="dev-tools-heading">Developer Tools</h2>
+      <div class="dev-tools-panel">
+        <div class="dev-tools-row">
+          <label for="dev-warp-floor">Warp to Floor</label>
+          <input id="dev-warp-floor" type="number" min="1" max="99" value="1" />
+          <button data-action="dev-warp">Warp</button>
+        </div>
+        <div class="dev-tools-row">
+          <button data-action="dev-echoes">+1000 Echoes</button>
+          <button data-action="dev-kill">Force Death (Reset/Skip)</button>
+        </div>
+        <button class="cheat-toggle${state.persistent.cheatModeEnabled ? ' active' : ''}" data-action="toggle-cheat-mode">
+          Cheat Mode: ${state.persistent.cheatModeEnabled ? 'ON' : 'OFF'}
+        </button>
+      </div>
       <h2>Controls</h2>
       <div class="help-list">${rows}</div>
     </div>`;
@@ -756,14 +846,14 @@ function renderTitle(state: GameState): string {
 
 function renderDeath(state: GameState): string {
   const fell = state.run.currentHp <= 0;
-  // Show first-loop framing.
-  const firstLoop = state.persistent.loopCount === 0;
-  const framing = firstLoop
-    ? '<div class="stat-line framing">Each attempt makes the next stronger. Spend your Echoes wisely — the dungeon remembers.</div>'
+  const tutorial = isShatteringTutorial(state);
+  const heading = tutorial ? 'Timeline Collapse' : fell ? 'You Have Fallen' : 'Time Has Run Out';
+  const framing = tutorial
+    ? '<div class="stat-line framing">The Hourglass shatters. The time loop begins. You have forgotten your mastery, but you remember your duty.</div>'
     : '';
   return `
     <div class="menu death-menu">
-      <h2>${fell ? 'You Have Fallen' : 'Time Has Run Out'}</h2>
+      <h2>${heading}</h2>
       <div class="stat-line">Loop ${state.persistent.loopCount + 1}</div>
       <div class="stat-line">Reached Floor ${state.run.currentFloor}</div>
       <div class="stat-line">Echoes banked: ${state.persistent.echoes}</div>
@@ -874,7 +964,7 @@ export function initMenus(state: GameState): void {
   screenEl().addEventListener('click', (ev) => {
     const target = (ev.target as HTMLElement).closest<HTMLElement>('[data-action]');
     if (!target) return;
-    const { action, index, skill, slot, track, tab, floor, relic, enemy } = target.dataset;
+    const { action, index, skill, slot, track, tab, floor, relic, enemy, upgrade } = target.dataset;
 
     if (action === 'select-item') selectedInvIndex = Number(index);
     else if (action === 'menu-tab') menuTab = (tab as MenuTabId) ?? 'status';
@@ -893,12 +983,19 @@ export function initMenus(state: GameState): void {
       if (item?.kind === 'WEAPON' || item?.kind === 'ACCESSORY') equipItem(state, selectedInvIndex);
       else if (item?.kind === 'POTION') usePotion(state, selectedInvIndex);
       else if (item?.kind === 'CONSUMABLE') useConsumable(state, selectedInvIndex);
-      selectedInvIndex = null;
+      reselectAfterConsume(state, selectedInvIndex);
+    } else if (action === 'stash-weapon' && selectedInvIndex !== null) {
+      equipWeaponSlot2(state, selectedInvIndex);
+      reselectAfterConsume(state, selectedInvIndex);
     } else if (action === 'melt-selected' && selectedInvIndex !== null) {
       meltItem(state, selectedInvIndex);
-      selectedInvIndex = null;
+      reselectAfterConsume(state, selectedInvIndex);
     } else if (action === 'unequip-weapon') unequipWeapon(state);
-    else if (action === 'unequip-accessory') unequipAccessory(state);
+    else if (action === 'unequip-weapon2') unequipWeapon2(state);
+    else if (action === 'swap-weapon') swapActiveWeapon(state);
+    else if (action === 'unequip-accessory-1') unequipAccessorySlot(state, 1);
+    else if (action === 'unequip-accessory-2') unequipAccessorySlot(state, 2);
+    else if (action === 'unequip-accessory-3') unequipAccessorySlot(state, 3);
     else if (action === 'toggle-cheat-mode') {
       state.persistent.cheatModeEnabled = !state.persistent.cheatModeEnabled;
       logLine(state, `Cheat Mode: ${state.persistent.cheatModeEnabled ? 'ON' : 'OFF'}.`);
@@ -914,6 +1011,7 @@ export function initMenus(state: GameState): void {
     }
     else if (action === 'buy-stat') buyStatUpgrade(state, track as StatTrack);
     else if (action === 'buy-skill') buySkillUpgrade(state, skill!);
+    else if (action === 'buy-upgrade') buyOneTimeUpgrade(state, upgrade as OneTimeUpgradeId);
     else if (action === 'warp') warpFromGate(state, Number(floor));
     else if (action === 'shop-continue') state.ui.currentScreen = 'GAME';
     else if (action === 'new-game') startNewGame(state);
@@ -925,6 +1023,9 @@ export function initMenus(state: GameState): void {
     else if (action === 'rift-accept') resolveRiftPact(state, true);
     else if (action === 'rift-decline') resolveRiftPact(state, false);
     else if (action === 'close-menu') state.ui.currentScreen = 'GAME';
+    else if (action === 'dev-warp') devWarp(state);
+    else if (action === 'dev-echoes') devAddEchoes(state);
+    else if (action === 'dev-kill') devForceDeath(state);
 
     render(state);
   });

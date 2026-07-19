@@ -32,6 +32,9 @@ function migratePersistent(parsed: Record<string, unknown>): GameState['persiste
     bestiaryKnown: legacy.bestiaryKnown ?? [],
     ngPlusLevel: legacy.ngPlusLevel ?? 0,
     cheatModeEnabled: legacy.cheatModeEnabled ?? false,
+    weaponSlot2Unlocked: legacy.weaponSlot2Unlocked ?? false,
+    accessorySlot2Unlocked: legacy.accessorySlot2Unlocked ?? false,
+    accessorySlot3Unlocked: legacy.accessorySlot3Unlocked ?? false,
   };
 }
 

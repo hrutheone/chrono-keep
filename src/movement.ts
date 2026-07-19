@@ -20,7 +20,7 @@ const ARENA_THRESHOLD_WARNING =
   'The temporal density beyond this stair is overwhelming. Something old and hungry guards the descent. Steady yourself — there is no retreat once you cross.';
 
 /** Perform descend to next floor. */
-function performDescend(state: GameState, next: number): void {
+export function performDescend(state: GameState, next: number): void {
   onFloorCleared(state);
   if (next === FINAL_BOSS_FLOOR) enterBossFloor(state);
   else if (isArenaFloor(next)) enterArenaFloor(state, next);

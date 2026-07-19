@@ -61,6 +61,53 @@ export function accessoryStamBonus(acc: Accessory | null): number {
   return STAM_BONUS[acc?.passive ?? ''] ?? 0;
 }
 
+// --- Multi-slot accessory helpers ---
+export type AccessorySlotNum = 1 | 2 | 3;
+type AccessorySlotField = 'equippedAccessory' | 'equippedAccessory2' | 'equippedAccessory3';
+
+function accessorySlotField(slot: AccessorySlotNum): AccessorySlotField {
+  return slot === 1 ? 'equippedAccessory' : slot === 2 ? 'equippedAccessory2' : 'equippedAccessory3';
+}
+
+function accessorySlotUnlocked(state: GameState, slot: AccessorySlotNum): boolean {
+  if (slot === 1) return true;
+  if (slot === 2) return state.persistent.accessorySlot2Unlocked;
+  return state.persistent.accessorySlot3Unlocked;
+}
+
+function firstEmptyUnlockedAccessorySlot(state: GameState): AccessorySlotNum | null {
+  for (const slot of [1, 2, 3] as AccessorySlotNum[]) {
+    if (accessorySlotUnlocked(state, slot) && !state.run[accessorySlotField(slot)]) return slot;
+  }
+  return null;
+}
+
+/** All currently-equipped accessories (any unlocked slot), simultaneously active. */
+export function equippedAccessories(state: GameState): Accessory[] {
+  return [state.run.equippedAccessory, state.run.equippedAccessory2, state.run.equippedAccessory3].filter(
+    (a): a is Accessory => a != null,
+  );
+}
+
+export function hasAccessoryPassive(state: GameState, passive: string): boolean {
+  return equippedAccessories(state).some((a) => a.passive === passive);
+}
+
+/** Removes (destroys, does not return to inventory) the first equipped accessory with this passive. */
+export function consumeAccessoryWithPassive(state: GameState, passive: string): Accessory | null {
+  for (const slot of [1, 2, 3] as AccessorySlotNum[]) {
+    const field = accessorySlotField(slot);
+    const acc = state.run[field];
+    if (acc && acc.passive === passive) {
+      applyMaxHpDelta(state, -accessoryHpBonus(acc));
+      applyMaxStamDelta(state, -accessoryStamBonus(acc));
+      state.run[field] = null;
+      return acc;
+    }
+  }
+  return null;
+}
+
 /** Elemental damage bonuses. */
 const ELEMENT_SYNERGY_BONUS: Partial<Record<string, number>> = {
   fire_synergy: 2,
@@ -74,9 +121,10 @@ const ELEMENT_SYNERGY_PASSIVE: Record<string, string | undefined> = {
 };
 
 export function elementSynergyBonus(state: GameState, element: string): number {
-  const passive = state.run.equippedAccessory?.passive;
-  if (!passive || ELEMENT_SYNERGY_PASSIVE[element] !== passive) return 0;
-  return ELEMENT_SYNERGY_BONUS[passive] ?? 0;
+  return equippedAccessories(state).reduce((sum, acc) => {
+    if (ELEMENT_SYNERGY_PASSIVE[element] !== acc.passive) return sum;
+    return sum + (ELEMENT_SYNERGY_BONUS[acc.passive] ?? 0);
+  }, 0);
 }
 
 // Giant's Anvil relic.
@@ -84,11 +132,12 @@ export const GIANTS_ANVIL_ATK = 5;
 
 export function totalAtk(state: GameState): number {
   const relicBonus = state.run.relics.includes('giants_anvil') ? GIANTS_ANVIL_ATK : 0;
+  const accAtk = equippedAccessories(state).reduce((sum, acc) => sum + accessoryAtkBonus(acc), 0);
   return (
     PLAYER_BASE_ATK +
     state.persistent.baseAtkUpgrade +
     (state.run.equippedWeapon?.atk ?? 0) +
-    accessoryAtkBonus(state.run.equippedAccessory) +
+    accAtk +
     state.run.tempAtkBonus +
     relicBonus
   );
@@ -96,9 +145,8 @@ export function totalAtk(state: GameState): number {
 
 export function totalDef(state: GameState): number {
   const brace = state.run.braced ? 1 : 0;
-  return (
-    PLAYER_BASE_DEF + accessoryDefBonus(state.run.equippedAccessory) + weaponDefBonus(state.run.equippedWeapon) + state.run.tempDefBonus + brace
-  );
+  const accDef = equippedAccessories(state).reduce((sum, acc) => sum + accessoryDefBonus(acc), 0);
+  return PLAYER_BASE_DEF + accDef + weaponDefBonus(state.run.equippedWeapon) + state.run.tempDefBonus + brace;
 }
 
 export function isThreatNearby(state: GameState): boolean {
@@ -127,7 +175,7 @@ function applyMaxStamDelta(state: GameState, delta: number): void {
 
 /** Alchemist's Belt check. */
 export function hasAlchemistsBelt(state: GameState): boolean {
-  return state.run.equippedAccessory?.passive === 'alchemist_belt';
+  return hasAccessoryPassive(state, 'alchemist_belt');
 }
 
 /** Grant item. */
@@ -250,17 +298,51 @@ function equipWeapon(state: GameState, invIndex: number, weapon: Weapon): void {
   playEquipSfx();
 }
 
-function equipAccessory(state: GameState, invIndex: number, accessory: Accessory): void {
+/** Stashes a weapon into the (unlockable) second weapon slot — the bench slot, not usable in combat until swapped active. */
+export function equipWeaponSlot2(state: GameState, invIndex: number): void {
+  if (!state.persistent.weaponSlot2Unlocked) return;
+  const item = state.run.inventory[invIndex];
+  if (!item || item.kind !== 'WEAPON') return;
+  const weapon = item as Weapon;
+  const freeAlways =
+    FREE_SWAP_PASSIVES.has(weapon.passive) || FREE_SWAP_PASSIVES.has(state.run.equippedWeapon2?.passive ?? '');
   state.run.inventory.splice(invIndex, 1);
-  const prior = state.run.equippedAccessory;
+  const prior = state.run.equippedWeapon2;
+  state.run.equippedWeapon2 = weapon;
+  if (prior) state.run.inventory.push(prior);
+  chargeInventoryAction(state, freeAlways);
+  logLine(state, `Stashed ${weapon.name} (Slot 2).`);
+  playEquipSfx();
+}
+
+/** Swaps the active weapon with the benched Slot 2 weapon. */
+export function swapActiveWeapon(state: GameState): void {
+  if (!state.persistent.weaponSlot2Unlocked) return;
+  const active = state.run.equippedWeapon;
+  const bench = state.run.equippedWeapon2;
+  if (!active && !bench) return;
+  applyMaxHpDelta(state, -weaponHpBonus(active));
+  state.run.equippedWeapon = bench;
+  state.run.equippedWeapon2 = active;
+  applyMaxHpDelta(state, weaponHpBonus(state.run.equippedWeapon));
+  chargeInventoryAction(state, false);
+  logLine(state, state.run.equippedWeapon ? `Swapped to ${state.run.equippedWeapon.name}.` : 'Weapon holstered — unarmed.');
+  playEquipSfx();
+}
+
+function equipAccessory(state: GameState, invIndex: number, accessory: Accessory): void {
+  const slot = firstEmptyUnlockedAccessorySlot(state) ?? 1;
+  const field = accessorySlotField(slot);
+  state.run.inventory.splice(invIndex, 1);
+  const prior = state.run[field];
   applyMaxHpDelta(state, -accessoryHpBonus(prior));
   applyMaxStamDelta(state, -accessoryStamBonus(prior));
-  state.run.equippedAccessory = accessory;
+  state.run[field] = accessory;
   applyMaxHpDelta(state, accessoryHpBonus(accessory));
   applyMaxStamDelta(state, accessoryStamBonus(accessory));
   if (prior) state.run.inventory.push(prior);
   chargeInventoryAction(state, false);
-  logLine(state, `Equipped ${accessory.name}.`);
+  logLine(state, `Equipped ${accessory.name}${slot > 1 ? ` (Slot ${slot})` : ''}.`);
   playEquipSfx();
 }
 
@@ -287,8 +369,23 @@ export function unequipWeapon(state: GameState): void {
   playUnequipSfx();
 }
 
-export function unequipAccessory(state: GameState): void {
-  const accessory = state.run.equippedAccessory;
+export function unequipWeapon2(state: GameState): void {
+  const weapon = state.run.equippedWeapon2;
+  if (!weapon) return;
+  if (state.run.inventory.length >= INVENTORY_CAP) {
+    logLine(state, 'Inventory full — cannot unequip.');
+    return;
+  }
+  state.run.equippedWeapon2 = null;
+  state.run.inventory.push(weapon);
+  chargeInventoryAction(state, FREE_SWAP_PASSIVES.has(weapon.passive));
+  logLine(state, `Unequipped ${weapon.name} (Slot 2).`);
+  playUnequipSfx();
+}
+
+export function unequipAccessorySlot(state: GameState, slot: AccessorySlotNum): void {
+  const field = accessorySlotField(slot);
+  const accessory = state.run[field];
   if (!accessory) return;
   if (state.run.inventory.length >= INVENTORY_CAP) {
     logLine(state, 'Inventory full — cannot unequip.');
@@ -296,7 +393,7 @@ export function unequipAccessory(state: GameState): void {
   }
   applyMaxHpDelta(state, -accessoryHpBonus(accessory));
   applyMaxStamDelta(state, -accessoryStamBonus(accessory));
-  state.run.equippedAccessory = null;
+  state.run[field] = null;
   state.run.inventory.push(accessory);
   chargeInventoryAction(state, false);
   logLine(state, `Unequipped ${accessory.name}.`);

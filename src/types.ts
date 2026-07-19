@@ -24,6 +24,9 @@ export interface GameState {
     bestiaryKnown: string[];
     ngPlusLevel: number;
     cheatModeEnabled: boolean;
+    weaponSlot2Unlocked: boolean;
+    accessorySlot2Unlocked: boolean;
+    accessorySlot3Unlocked: boolean;
   };
 
   run: {
@@ -40,7 +43,10 @@ export interface GameState {
 
     inventory: Item[];
     equippedWeapon: Weapon | null;
+    equippedWeapon2: Weapon | null;
     equippedAccessory: Accessory | null;
+    equippedAccessory2: Accessory | null;
+    equippedAccessory3: Accessory | null;
     activeSkills: string[];
     status: StatusEffect;
     statusTurns: number;

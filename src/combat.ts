@@ -14,7 +14,7 @@ import {
   weaknessOf,
 } from './content';
 import type { WeaponKey } from './content';
-import { elementSynergyBonus, totalAtk, totalDef } from './inventory';
+import { elementSynergyBonus, hasAccessoryPassive, totalAtk, totalDef } from './inventory';
 import { TILE, isWalkableAt } from './mapgen';
 import { openBossGate } from './arenas';
 import { logLine } from './turns';
@@ -103,7 +103,7 @@ function applyPull(state: GameState, enemy: Enemy, dx: number, dy: number): void
 
 /** Calculates Time Shard drop chance. */
 function timeShardChance(state: GameState): number {
-  return state.run.equippedAccessory?.passive === 'gamblers_dice' ? TIME_SHARD_DROP_CHANCE * 2 : TIME_SHARD_DROP_CHANCE;
+  return hasAccessoryPassive(state, 'gamblers_dice') ? TIME_SHARD_DROP_CHANCE * 2 : TIME_SHARD_DROP_CHANCE;
 }
 
 // --- Weapon passive parameter maps ---
@@ -178,7 +178,8 @@ const STATUS_IMMUNITY: Partial<Record<StatusEffect, string>> = {
 
 /** Applies a status effect to the player. */
 export function applyPlayerStatus(state: GameState, status: StatusEffect, turns: number, attacker?: Enemy): void {
-  if (state.run.equippedAccessory?.passive === STATUS_IMMUNITY[status]) {
+  const immunityPassive = STATUS_IMMUNITY[status];
+  if (immunityPassive && hasAccessoryPassive(state, immunityPassive)) {
     notifyFloatingText(state.run.playerX, state.run.playerY, 'IMMUNE', 'immune');
     return;
   }
@@ -332,7 +333,7 @@ export function killEnemy(state: GameState, enemy: Enemy, source: 'bump' | 'skil
     logLine(state, 'Execution refund: +1 Stamina.');
   }
 
-  if (state.run.equippedAccessory?.passive === 'lifesteal_1') {
+  if (hasAccessoryPassive(state, 'lifesteal_1')) {
     state.run.currentHp = Math.min(state.run.maxHp, state.run.currentHp + 1);
     logLine(state, 'Vampire Tooth pulses — +1 HP.');
   }
@@ -686,7 +687,7 @@ export function enemyAttackPlayer(state: GameState, enemy: Enemy): void {
     logLine(state, 'You are Stunned!');
   }
 
-  if (state.run.equippedAccessory?.passive === 'retaliation_2') {
+  if (hasAccessoryPassive(state, 'retaliation_2')) {
     const retaliateDmg = computeDamage(2, enemy.defense, 'PHYSICAL', enemy.element);
     enemy.hp -= retaliateDmg;
     logLine(state, `Spiked Pauldrons retaliate for ${retaliateDmg}.`);

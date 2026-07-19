@@ -1,7 +1,7 @@
 // Skill execution.
 
 import { SKILLS, rollRandomConsumable } from './content';
-import { elementSynergyBonus, pickupItemsAt, totalAtk } from './inventory';
+import { elementSynergyBonus, hasAccessoryPassive, pickupItemsAt, totalAtk } from './inventory';
 import { applyEnemyStatus, applyKnockback, skillDamageEnemy } from './combat';
 import { isWalkableAt, TILE } from './mapgen';
 import { consumeStunnedAction, tryDescendIfOnStairs } from './movement';
@@ -52,14 +52,14 @@ let ultimaStaminaSpent = 0;
 
 /** Returns stamina cost for a skill. */
 function skillStaminaCost(state: GameState, skillId: string, level: number): number {
-  if (state.run.equippedAccessory?.passive === 'adrenaline' && state.run.currentHp < 10) return 0;
+  if (hasAccessoryPassive(state, 'adrenaline') && state.run.currentHp < 10) return 0;
   if (skillId === 'ultima') {
     ultimaStaminaSpent = state.run.currentStamina;
     return state.run.currentStamina;
   }
   if (skillId === 'static_shift' && level >= 3) return 2;
   if (skillId === 'dragoon_jump' && level >= 3) return 2;
-  if (skillId === 'dash' && state.run.equippedAccessory?.passive === 'dash_discount') return 1;
+  if (skillId === 'dash' && hasAccessoryPassive(state, 'dash_discount')) return 1;
   return SKILLS[skillId].stamina;
 }
 

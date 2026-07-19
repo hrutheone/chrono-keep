@@ -11,7 +11,8 @@ import { saveGame, saveRunSnapshot } from './persistence';
 import { playDeathSfx, playLoopResetSfx } from './audio';
 import { PLAYER_ID, notifyDeath } from './animation';
 import { notifyFloatingText } from './floatingText';
-import { totalDef } from './inventory';
+import { consumeAccessoryWithPassive, hasAccessoryPassive, totalDef } from './inventory';
+import { isShatteringTutorial } from './shattering';
 import type { GameState } from './types';
 
 export type PlayerActionKind = 'move' | 'attack' | 'wait' | 'skill' | 'item';
@@ -22,7 +23,7 @@ function isHazardAt(state: GameState, x: number, y: number): boolean {
 
 function applyFireHazard(state: GameState): void {
   if (isHazardAt(state, state.run.playerX, state.run.playerY)) {
-    if (state.run.equippedAccessory?.passive !== 'burn_immune') applyPlayerStatus(state, 'BURN', 3);
+    if (!hasAccessoryPassive(state, 'burn_immune')) applyPlayerStatus(state, 'BURN', 3);
   }
 
   for (const enemy of state.dungeon.enemies) {
@@ -236,8 +237,8 @@ function clearCrtWarp(): void {
 /** Shattered Hourglass relic. */
 function tryShatteredHourglass(state: GameState): boolean {
   if (state.run.turnsRemaining > 0 || state.run.currentHp <= 0) return false;
-  if (state.run.equippedAccessory?.passive !== 'safety_net_15') return false;
-  state.run.equippedAccessory = null;
+  if (!hasAccessoryPassive(state, 'safety_net_15')) return false;
+  consumeAccessoryWithPassive(state, 'safety_net_15');
   state.run.turnsRemaining = 15;
   logLine(state, 'The Shattered Hourglass shatters completely — 15 Turns restored!');
   return true;
@@ -254,10 +255,48 @@ function tryPhoenixFeather(state: GameState): boolean {
   return true;
 }
 
+// Shatter Eternity: the Chrono-Lich's scripted kill during The Shattering (Loop 0 only).
+const SHATTER_HP_THRESHOLD = 0.25;
+const SHATTER_DAMAGE = 9999;
+
+function playShatterEternityVisual(): void {
+  const el = document.querySelector('#game');
+  if (!el) return;
+  el.classList.remove('screen-shake-long', 'shatter-flash');
+  void (el as HTMLElement).offsetWidth; // restart the CSS animation
+  el.classList.add('screen-shake-long', 'shatter-flash');
+}
+
+/** The Shattering's scripted loss — fires once, regardless of who "should" have won this exchange. */
+function triggerShatterEternity(state: GameState): void {
+  lossPending = true;
+  state.run.currentHp = 0;
+  notifyDeath(PLAYER_ID, 'PLAYER', state.run.playerX, state.run.playerY, state.run.facing);
+  logLine(state, `Shatter Eternity! The Chrono-Lich unravels the timeline — ${SHATTER_DAMAGE} damage.`);
+  notifyFloatingText(state.run.playerX, state.run.playerY, 'TIMELINE COLLAPSE', 'crit');
+  playShatterEternityVisual();
+  playDeathSfx();
+  playCrtWarp();
+  setTimeout(() => {
+    state.ui.currentScreen = 'DEATH';
+  }, CRT_WARP_MS);
+}
+
 function runCheckPhase(state: GameState): void {
   // Skip Check Phase in Hub.
   if (state.run.currentFloor === HUB_FLOOR) return;
-  if (lossPending || (state.run.turnsRemaining > 0 && state.run.currentHp > 0)) return;
+  if (lossPending) return;
+
+  if (isShatteringTutorial(state)) {
+    const boss = state.dungeon.enemies.find((e) => e.kind === 'CHRONO_LICH');
+    const bossShattered = boss !== undefined && boss.hp <= boss.maxHp * SHATTER_HP_THRESHOLD;
+    if (bossShattered || state.run.currentHp <= 0) {
+      triggerShatterEternity(state);
+      return;
+    }
+  }
+
+  if (state.run.turnsRemaining > 0 && state.run.currentHp > 0) return;
   if (tryShatteredHourglass(state)) return;
   if (tryPhoenixFeather(state)) return;
   lossPending = true;
@@ -276,15 +315,26 @@ function runCheckPhase(state: GameState): void {
 
 /** Continue after death. */
 export function continueAfterDeath(state: GameState): void {
+  const wasTutorial = isShatteringTutorial(state);
   lossPending = false;
   clearCrtWarp();
   state.persistent.loopCount += 1;
-  state.persistent.stats.deepestFloor = Math.max(state.persistent.stats.deepestFloor, state.run.currentFloor);
+
+  if (wasTutorial) {
+    // The Awakening: the vision's borrowed mastery was never really earned.
+    state.persistent.skills = { dash: 1 };
+    state.persistent.skillLoadout = ['dash'];
+  } else {
+    state.persistent.stats.deepestFloor = Math.max(state.persistent.stats.deepestFloor, state.run.currentFloor);
+  }
 
   resetRunForNewLoop(state);
-
   enterHub(state);
   playLoopResetSfx();
+
+  if (wasTutorial) {
+    logLine(state, 'The Hourglass shatters. The time loop begins. You have forgotten your mastery, but you remember your duty.');
+  }
 
   state.ui.currentScreen = 'GAME';
   saveGame(state);
@@ -321,8 +371,11 @@ export async function resolvePlayerTurn(state: GameState, actionKind: PlayerActi
   }
   runEnemyPhase(state);
   runTickPhase(state, actionKind);
-  // Apply Cheat Mode heal.
-  if (state.persistent.cheatModeEnabled) state.run.currentHp = state.run.maxHp;
+  // Cheat Mode: lock HP and Stamina to max.
+  if (state.persistent.cheatModeEnabled) {
+    state.run.currentHp = state.run.maxHp;
+    state.run.currentStamina = state.run.maxStamina;
+  }
   runCheckPhase(state);
   // Snapshot unconditionally.
   saveRunSnapshot(state);

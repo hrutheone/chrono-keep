@@ -2,11 +2,12 @@
 
 import { logLine } from './turns';
 import { saveGame } from './persistence';
+import { hasAccessoryPassive } from './inventory';
 import type { GameState } from './types';
 
 /** Calculates total echo multiplier. */
 function echoMultiplier(state: GameState): number {
-  const charm = state.run.equippedAccessory?.passive === 'echo_bonus_20' ? 1.2 : 1;
+  const charm = hasAccessoryPassive(state, 'echo_bonus_20') ? 1.2 : 1;
   const magnet = state.run.relics.includes('echo_magnet') ? 1.5 : 1;
   return charm * magnet;
 }

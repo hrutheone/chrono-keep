@@ -61,3 +61,39 @@ export function buySkillUpgrade(state: GameState, skillId: string): boolean {
   saveGame(state);
   return true;
 }
+
+// One-time gear-slot unlocks — not part of the leveled Stat Tracks above.
+export type OneTimeUpgradeId = 'weaponSlot2' | 'accessorySlot2' | 'accessorySlot3';
+type BooleanPersistentFlag = 'weaponSlot2Unlocked' | 'accessorySlot2Unlocked' | 'accessorySlot3Unlocked';
+
+export interface OneTimeUpgrade {
+  id: OneTimeUpgradeId;
+  label: string;
+  cost: number;
+  flag: BooleanPersistentFlag;
+  prereqFlag?: BooleanPersistentFlag;
+}
+
+export const ONE_TIME_UPGRADES: readonly OneTimeUpgrade[] = [
+  { id: 'weaponSlot2', label: 'Second Weapon Slot (hold 2, swap active)', cost: 1000, flag: 'weaponSlot2Unlocked' },
+  { id: 'accessorySlot2', label: 'Second Accessory Slot', cost: 1000, flag: 'accessorySlot2Unlocked' },
+  { id: 'accessorySlot3', label: 'Third Accessory Slot', cost: 2500, flag: 'accessorySlot3Unlocked', prereqFlag: 'accessorySlot2Unlocked' },
+];
+
+export function oneTimeUpgradeAvailable(state: GameState, upgrade: OneTimeUpgrade): boolean {
+  return !upgrade.prereqFlag || state.persistent[upgrade.prereqFlag];
+}
+
+export function buyOneTimeUpgrade(state: GameState, id: OneTimeUpgradeId): boolean {
+  const upgrade = ONE_TIME_UPGRADES.find((u) => u.id === id);
+  if (!upgrade) return false;
+  if (state.persistent[upgrade.flag]) return false;
+  if (!oneTimeUpgradeAvailable(state, upgrade)) return false;
+  if (state.persistent.echoes < upgrade.cost) return false;
+  state.persistent.echoes -= upgrade.cost;
+  state.persistent[upgrade.flag] = true;
+  logLine(state, `${upgrade.label} unlocked.`);
+  playPurchaseSfx();
+  saveGame(state);
+  return true;
+}

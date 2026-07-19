@@ -39,6 +39,9 @@ export function createNewGameState(): GameState {
       bestiaryKnown: [],
       ngPlusLevel: 0,
       cheatModeEnabled: false,
+      weaponSlot2Unlocked: false,
+      accessorySlot2Unlocked: false,
+      accessorySlot3Unlocked: false,
     },
 
     run: {
@@ -54,7 +57,10 @@ export function createNewGameState(): GameState {
       facing: 'DOWN',
       inventory: [],
       equippedWeapon: startingWeapon(),
+      equippedWeapon2: null,
       equippedAccessory: null,
+      equippedAccessory2: null,
+      equippedAccessory3: null,
       activeSkills: ['dash'],
       status: 'NONE',
       statusTurns: 0,
@@ -129,7 +135,10 @@ export function resetRunForNewLoop(state: GameState, startFloor = 1): void {
   state.run.startFloor = startFloor;
   state.run.inventory = [];
   state.run.equippedWeapon = startingWeapon();
+  state.run.equippedWeapon2 = null;
   state.run.equippedAccessory = null;
+  state.run.equippedAccessory2 = null;
+  state.run.equippedAccessory3 = null;
   // Copied so run and persistent stay independently mutable.
   state.run.activeSkills = [...state.persistent.skillLoadout];
   state.run.status = 'NONE';
