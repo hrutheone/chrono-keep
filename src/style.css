@@ -710,15 +710,22 @@ body {
   flex-shrink: 0;
 }
 
-.upgrade-shop {
-  overflow-y: auto;
-}
-
 .upgrade-shop h3 {
   font-size: 11px;
   opacity: 0.8;
   margin: 6px 0 4px;
   flex-shrink: 0;
+}
+
+/* Stats/Upgrades/Skills scroll as one region; the detail panel and the
+ * Continue/New Game buttons below stay put, never scrolled out of view. */
+.upgrade-shop-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 

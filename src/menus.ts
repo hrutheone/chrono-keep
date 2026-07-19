@@ -590,6 +590,14 @@ function renderBestiaryTab(state: GameState): string {
     </div>`;
 }
 
+// Current-level bonus math for each Stat Track's detail line (Section 7's per-level amounts).
+const STAT_TRACK_UNIT: Record<StatTrack, { perLevel: number; suffix: string }> = {
+  maxHpUpgrade: { perLevel: 5, suffix: 'HP' },
+  maxStamUpgrade: { perLevel: 2, suffix: 'Stamina' },
+  turnBonusUpgrade: { perLevel: 5, suffix: 'Turns' },
+  baseAtkUpgrade: { perLevel: 1, suffix: 'ATK' },
+};
+
 /** Renders Upgrade Shop detail panel. */
 function renderShopDetail(state: GameState): string {
   if (selectedStatTrack) {
@@ -599,13 +607,15 @@ function renderShopDetail(state: GameState): string {
     const cost = statTrackCost(state, track);
     const maxed = cost === null;
     const disabled = maxed || state.persistent.echoes < (cost ?? 0);
+    const { perLevel, suffix } = STAT_TRACK_UNIT[track];
+    const currentBonus = level > 0 ? ` +${level * perLevel} ${suffix}` : '';
     return `
       <div class="item-detail">
         <div class="item-detail-header">
           <span class="item-detail-icon" style="${spriteCssStyle(STAT_TRACK_SPRITE[track], DETAIL_ICON_SIZE)}"></span>
           <div class="item-detail-heading">
             <div class="item-detail-name">${shortStatLabel(label)}</div>
-            <div class="item-detail-stat">Lv${level}${maxed ? ' (MAX)' : ''}</div>
+            <div class="item-detail-stat">Lv${level}${currentBonus}${maxed ? ' (MAX)' : ''}</div>
           </div>
         </div>
         <div class="item-detail-lore">${label}</div>
@@ -623,7 +633,7 @@ function renderShopDetail(state: GameState): string {
     const maxed = cost === null;
     const disabled = maxed || state.persistent.echoes < (cost ?? 0);
     const buyLabel = maxed ? 'MAX' : level === 0 ? `Unlock (${cost})` : `Upgrade (${cost})`;
-    const nextEffect = maxed ? 'Fully upgraded.' : SKILL_LEVEL_EFFECTS[id as keyof typeof SKILL_LEVEL_EFFECTS][level];
+    const effectLines = renderSkillLevelEffects(id, level);
     return `
       <div class="item-detail">
         <div class="item-detail-header">
@@ -633,7 +643,7 @@ function renderShopDetail(state: GameState): string {
             <div class="item-detail-stat">${level === 0 ? 'Locked' : `Lv${level}${maxed ? ' (MAX)' : ''}`}</div>
           </div>
         </div>
-        <div class="item-detail-lore">${nextEffect}</div>
+        <div class="item-detail-lore">${effectLines}</div>
         <div class="item-detail-actions">
           <button data-action="buy-skill" data-skill="${id}" ${disabled ? 'disabled' : ''}>${buyLabel}</button>
         </div>
@@ -701,12 +711,14 @@ function renderUpgradeShop(state: GameState): string {
     <div class="menu upgrade-shop">
       <h2>Upgrade Shop</h2>
       <div class="stat-line">Echoes: ${state.persistent.echoes}</div>
-      <h3>Stats</h3>
-      <div class="inventory-grid shop-stat-grid">${statGridHtml}</div>
-      <h3>Upgrades</h3>
-      <div class="inventory-grid shop-stat-grid">${upgradeGridHtml}</div>
-      <h3>Skills</h3>
-      <div class="inventory-grid shop-stat-grid">${skillGridHtml}</div>
+      <div class="upgrade-shop-scroll">
+        <h3>Stats</h3>
+        <div class="inventory-grid shop-stat-grid">${statGridHtml}</div>
+        <h3>Upgrades</h3>
+        <div class="inventory-grid shop-stat-grid">${upgradeGridHtml}</div>
+        <h3>Skills</h3>
+        <div class="inventory-grid shop-stat-grid">${skillGridHtml}</div>
+      </div>
       ${renderShopDetail(state)}
       <button class="continue-btn" data-action="shop-continue">${continueLabel}</button>
       <button class="new-game-btn" data-action="new-game">New Game (wipe save)</button>

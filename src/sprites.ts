@@ -65,8 +65,8 @@ export const SKILL_SPRITE_BY_ID: Record<SkillId, SpriteRef> = {
   dash: { col: 24, row: 12 }, // arrow — forward burst
   cleave: { col: 24, row: 11 }, // slash
   flame_arc: SPRITES.FIRE_HAZARD,
-  static_shift: { col: 26, row: 12 }, // 4-way arrows — teleport
-  ice_aegis: SPRITES.FROST_HAZARD,
+  static_shift: { col: 27, row: 13 }, // teleport
+  ice_aegis: { col: 33, row: 10 }, 
   bash: { col: 35, row: 2 }, // hammer (Mythril Hammer's cell)
   dragoon_jump: { col: 33, row: 21 }, // rocket — launch upward
   blizzard_wave: { col: 27, row: 12 }, // snowflake bloom
@@ -74,7 +74,7 @@ export const SKILL_SPRITE_BY_ID: Record<SkillId, SpriteRef> = {
   chakra: { col: 25, row: 12 }, // plus — restore HP
   recall: SPRITES.TIME_SHARD,
   dark_wave: { col: 25, row: 11 }, // crescent slash
-  reflect_barrier: { col: 43, row: 12 }, // glowing orb (hourglass_shard's cell) — ward
+  reflect_barrier: { col: 37, row: 4 }, //
   vanish: { col: 29, row: 11 }, // eye slash
   omnislash: { col: 26, row: 11 }, // double slash — multi-hit
   mug: SPRITES.RELIC, // gold coin — steal
