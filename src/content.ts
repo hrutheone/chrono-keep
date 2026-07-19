@@ -1073,6 +1073,12 @@ const LATE_TIER_WEAPON_KEYS: WeaponKey[] = [
   'DEATHBRINGER', 'APOCALYPSE', 'MASAMUNE',
 ];
 
+/** Rolls a random weapon strictly from the Late Tier (F51-99) pool. */
+export function rollLateTierWeapon(id: string): Weapon {
+  const key = LATE_TIER_WEAPON_KEYS[Math.floor(Math.random() * LATE_TIER_WEAPON_KEYS.length)];
+  return createWeapon(key, id);
+}
+
 /** Rolls regular Elite drop. */
 export function rollEliteDrop(id: string, heldRelics: readonly string[]): Item {
   if (Math.random() < 0.5) {

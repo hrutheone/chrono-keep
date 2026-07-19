@@ -1,17 +1,18 @@
 // Player movement logic.
 
 import { findRangedTarget, playerAttackEnemy, weaponBlockedAtRange } from './combat';
-import { pickupItemsAt } from './inventory';
+import { pickupItemsAt, reforgeWeapon } from './inventory';
 import { onFloorCleared, onFloorEntered } from './echoes';
-import { enterFloor, isWalkableAt, TILE } from './mapgen';
+import { effectiveTileAt, enterFloor, isWalkableAt, TILE } from './mapgen';
 import { HUB_FLOOR } from './hub';
 import { isArenaFloor, enterArenaFloor } from './arenas';
 import { enterBossFloor, FINAL_BOSS_FLOOR } from './bossArena';
 import { showConfirm } from './menus';
 import { isTurnBusy, resolvePlayerTurn } from './turnController';
 import { isRunOver, logLine } from './turns';
-import { playBlockedSfx, playMoveSfx } from './audio';
+import { playBlockedSfx, playEquipSfx, playMoveSfx, playPotionSfx } from './audio';
 import { saveRunSnapshot } from './persistence';
+import { rollLateTierWeapon } from './content';
 import type { GameState } from './types';
 
 type Facing = GameState['run']['facing'];
@@ -60,6 +61,32 @@ function tryHubInteraction(state: GameState): boolean {
     return true;
   }
   return false;
+}
+
+/** Full HP/Stamina/status restore, then the well reverts to floor. */
+function tryEchoWell(state: GameState, x: number, y: number): void {
+  if (effectiveTileAt(state, x, y) !== TILE.ECHO_WELL) return;
+  state.run.currentHp = state.run.maxHp;
+  state.run.currentStamina = state.run.maxStamina;
+  state.run.status = 'NONE';
+  state.run.statusTurns = 0;
+  state.dungeon.tiles[y][x] = TILE.FLOOR;
+  logLine(state, 'The Echo Well washes over you — fully restored.');
+  playPotionSfx();
+}
+
+/** Destroys the equipped weapon and forges a random Late Tier (F51-99) replacement. */
+function tryChronoAnvil(state: GameState, x: number, y: number): void {
+  if (effectiveTileAt(state, x, y) !== TILE.CHRONO_ANVIL) return;
+  if (!state.run.equippedWeapon) {
+    logLine(state, 'You need to equip a weapon to reforge it.');
+    return;
+  }
+  const forged = rollLateTierWeapon(`f${state.run.currentFloor}-anvil-${x}-${y}`);
+  reforgeWeapon(state, forged);
+  state.dungeon.tiles[y][x] = TILE.FLOOR;
+  logLine(state, 'The Anvil shatters your weapon and forges a masterpiece!');
+  playEquipSfx();
 }
 
 /** Try Cursed Rift interaction. */
@@ -146,6 +173,8 @@ export function tryMove(state: GameState, dx: number, dy: number, facing: Facing
   }
 
   pickupItemsAt(state, nx, ny);
+  tryEchoWell(state, nx, ny);
+  tryChronoAnvil(state, nx, ny);
   if (tryDescendIfOnStairs(state)) return Promise.resolve();
   if (tryHubInteraction(state)) return Promise.resolve();
   if (tryRiftInteraction(state)) return Promise.resolve();

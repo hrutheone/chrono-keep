@@ -29,10 +29,16 @@ export const TILE = {
   SHOP_TERMINAL: 8,
   // Scourge's expiring-tile hazard.
   FROST_HAZARD: 9,
+  ECHO_WELL: 10,
+  CHRONO_ANVIL: 11,
 } as const;
 
 /** Turn-budget guarantee: spawn -> Stairs within 40 walked tiles. */
 export const PATH_BUDGET = 40;
+
+const ECHO_WELL_CHANCE = 0.05;
+const CHRONO_ANVIL_CHANCE = 0.05;
+const MIMIC_CHANCE = 0.02;
 
 const MAX_ATTEMPTS = 50;
 const N = DUNGEON_SIZE;
@@ -46,6 +52,8 @@ const WALKABLE = new Set<number>([
   TILE.FROST_HAZARD,
   TILE.SHORTCUT_GATE,
   TILE.SHOP_TERMINAL,
+  TILE.ECHO_WELL,
+  TILE.CHRONO_ANVIL,
 ]);
 
 /** Shared walkability rule (generator pathing and player movement agree). */
@@ -390,6 +398,7 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
       x: pos.x,
       y: pos.y,
       chestLoot: true,
+      isMimic: rng() < MIMIC_CHANCE,
     });
   }
 
@@ -404,6 +413,30 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
       const pos = pick(rng, spots);
       riftX = pos.x;
       riftY = pos.y;
+    }
+  }
+
+  // Echo Well: full HP/Stamina/status restore, then reverts to floor.
+  if (rng() < ECHO_WELL_CHANCE) {
+    const spots = candidates(
+      (x, y) => tiles[y][x] === TILE.FLOOR && distSpawn[y * N + x] >= 3 && !occupied.has(y * N + x),
+    );
+    if (spots.length > 0) {
+      const pos = pick(rng, spots);
+      tiles[pos.y][pos.x] = TILE.ECHO_WELL;
+      occupied.add(pos.y * N + pos.x);
+    }
+  }
+
+  // Chrono-Anvil: reforges the equipped weapon into a random late-tier one.
+  if (rng() < CHRONO_ANVIL_CHANCE) {
+    const spots = candidates(
+      (x, y) => tiles[y][x] === TILE.FLOOR && distSpawn[y * N + x] >= 3 && !occupied.has(y * N + x),
+    );
+    if (spots.length > 0) {
+      const pos = pick(rng, spots);
+      tiles[pos.y][pos.x] = TILE.CHRONO_ANVIL;
+      occupied.add(pos.y * N + pos.x);
     }
   }
 

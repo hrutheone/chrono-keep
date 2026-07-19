@@ -2,10 +2,19 @@
 
 import { PLAYER_BASE_ATK, PLAYER_BASE_DEF } from './types';
 import type { Accessory, GameState, Item, Weapon } from './types';
-import { FREE_SWAP_PASSIVES, POTION_FIXED_TURN_COST, itemMeltValue, rollChestItem } from './content';
+import {
+  createEnemy,
+  FREE_SWAP_PASSIVES,
+  itemMeltValue,
+  POTION_FIXED_TURN_COST,
+  rollChestItem,
+  scaleEnemyForDepth,
+  scaleEnemyForEchoMagnet,
+  scaleEnemyForNgPlus,
+} from './content';
 import { spendTurn, logLine } from './turns';
 import { awardEchoes } from './echoes';
-import { playAnchorSfx, playEquipSfx, playPickupSfx, playPotionSfx, playPurchaseSfx, playTimeShardSfx, playUnequipSfx, playUnlockSfx } from './audio';
+import { playAnchorSfx, playBossTelegraphSfx, playEquipSfx, playPickupSfx, playPotionSfx, playPurchaseSfx, playTimeShardSfx, playUnequipSfx, playUnlockSfx } from './audio';
 import { notifyFloatingText } from './floatingText';
 
 // Matches the 5x5 grid in menus.ts/style.css's .inventory-grid.
@@ -209,6 +218,19 @@ export function pickupItemsAt(state: GameState, x: number, y: number): void {
     const worldItem = state.dungeon.items[idx];
     const item = worldItem.item;
 
+    if (worldItem.isMimic) {
+      state.dungeon.items.splice(idx, 1);
+      const enemy = createEnemy('TIME_WEAVER', `f${state.run.currentFloor}-mimic-${x}-${y}`, x, y);
+      scaleEnemyForDepth(enemy, state.run.currentFloor);
+      scaleEnemyForNgPlus(enemy, state.persistent.ngPlusLevel);
+      scaleEnemyForEchoMagnet(enemy, state.run.relics.includes('echo_magnet'));
+      enemy.awake = true;
+      state.dungeon.enemies.push(enemy);
+      logLine(state, 'The chest was a Time-Mimic!');
+      playBossTelegraphSfx();
+      continue;
+    }
+
     if (item.kind === 'ANCHOR') {
       state.dungeon.items.splice(idx, 1);
       const nextBiomeStart = Math.min(91, Math.floor(state.run.currentFloor / 10) * 10 + 1);
@@ -296,6 +318,13 @@ function equipWeapon(state: GameState, invIndex: number, weapon: Weapon): void {
   chargeInventoryAction(state, freeAlways);
   logLine(state, `Equipped ${weapon.name}.`);
   playEquipSfx();
+}
+
+/** Destroys the equipped weapon and replaces it, without returning the old one to inventory. */
+export function reforgeWeapon(state: GameState, weapon: Weapon): void {
+  applyMaxHpDelta(state, -weaponHpBonus(state.run.equippedWeapon));
+  state.run.equippedWeapon = weapon;
+  applyMaxHpDelta(state, weaponHpBonus(weapon));
 }
 
 /** Stashes a weapon into the (unlockable) second weapon slot — the bench slot, not usable in combat until swapped active. */

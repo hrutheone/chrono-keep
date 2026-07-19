@@ -48,7 +48,7 @@ export const SPRITES = {
   WALL_T: { col: 10, row: 1 }, // 3-way wall junction, drawn connecting North+East+South
   WALL_CROSS: { col: 11, row: 1 }, // 4-way wall junction (symmetric)
   WALL_END: { col: 12, row: 1 }, // wall dead-end, drawn connecting North only
-  DOOR: { col: 0, row: 0 }, // door arch
+  DOOR: { col: 0, row: 0 }, // no door
   STAIRS: { col: 2, row: 6 }, // stairs
   SHORTCUT_GATE: { col: 1, row: 9 }, // blue gate
   BOSS_GATE: { col: 0, row: 9 }, // blue padlock
@@ -56,6 +56,8 @@ export const SPRITES = {
   FROST_HAZARD: { col: 14, row: 18 }, // blue water droplet
   SHOP_TERMINAL: { col: 0, row: 20 }, // tree brach
   CURSED_RIFT: { col: 13, row: 17 }, // dark red brick pattern — ominous texture
+  ECHO_WELL: { col: 8, row: 5 }, // solid glowing-blue pool tile
+  CHRONO_ANVIL: { col: 48, row: 4 }, // same solid brown block used for the Giant's Anvil relic
 
   // --- World-item pickups ---
   CHEST: { col: 8, row: 6 }, // brown chest with a latch

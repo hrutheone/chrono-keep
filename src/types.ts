@@ -192,4 +192,5 @@ export interface WorldItem {
   x: number;
   y: number;
   chestLoot?: boolean;
+  isMimic?: boolean;
 }

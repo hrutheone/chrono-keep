@@ -115,6 +115,8 @@ const TILE_REFS: Partial<Record<number, SpriteRef>> = {
   [TILE.FIRE_HAZARD]: SPRITES.FIRE_HAZARD,
   [TILE.FROST_HAZARD]: SPRITES.FROST_HAZARD,
   [TILE.SHOP_TERMINAL]: SPRITES.SHOP_TERMINAL,
+  [TILE.ECHO_WELL]: SPRITES.ECHO_WELL,
+  [TILE.CHRONO_ANVIL]: SPRITES.CHRONO_ANVIL,
 };
 
 // Wall autotiling: bitmask of which cardinal neighbors are also walls (N=1, E=2, S=4, W=8)
