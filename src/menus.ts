@@ -39,7 +39,7 @@ import { logLine } from './turns';
 import { awardEchoes } from './echoes';
 import { resetRunForNewLoop, resetToNewGame, rerollSeedKeepProgress } from './state';
 import { enterShatteringTutorial, isShatteringTutorial } from './shattering';
-import { getMasterVolume, isMuted, playNewGameSfx, playWarpSfx, setMasterVolume, toggleMuted } from './audio';
+import { getMasterVolume, isMuted, playErrorSound, playHoverSound, playNewGameSfx, playSelectSound, playWarpSfx, setMasterVolume, toggleMuted } from './audio';
 import {
   buyOneTimeUpgrade,
   buySkillUpgrade,
@@ -1030,23 +1030,36 @@ export function initMenus(state: GameState): void {
     if (!target) return;
     const { action, index, skill, slot, track, tab, floor, relic, enemy, upgrade } = target.dataset;
 
-    if (action === 'select-item') selectedInvIndex = Number(index);
-    else if (action === 'menu-tab') menuTab = (tab as MenuTabId) ?? 'status';
-    else if (action === 'select-relic') selectedRelicEffect = relic ?? null;
-    else if (action === 'select-skill') selectedSkillId = skill ?? null;
-    else if (action === 'select-enemy') selectedBestiaryKind = (enemy as EnemyKind) ?? null;
-    else if (action === 'select-stat') {
+    if (action === 'select-item') {
+      selectedInvIndex = Number(index);
+      playSelectSound();
+    } else if (action === 'menu-tab') {
+      menuTab = (tab as MenuTabId) ?? 'status';
+      playSelectSound();
+    } else if (action === 'select-relic') {
+      selectedRelicEffect = relic ?? null;
+      playSelectSound();
+    } else if (action === 'select-skill') {
+      selectedSkillId = skill ?? null;
+      playSelectSound();
+    } else if (action === 'select-enemy') {
+      selectedBestiaryKind = (enemy as EnemyKind) ?? null;
+      playSelectSound();
+    } else if (action === 'select-stat') {
       selectedStatTrack = (track as StatTrack) ?? null;
       selectedShopSkillId = null;
       selectedUpgradeId = null;
+      playSelectSound();
     } else if (action === 'select-shop-skill') {
       selectedShopSkillId = skill ?? null;
       selectedStatTrack = null;
       selectedUpgradeId = null;
+      playSelectSound();
     } else if (action === 'select-upgrade') {
       selectedUpgradeId = (upgrade as OneTimeUpgradeId) ?? null;
       selectedStatTrack = null;
       selectedShopSkillId = null;
+      playSelectSound();
     }
     else if (action === 'use-selected' && selectedInvIndex !== null) {
       const item = state.run.inventory[selectedInvIndex];
@@ -1071,7 +1084,10 @@ export function initMenus(state: GameState): void {
       logLine(state, `Cheat Mode: ${state.persistent.cheatModeEnabled ? 'ON' : 'OFF'}.`);
       saveGame(state);
     }
-    else if (action === 'assign-skill') assignSkill(state, skill!, slot as SkillSlot);
+    else if (action === 'assign-skill') {
+      assignSkill(state, skill!, slot as SkillSlot);
+      playSelectSound();
+    }
     else if (action === 'toggle-mute') {
       toggleMuted();
       saveAudioSettings({ volume: getMasterVolume(), muted: isMuted() });
@@ -1083,21 +1099,44 @@ export function initMenus(state: GameState): void {
     else if (action === 'buy-skill') buySkillUpgrade(state, skill!);
     else if (action === 'buy-upgrade') buyOneTimeUpgrade(state, upgrade as OneTimeUpgradeId);
     else if (action === 'warp') warpFromGate(state, Number(floor));
-    else if (action === 'shop-continue') state.ui.currentScreen = 'GAME';
+    else if (action === 'shop-continue') {
+      state.ui.currentScreen = 'GAME';
+      playSelectSound();
+    }
     else if (action === 'new-game') startNewGame(state);
     else if (action === 'title-continue') continueSave(state);
     else if (action === 'death-continue') continueAfterDeath(state);
     else if (action === 'victory-newgameplus') startNewGamePlus(state);
-    else if (action === 'confirm-yes') answerPendingConfirm(state, true);
-    else if (action === 'confirm-no') answerPendingConfirm(state, false);
+    else if (action === 'confirm-yes') {
+      answerPendingConfirm(state, true);
+      playSelectSound();
+    } else if (action === 'confirm-no') {
+      answerPendingConfirm(state, false);
+      playSelectSound();
+    }
     else if (action === 'rift-accept') resolveRiftPact(state, true);
     else if (action === 'rift-decline') resolveRiftPact(state, false);
-    else if (action === 'close-menu') state.ui.currentScreen = 'GAME';
+    else if (action === 'close-menu') {
+      state.ui.currentScreen = 'GAME';
+      playSelectSound();
+    }
     else if (action === 'dev-warp') devWarp(state);
     else if (action === 'dev-echoes') devAddEchoes(state);
     else if (action === 'dev-kill') devForceDeath(state);
 
     render(state);
+  });
+
+  let lastHoverTarget: HTMLElement | null = null;
+  screenEl().addEventListener('mouseover', (ev) => {
+    const target = (ev.target as HTMLElement).closest<HTMLElement>('[data-action]');
+    if (!target || target === lastHoverTarget) return;
+    lastHoverTarget = target;
+    if (target.matches(':disabled')) playErrorSound();
+    else playHoverSound();
+  });
+  screenEl().addEventListener('mouseout', (ev) => {
+    if (!(ev.relatedTarget as HTMLElement | null)?.closest('[data-action]')) lastHoverTarget = null;
   });
 }
 

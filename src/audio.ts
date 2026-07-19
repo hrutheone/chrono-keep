@@ -146,6 +146,51 @@ function noiseBurst(duration: number, gain = 0.25): void {
   src.stop(ctx.currentTime + duration);
 }
 
+/** Brown noise: a random walk over white noise, reads as a deeper, softer rumble than flat white noise. */
+function brownNoiseBurst(duration: number, gain: number): void {
+  if (!ctx || !master) return;
+  const size = Math.max(1, Math.floor(ctx.sampleRate * duration));
+  const buffer = ctx.createBuffer(1, size, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  let lastOut = 0;
+  for (let i = 0; i < size; i++) {
+    const white = Math.random() * 2 - 1;
+    lastOut = (lastOut + 0.02 * white) / 1.02;
+    data[i] = lastOut * 3.5;
+  }
+  const src = ctx.createBufferSource();
+  src.buffer = buffer;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(gain, ctx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
+  src.connect(g);
+  g.connect(master);
+  src.start();
+  src.stop(ctx.currentTime + duration);
+}
+
+function noiseBurstHighpass(duration: number, gain: number, cutoff: number, delay = 0): void {
+  if (!ctx || !master) return;
+  const t0 = ctx.currentTime + delay;
+  const size = Math.max(1, Math.floor(ctx.sampleRate * duration));
+  const buffer = ctx.createBuffer(1, size, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < size; i++) data[i] = Math.random() * 2 - 1;
+  const src = ctx.createBufferSource();
+  src.buffer = buffer;
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'highpass';
+  filter.frequency.value = cutoff;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(gain, t0);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+  src.connect(filter);
+  filter.connect(g);
+  g.connect(master);
+  src.start(t0);
+  src.stop(t0 + duration);
+}
+
 const ELEMENT_FREQ: Record<Element, number> = {
   PHYSICAL: 180,
   FIRE: 260,
@@ -279,6 +324,53 @@ export function playDeathSfx(): void {
   tone({ freq: 300, duration: 0.5, type: 'sawtooth', gain: 0.22, freqEnd: 60 });
 }
 
+/** Frost enemy death: a high triangle tone with fast amplitude-modulated tremolo, for an icy shatter. */
+function playFrostShatterSfx(): void {
+  if (!ctx || !master) return;
+  const t0 = ctx.currentTime;
+  const duration = 0.35;
+  const osc = ctx.createOscillator();
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(1200, t0);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.2, t0);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+  const lfo = ctx.createOscillator();
+  lfo.type = 'sine';
+  lfo.frequency.setValueAtTime(28, t0);
+  const lfoGain = ctx.createGain();
+  lfoGain.gain.setValueAtTime(0.15, t0);
+  lfo.connect(lfoGain);
+  lfoGain.connect(g.gain);
+  osc.connect(g);
+  g.connect(master);
+  osc.start(t0);
+  osc.stop(t0 + duration);
+  lfo.start(t0);
+  lfo.stop(t0 + duration);
+}
+
+/** Per-element enemy death cue. */
+export function playEnemyDeathSfx(element: Element): void {
+  switch (element) {
+    case 'PHYSICAL':
+      noiseBurst(0.1, 0.24);
+      break;
+    case 'FIRE':
+      brownNoiseBurst(0.3, 0.2);
+      break;
+    case 'VOLT':
+      tone({ freq: 1000, duration: 0.2, type: 'sawtooth', gain: 0.22, freqEnd: 100 });
+      break;
+    case 'FROST':
+      playFrostShatterSfx();
+      break;
+    case 'CHRONO':
+      tone({ freq: 200, duration: 0.3, type: 'sine', gain: 0.2, freqEnd: 800 });
+      break;
+  }
+}
+
 /** Victory sound. */
 export function playVictorySfx(): void {
   [523, 659, 784, 1047].forEach((freq, i) => tone({ freq, duration: 0.3, type: 'square', gain: 0.22, delay: i * 0.1 }));
@@ -309,6 +401,29 @@ export function playPurchaseSfx(): void {
 /** Skill unlock/upgrade sound. */
 export function playSkillUnlockSfx(): void {
   [330, 440, 554, 660].forEach((freq, i) => tone({ freq, duration: 0.12, type: 'triangle', gain: 0.2, delay: i * 0.06 }));
+}
+
+/** Button hover tick. */
+export function playHoverSound(): void {
+  tone({ freq: 800, duration: 0.02, type: 'sine', gain: 0.08 });
+}
+
+/** Generic UI selection/confirm blip. */
+export function playSelectSound(): void {
+  tone({ freq: 400, duration: 0.1, type: 'square', gain: 0.18, freqEnd: 600 });
+}
+
+/** Item melted for Echoes — a crystalline shatter. */
+export function playMeltSound(): void {
+  tone({ freq: 800, duration: 0.06, type: 'triangle', gain: 0.18 });
+  tone({ freq: 600, duration: 0.06, type: 'triangle', gain: 0.16, delay: 0.05 });
+  tone({ freq: 400, duration: 0.08, type: 'triangle', gain: 0.14, delay: 0.1 });
+  noiseBurstHighpass(0.08, 0.12, 3500, 0.1);
+}
+
+/** Action unavailable (disabled button, on cooldown, etc). */
+export function playErrorSound(): void {
+  tone({ freq: 150, duration: 0.15, type: 'sawtooth', gain: 0.16 });
 }
 
 // Music scheduler: seamlessly loops scheduled notes using a lookahead polling approach.

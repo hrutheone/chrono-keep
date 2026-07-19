@@ -14,7 +14,7 @@ import {
 } from './content';
 import { spendTurn, logLine } from './turns';
 import { awardEchoes } from './echoes';
-import { playAnchorSfx, playBossTelegraphSfx, playEquipSfx, playPickupSfx, playPotionSfx, playPurchaseSfx, playTimeShardSfx, playUnequipSfx, playUnlockSfx } from './audio';
+import { playAnchorSfx, playBossTelegraphSfx, playEquipSfx, playMeltSound, playPickupSfx, playPotionSfx, playTimeShardSfx, playUnequipSfx, playUnlockSfx } from './audio';
 import { notifyFloatingText } from './floatingText';
 
 // Matches the 5x5 grid in menus.ts/style.css's .inventory-grid.
@@ -303,7 +303,7 @@ export function meltItem(state: GameState, invIndex: number): void {
   const units = item.count && item.count > 1 ? item.count : 1;
   // Award echoes.
   awardEchoes(state, itemMeltValue(item) * units, units > 1 ? `melted ${item.name} x${units}` : `melted ${item.name}`);
-  playPurchaseSfx();
+  playMeltSound();
 }
 
 function equipWeapon(state: GameState, invIndex: number, weapon: Weapon): void {

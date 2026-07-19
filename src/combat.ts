@@ -20,7 +20,7 @@ import { openBossGate } from './arenas';
 import { logLine } from './turns';
 import { awardEchoes, markFloorDamageTaken } from './echoes';
 import { triggerVictory } from './victory';
-import { playAttackSfx, playEnemyHitPlayerSfx, playStatusApplySfx } from './audio';
+import { playAttackSfx, playEnemyDeathSfx, playEnemyHitPlayerSfx, playStatusApplySfx } from './audio';
 import { PLAYER_ID, notifyAttack, notifyDeath, spawnDeathParticles } from './animation';
 import { notifyFloatingText } from './floatingText';
 import type { Element, Enemy, GameState, StatusEffect } from './types';
@@ -296,6 +296,7 @@ export function killEnemy(state: GameState, enemy: Enemy, source: 'bump' | 'skil
   state.dungeon.enemies = state.dungeon.enemies.filter((e) => e.id !== enemy.id);
   notifyDeath(enemy.id, enemy.kind, enemy.x, enemy.y);
   spawnDeathParticles(enemy.x, enemy.y);
+  playEnemyDeathSfx(enemy.element);
 
   // Ash-Fiend: leaves a Fire Hazard where it dies.
   if (enemy.kind === 'ASH_FIEND') placeFireHazard(state, enemy.x, enemy.y, 2);
