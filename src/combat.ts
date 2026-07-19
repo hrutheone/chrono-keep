@@ -46,6 +46,15 @@ const NORMAL_ENEMY_KINDS = new Set<Enemy['kind']>([
   'CINDER_SHAMAN',
   'VOLT_HOUND',
   'FROST_SENTINEL',
+  'CLOCKWORK_SCARAB',
+  'DREAD_LEGION',
+  'DOOM_GUARD',
+  'ASH_FIEND',
+  'HELLFIRE_MAGUS',
+  'TESLA_COIL',
+  'STORM_STALKER',
+  'VOID_SPIRIT',
+  'GLACIAL_MONOLITH',
 ]);
 
 /** Elemental damage multiplier. */
@@ -75,8 +84,8 @@ function randomElement(): Element {
 
 /** Pushes the defender away from the player. */
 export function applyKnockback(state: GameState, enemy: Enemy, dx: number, dy: number, tiles: number): void {
-  // [Armored] affix: immune to Knockback.
-  if (enemy.affix === 'armored') return;
+  // [Armored] affix and Dread-Legion: immune to Knockback.
+  if (enemy.affix === 'armored' || enemy.kind === 'DREAD_LEGION') return;
   for (let i = 0; i < tiles; i++) {
     const nx = enemy.x + dx;
     const ny = enemy.y + dy;
@@ -287,6 +296,9 @@ export function killEnemy(state: GameState, enemy: Enemy, source: 'bump' | 'skil
   state.dungeon.enemies = state.dungeon.enemies.filter((e) => e.id !== enemy.id);
   notifyDeath(enemy.id, enemy.kind, enemy.x, enemy.y);
   spawnDeathParticles(enemy.x, enemy.y);
+
+  // Ash-Fiend: leaves a Fire Hazard where it dies.
+  if (enemy.kind === 'ASH_FIEND') placeFireHazard(state, enemy.x, enemy.y, 2);
 
   // Handle elite or normal drops.
   if (enemy.affix === 'wealthy') {
@@ -677,6 +689,16 @@ export function enemyAttackPlayer(state: GameState, enemy: Enemy): void {
     return;
   }
 
+  // Clockwork Scarab: 1 flat damage, but steals 3 Turns instead.
+  if (enemy.kind === 'CLOCKWORK_SCARAB') {
+    state.run.currentHp = Math.max(0, state.run.currentHp - 1);
+    state.run.turnsRemaining = Math.max(0, state.run.turnsRemaining - 3);
+    markFloorDamageTaken(state);
+    logLine(state, `${ENEMY_NAME[enemy.kind]} nips you for 1 and steals 3 Turns!`);
+    notifyFloatingText(state.run.playerX, state.run.playerY, '-3 TURNS', 'damage');
+    return;
+  }
+
   const dmg = computeDamage(enemy.attack, totalDef(state), enemy.element, playerElement(state));
   state.run.currentHp = Math.max(0, state.run.currentHp - dmg);
   markFloorDamageTaken(state);
@@ -696,8 +718,24 @@ export function enemyAttackPlayer(state: GameState, enemy: Enemy): void {
     logLine(state, 'You are Chilled!');
   }
 
+  // Void-Spirit: higher Chill chance, and drains Stamina on hit.
+  if (enemy.kind === 'VOID_SPIRIT') {
+    if (Math.random() < 0.5) {
+      applyPlayerStatus(state, 'CHILLED', 3, enemy);
+      logLine(state, 'You are Chilled!');
+    }
+    state.run.currentStamina = Math.max(0, state.run.currentStamina - 1);
+    logLine(state, 'The Void-Spirit drains 1 Stamina.');
+  }
+
   // Volt-Hound stun proc.
   if (enemy.kind === 'VOLT_HOUND' && Math.random() < 0.25) {
+    applyPlayerStatus(state, 'STUN', 1, enemy);
+    logLine(state, 'You are Stunned!');
+  }
+
+  // Storm-Stalker: Paralyzing Bite, higher Stun chance.
+  if (enemy.kind === 'STORM_STALKER' && Math.random() < 0.5) {
     applyPlayerStatus(state, 'STUN', 1, enemy);
     logLine(state, 'You are Stunned!');
   }

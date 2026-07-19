@@ -30,6 +30,17 @@ export const SPRITES = {
   STORM_CALLER: { col: 27, row: 3 }, // robed bust, distinct floatier silhouette
   GLACIAL_KNIGHT: { col: 31, row: 6 }, // bust with a slotted armor-plate torso
 
+  // --- Tier 3 (Floor 41+ upgrades) — same silhouette as base kind, tinted via auraColor ---
+  CLOCKWORK_SCARAB: { col: 30, row: 6 }, // mechanical-arm bust reused for the clockwork look
+  DREAD_LEGION: { col: 29, row: 6 }, // same as Bone-Grunt
+  DOOM_GUARD: { col: 30, row: 6 }, // same as Bone-Knight
+  ASH_FIEND: { col: 26, row: 8 }, // same as Ember-Bat
+  HELLFIRE_MAGUS: { col: 24, row: 1 }, // same as Cinder-Shaman
+  TESLA_COIL: { col: 18, row: 7 }, // same as Volt-Turret
+  STORM_STALKER: { col: 28, row: 7 }, // same as Volt-Hound
+  VOID_SPIRIT: { col: 24, row: 8 }, // same as Frost-Wraith
+  GLACIAL_MONOLITH: { col: 24, row: 7 }, // same as Frost-Sentinel
+
   // --- Terrain ---
   FLOOR: { col: 0, row: 0 }, // dark ground
   WALL: { col: 8, row: 1 }, // straight wall segment, drawn vertical (N-S)

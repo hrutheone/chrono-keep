@@ -176,6 +176,15 @@ const ENEMY_REFS: Record<Enemy['kind'], SpriteRef> = {
   INFERNO_GOLEM: SPRITES.INFERNO_GOLEM,
   STORM_CALLER: SPRITES.STORM_CALLER,
   GLACIAL_KNIGHT: SPRITES.GLACIAL_KNIGHT,
+  CLOCKWORK_SCARAB: SPRITES.CLOCKWORK_SCARAB,
+  DREAD_LEGION: SPRITES.DREAD_LEGION,
+  DOOM_GUARD: SPRITES.DOOM_GUARD,
+  ASH_FIEND: SPRITES.ASH_FIEND,
+  HELLFIRE_MAGUS: SPRITES.HELLFIRE_MAGUS,
+  TESLA_COIL: SPRITES.TESLA_COIL,
+  STORM_STALKER: SPRITES.STORM_STALKER,
+  VOID_SPIRIT: SPRITES.VOID_SPIRIT,
+  GLACIAL_MONOLITH: SPRITES.GLACIAL_MONOLITH,
 };
 
 // 2x scale enemies.
@@ -367,6 +376,9 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
       ctx.globalAlpha = 0.5;
     } else if (e.affix && e.affix !== 'colossal' && e.affix !== 'shielded') {
       ctx.shadowColor = eliteAffixColor(e.affix);
+      ctx.shadowBlur = 10;
+    } else if (e.auraColor) {
+      ctx.shadowColor = e.auraColor;
       ctx.shadowBlur = 10;
     }
     drawRef(ctx, ENEMY_REFS[e.kind], drawPx, drawPy, false, visual.flashing, size);

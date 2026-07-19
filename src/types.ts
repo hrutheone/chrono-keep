@@ -127,7 +127,16 @@ export interface Enemy {
     | 'FROST_SENTINEL'
     | 'INFERNO_GOLEM'
     | 'STORM_CALLER'
-    | 'GLACIAL_KNIGHT';
+    | 'GLACIAL_KNIGHT'
+    | 'CLOCKWORK_SCARAB'
+    | 'DREAD_LEGION'
+    | 'DOOM_GUARD'
+    | 'ASH_FIEND'
+    | 'HELLFIRE_MAGUS'
+    | 'TESLA_COIL'
+    | 'STORM_STALKER'
+    | 'VOID_SPIRIT'
+    | 'GLACIAL_MONOLITH';
   x: number;
   y: number;
   hp: number;
@@ -149,6 +158,7 @@ export interface Enemy {
 
   affix?: string;
   shieldedHitsLeft?: number;
+  auraColor?: string;
 }
 
 export interface Item {

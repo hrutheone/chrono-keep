@@ -176,7 +176,7 @@ function erraticStep(state: GameState, enemy: Enemy, steps: number): void {
 }
 
 /** Turret behavior. */
-function turretAct(state: GameState, enemy: Enemy): void {
+function turretAct(state: GameState, enemy: Enemy, range = 4): void {
   const count = (activationCounters.get(enemy.id) ?? 0) + 1;
   activationCounters.set(enemy.id, count);
   if (count % 2 !== 0) return;
@@ -191,7 +191,7 @@ function turretAct(state: GameState, enemy: Enemy): void {
   let endX = enemy.x;
   let endY = enemy.y;
   let hit = false;
-  for (let i = 1; i <= 4; i++) {
+  for (let i = 1; i <= range; i++) {
     const tx = enemy.x + dx * i;
     const ty = enemy.y + dy * i;
     if (tx === state.run.playerX && ty === state.run.playerY) {
@@ -282,7 +282,7 @@ function golemAct(state: GameState, enemy: Enemy): void {
 }
 
 /** Shaman behavior. */
-function shamanAct(state: GameState, enemy: Enemy): void {
+function shamanAct(state: GameState, enemy: Enemy, castCadence = 3): void {
   const count = (activationCounters.get(enemy.id) ?? 0) + 1;
   activationCounters.set(enemy.id, count);
 
@@ -291,7 +291,7 @@ function shamanAct(state: GameState, enemy: Enemy): void {
   else if (dist < 4) fleeStep(state, enemy, enemy.speed);
   else if (dist > 6) chaseStep(state, enemy, enemy.speed, true);
 
-  if (count % 3 === 0) castFirebomb(state, enemy);
+  if (count % castCadence === 0) castFirebomb(state, enemy);
 }
 
 /** Chain Bolt cast. */
@@ -415,6 +415,35 @@ function sentinelAct(state: GameState, enemy: Enemy): void {
   castFrostPulse(state, enemy);
 }
 
+/** Blizzard Pulse: a stationary 3x3 square AOE centered on self, instead of a cross. */
+function castBlizzardPulse(state: GameState, enemy: Enemy): void {
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      if (dx === 0 && dy === 0) continue;
+      const tx = enemy.x + dx;
+      const ty = enemy.y + dy;
+      if (!inBounds(state, tx, ty) || !isWalkableAt(state, tx, ty)) continue;
+      state.dungeon.telegraphTiles.push({
+        x: tx,
+        y: ty,
+        turnsUntil: FROST_PULSE_TELEGRAPH_TURNS,
+        payload: 'chill_pulse',
+        sourceAttack: enemy.attack,
+      });
+    }
+  }
+  logLine(state, `${ENEMY_NAME[enemy.kind]} channels a blizzard pulse!`);
+  playBossTelegraphSfx();
+}
+
+/** Monolith behavior. */
+function monolithAct(state: GameState, enemy: Enemy): void {
+  const count = (activationCounters.get(enemy.id) ?? 0) + 1;
+  activationCounters.set(enemy.id, count);
+  if (count % 2 !== 0) return;
+  castBlizzardPulse(state, enemy);
+}
+
 /** Frozen Sweep cast. */
 function castFrozenSweep(state: GameState, enemy: Enemy): void {
   const hitsPlayer = ALL_8.some(([dx, dy]) => enemy.x + dx === state.run.playerX && enemy.y + dy === state.run.playerY);
@@ -456,6 +485,13 @@ function castIceBarricade(state: GameState, enemy: Enemy): void {
   }
   logLine(state, `${ENEMY_NAME[enemy.kind]} raises an Ice-Barricade!`);
   playBossTelegraphSfx();
+}
+
+/** Doom-Guard behavior: below 50% HP, its Speed permanently rises to 2. */
+function doomGuardAct(state: GameState, enemy: Enemy): void {
+  const speed = enemy.status === 'CHILLED' ? Math.max(1, Math.floor(enemy.speed / 2)) : enemy.speed;
+  const enraged = enemy.hp <= enemy.maxHp * 0.5;
+  chaseStep(state, enemy, enraged ? 2 : speed, true);
 }
 
 /** Knight behavior. */
@@ -620,22 +656,39 @@ function actEnemy(state: GameState, enemy: Enemy): void {
     case 'TIME_WEAVER':
     case 'BONE_KNIGHT':
     case 'VOLT_HOUND':
+    case 'DREAD_LEGION':
+    case 'STORM_STALKER':
+    case 'CLOCKWORK_SCARAB':
       chaseStep(state, enemy, speed, true);
       break;
     case 'EMBER_BAT':
+    case 'ASH_FIEND':
       erraticStep(state, enemy, speed);
       break;
     case 'FROST_WRAITH':
+    case 'VOID_SPIRIT':
       chaseStep(state, enemy, speed, false);
       break;
     case 'VOLT_TURRET':
-      turretAct(state, enemy);
+      turretAct(state, enemy, 4);
+      break;
+    case 'TESLA_COIL':
+      turretAct(state, enemy, 8);
       break;
     case 'CINDER_SHAMAN':
-      shamanAct(state, enemy);
+      shamanAct(state, enemy, 3);
+      break;
+    case 'HELLFIRE_MAGUS':
+      shamanAct(state, enemy, 2);
       break;
     case 'FROST_SENTINEL':
       sentinelAct(state, enemy);
+      break;
+    case 'GLACIAL_MONOLITH':
+      monolithAct(state, enemy);
+      break;
+    case 'DOOM_GUARD':
+      doomGuardAct(state, enemy);
       break;
     case 'INFERNO_GOLEM':
       golemAct(state, enemy);

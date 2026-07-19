@@ -30,7 +30,7 @@ export const BESTIARY: Record<EnemyKind, EnemyTemplate> = {
   VOLT_TURRET: { hp: 25, attack: 6, defense: 1, speed: 0, element: 'VOLT' },
   FROST_WRAITH: { hp: 18, attack: 5, defense: 2, speed: 1, element: 'FROST' },
   TIME_WEAVER: { hp: 40, attack: 8, defense: 4, speed: 1, element: 'CHRONO' },
-  CHRONO_LICH: { hp: 400, attack: 16, defense: 8, speed: 1, element: 'CHRONO' },
+  CHRONO_LICH: { hp: 600, attack: 22, defense: 8, speed: 1, element: 'CHRONO' },
 
   BONE_KNIGHT: { hp: 22, attack: 5, defense: 6, speed: 1, element: 'PHYSICAL' },
   CINDER_SHAMAN: { hp: 14, attack: 6, defense: 1, speed: 1, element: 'FIRE' },
@@ -39,7 +39,42 @@ export const BESTIARY: Record<EnemyKind, EnemyTemplate> = {
 
   INFERNO_GOLEM: { hp: 120, attack: 9, defense: 2, speed: 1, element: 'FIRE' },
   STORM_CALLER: { hp: 100, attack: 11, defense: 3, speed: 1, element: 'VOLT' },
-  GLACIAL_KNIGHT: { hp: 140, attack: 10, defense: 7, speed: 1, element: 'FROST' },
+  GLACIAL_KNIGHT: { hp: 140, attack: 10, defense: 5, speed: 1, element: 'FROST' },
+
+  CLOCKWORK_SCARAB: { hp: 6, attack: 1, defense: 9, speed: 1, element: 'CHRONO' },
+
+  DREAD_LEGION: { hp: 16, attack: 6, defense: 2, speed: 1, element: 'PHYSICAL' },
+  DOOM_GUARD: { hp: 28, attack: 7, defense: 7, speed: 1, element: 'PHYSICAL' },
+  ASH_FIEND: { hp: 12, attack: 7, defense: 0, speed: 2, element: 'FIRE' },
+  HELLFIRE_MAGUS: { hp: 18, attack: 8, defense: 1, speed: 1, element: 'FIRE' },
+  TESLA_COIL: { hp: 35, attack: 8, defense: 4, speed: 0, element: 'VOLT' },
+  STORM_STALKER: { hp: 15, attack: 8, defense: 0, speed: 2, element: 'VOLT' },
+  VOID_SPIRIT: { hp: 24, attack: 7, defense: 3, speed: 1, element: 'FROST' },
+  GLACIAL_MONOLITH: { hp: 28, attack: 7, defense: 6, speed: 0, element: 'FROST' },
+};
+
+/** Aura glow color for Floor-41+ Tier-3 enemy variants. */
+export const AURA_COLOR: Partial<Record<EnemyKind, string>> = {
+  DREAD_LEGION: '#8b0000', // Blood Red
+  DOOM_GUARD: '#4b0082', // Deep Purple
+  ASH_FIEND: '#9e9e8f', // Ash Grey
+  HELLFIRE_MAGUS: '#fff200', // Blinding Yellow
+  TESLA_COIL: '#22e5ff', // Bright Cyan
+  STORM_STALKER: '#1a1a6e', // Dark Blue
+  VOID_SPIRIT: '#0d0d0d', // Pitch Black
+  GLACIAL_MONOLITH: '#ffffff', // Pure White
+};
+
+/** Floors 41+: swaps a base enemy kind for its Tier-3 upgraded variant. */
+const TIER3_UPGRADE: Partial<Record<EnemyKind, EnemyKind>> = {
+  BONE_GRUNT: 'DREAD_LEGION',
+  BONE_KNIGHT: 'DOOM_GUARD',
+  EMBER_BAT: 'ASH_FIEND',
+  CINDER_SHAMAN: 'HELLFIRE_MAGUS',
+  VOLT_TURRET: 'TESLA_COIL',
+  VOLT_HOUND: 'STORM_STALKER',
+  FROST_WRAITH: 'VOID_SPIRIT',
+  FROST_SENTINEL: 'GLACIAL_MONOLITH',
 };
 
 export const ENEMY_NAME: Record<EnemyKind, string> = {
@@ -56,6 +91,15 @@ export const ENEMY_NAME: Record<EnemyKind, string> = {
   INFERNO_GOLEM: 'Inferno-Golem',
   STORM_CALLER: 'Storm-Caller',
   GLACIAL_KNIGHT: 'Glacial-Knight',
+  CLOCKWORK_SCARAB: 'Clockwork Scarab',
+  DREAD_LEGION: 'Dread-Legion',
+  DOOM_GUARD: 'Doom-Guard',
+  ASH_FIEND: 'Ash-Fiend',
+  HELLFIRE_MAGUS: 'Hellfire-Magus',
+  TESLA_COIL: 'Tesla-Coil',
+  STORM_STALKER: 'Storm-Stalker',
+  VOID_SPIRIT: 'Void-Spirit',
+  GLACIAL_MONOLITH: 'Glacial-Monolith',
 };
 
 export const MONSTER_LORE: Record<EnemyKind, string> = {
@@ -85,10 +129,29 @@ export const MONSTER_LORE: Record<EnemyKind, string> = {
     "Once the Keep's chief meteomancer, still mid-ritual when the loop caught her. She keeps casting the storm she can no longer stop, and the Volt-Hounds keep answering a summons centuries stale.",
   GLACIAL_KNIGHT:
     'The last duelist of Oakhaven\'s winter court, sworn to hold this passage until relieved. No one is coming. He holds it anyway.',
+  CLOCKWORK_SCARAB:
+    'A gnawing little paradox, small enough to slip through the cracks in the loop. It does not bite for blood — it bites for time.',
+  DREAD_LEGION:
+    'What the Bone-Grunts become when the loop stops being gentle with them. They no longer feel the shove that used to buy you a breath.',
+  DOOM_GUARD:
+    'A Bone-Knight past caring about its wounds. Half its plate has fallen away, and the rest moves faster for the lightness.',
+  ASH_FIEND:
+    'An Ember-Bat burned down to embers and spite. It dies the way it lived — leaving the ground on fire behind it.',
+  HELLFIRE_MAGUS:
+    "A Cinder-Shaman that stopped waiting for the ritual's proper rhythm. It casts on the offbeat now, and the beat keeps quickening.",
+  TESLA_COIL:
+    'A Volt-Turret rewired for a longer patrol corridor. Its arc no longer forgives distance.',
+  STORM_STALKER:
+    'A Volt-Hound whose bite outlasts the shock. It still hunts in pairs — now it just wins more of those fights.',
+  VOID_SPIRIT:
+    "A Frost-Wraith that gave up on walls entirely. It drifts through stone the way the cold drifts through a held breath, and it takes a little of yours with it.",
+  GLACIAL_MONOLITH:
+    'A Frost-Sentinel that stopped watching corridors and started claiming rooms. Whatever stands near it, stands in the blizzard.',
 };
 
 export function createEnemy(kind: EnemyKind, id: string, x: number, y: number): Enemy {
   const t = BESTIARY[kind];
+  const auraColor = AURA_COLOR[kind];
   return {
     id,
     kind,
@@ -104,6 +167,7 @@ export function createEnemy(kind: EnemyKind, id: string, x: number, y: number): 
     awake: false,
     status: 'NONE',
     statusTurns: 0,
+    ...(auraColor ? { auraColor } : {}),
   };
 }
 
@@ -112,9 +176,9 @@ export function biomeOf(floorNumber: number): number {
   return Math.min(10, Math.floor((floorNumber - 1) / 10) + 1);
 }
 
-/** Depth Multiplier: +15% compounding every 5 floors. */
+/** Depth Multiplier: +8% compounding every 5 floors. */
 export function depthMultiplier(floorNumber: number): number {
-  return Math.pow(1.15, Math.floor((floorNumber - 1) / 5));
+  return Math.pow(1.08, Math.floor((floorNumber - 1) / 5));
 }
 
 /** Applies Depth Multiplier to spawned enemies. */
@@ -145,26 +209,36 @@ export function scaleEnemyForEchoMagnet(enemy: Enemy, active: boolean): void {
 /** Procedural-floor enemy pool. */
 export function enemyPoolForFloor(floorNumber: number): EnemyKind[] {
   const biome = biomeOf(floorNumber);
-  if (biome === 1) return ['BONE_GRUNT', 'EMBER_BAT'];
-  if (biome === 2) return ['BONE_GRUNT', 'EMBER_BAT', 'VOLT_TURRET', 'FROST_WRAITH'];
+  let pool: EnemyKind[];
+  if (biome === 1) {
+    pool = ['BONE_GRUNT', 'EMBER_BAT'];
+  } else if (biome === 2) {
+    pool = ['BONE_GRUNT', 'EMBER_BAT', 'VOLT_TURRET', 'FROST_WRAITH'];
+  } else {
+    const full: EnemyKind[] = [
+      'BONE_GRUNT',
+      'EMBER_BAT',
+      'VOLT_TURRET',
+      'FROST_WRAITH',
+      'TIME_WEAVER',
+      'BONE_KNIGHT',
+      'CINDER_SHAMAN',
+      'VOLT_HOUND',
+      'FROST_SENTINEL',
+    ];
+    if (biome === 10) {
+      pool = [...full, 'TIME_WEAVER', 'TIME_WEAVER'];
+    } else {
+      const theme = (biome - 4) % 3;
+      if (theme === 0) pool = [...full, 'EMBER_BAT', 'EMBER_BAT'];
+      else if (theme === 1) pool = [...full, 'VOLT_TURRET', 'VOLT_TURRET'];
+      else pool = [...full, 'FROST_WRAITH', 'FROST_WRAITH'];
+    }
+  }
 
-  const full: EnemyKind[] = [
-    'BONE_GRUNT',
-    'EMBER_BAT',
-    'VOLT_TURRET',
-    'FROST_WRAITH',
-    'TIME_WEAVER',
-    'BONE_KNIGHT',
-    'CINDER_SHAMAN',
-    'VOLT_HOUND',
-    'FROST_SENTINEL',
-  ];
-  if (biome === 10) return [...full, 'TIME_WEAVER', 'TIME_WEAVER'];
-
-  const theme = (biome - 4) % 3;
-  if (theme === 0) return [...full, 'EMBER_BAT', 'EMBER_BAT'];
-  if (theme === 1) return [...full, 'VOLT_TURRET', 'VOLT_TURRET'];
-  return [...full, 'FROST_WRAITH', 'FROST_WRAITH'];
+  if (floorNumber >= 31) pool = [...pool, 'CLOCKWORK_SCARAB'];
+  if (floorNumber >= 41) pool = pool.map((k) => TIER3_UPGRADE[k] ?? k);
+  return pool;
 }
 
 export function enemyCountRangeForFloor(floorNumber: number): { min: number; max: number } {

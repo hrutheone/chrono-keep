@@ -327,16 +327,18 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
   while (enemies.length + roomKinds.length < totalEnemies) {
     const kind = pick(rng, pool);
     roomKinds.push(kind);
-    // Volt-Hound spawns in pairs.
-    if (kind === 'VOLT_HOUND' && enemies.length + roomKinds.length < totalEnemies) roomKinds.push('VOLT_HOUND');
+    // Volt-Hound (and its Floor 41+ upgrade, Storm-Stalker) spawns in pairs.
+    if ((kind === 'VOLT_HOUND' || kind === 'STORM_STALKER') && enemies.length + roomKinds.length < totalEnemies) {
+      roomKinds.push(kind);
+    }
   }
   if (floorNumber >= 21 && roomKinds.length > 0) roomKinds[0] = 'TIME_WEAVER';
 
   let openHoundPos: Point | null = null;
   for (const kind of roomKinds) {
     let pos: Point | undefined;
-    // Place Volt-Hound adjacent to pack-mate if possible.
-    if (kind === 'VOLT_HOUND' && openHoundPos) {
+    // Place Volt-Hound/Storm-Stalker adjacent to pack-mate if possible.
+    if ((kind === 'VOLT_HOUND' || kind === 'STORM_STALKER') && openHoundPos) {
       const adjacent = ORTHO.map(([dx, dy]) => ({ x: openHoundPos!.x + dx, y: openHoundPos!.y + dy })).filter(
         (p) => tiles[p.y]?.[p.x] === TILE.FLOOR && !occupied.has(p.y * N + p.x),
       );
@@ -349,7 +351,7 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
       );
       if (spots.length === 0) return null;
       pos = pick(rng, spots);
-      if (kind === 'VOLT_HOUND') openHoundPos = pos;
+      if (kind === 'VOLT_HOUND' || kind === 'STORM_STALKER') openHoundPos = pos;
     }
     occupied.add(pos.y * N + pos.x);
     spawnEnemy(kind, pos.x, pos.y);
@@ -465,6 +467,15 @@ export function floorToAscii(floor: GeneratedFloor): string {
     INFERNO_GOLEM: 'G',
     STORM_CALLER: 'O',
     GLACIAL_KNIGHT: 'N',
+    CLOCKWORK_SCARAB: 'z',
+    DREAD_LEGION: 'd',
+    DOOM_GUARD: 'k',
+    ASH_FIEND: 'a',
+    HELLFIRE_MAGUS: 'c',
+    TESLA_COIL: 'T',
+    STORM_STALKER: 's',
+    VOID_SPIRIT: 'v',
+    GLACIAL_MONOLITH: 'M',
   };
   for (const e of floor.enemies) grid[e.y][e.x] = enemyGlyphs[e.kind];
   grid[floor.spawnY][floor.spawnX] = '@';
