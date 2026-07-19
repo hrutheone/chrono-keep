@@ -299,6 +299,11 @@ const WEAPONS = {
   DEATHBRINGER: { name: 'Deathbringer', atk: 8, element: 'CHRONO', passive: 'execute_chance_5', lore: "It doesn't always kill outright. It doesn't need to, often enough." },
   APOCALYPSE: { name: 'Apocalypse', atk: 14, element: 'CHRONO', passive: 'max_hp_minus_10_equipped', lore: 'Devastating in the hand, and it costs you something just to hold it.' },
   MASAMUNE: { name: 'Masamune', atk: 10, element: 'CHRONO', passive: 'kill_refund_turns_3', lore: 'A legendary blade, somehow, in a timeline that has no business having legends. Mythic-tier — it steals back a real handful of moments with every kill.' },
+
+  // --- Ultimate Elemental (F80-99 chase weapons) ---
+  LAEVATEINN: { name: 'Laevateinn', atk: 9, element: 'FIRE', passive: 'cremate', lore: 'The legendary fire sword that reduces everything to ash. It burns hottest when the fuel is already lit.' },
+  VAJRA: { name: 'Vajra', atk: 9, element: 'VOLT', passive: 'gungnir_pierce', lore: 'A spear of mythic thunder. It never misses, and its strike freezes the nervous system.' },
+  NIFLHEIM: { name: 'Niflheim', atk: 9, element: 'FROST', passive: 'shatter_execute', lore: 'A blade colder than the void. It does not cut; it simply shatters what is already frozen.' },
 } as const satisfies Record<string, { name: string; atk: number; element: Element; passive: string; lore: string }>;
 
 export type WeaponKey = keyof typeof WEAPONS;
@@ -322,6 +327,7 @@ export const WEAPON_RANGE: Partial<Record<string, WeaponRangeProfile>> = {
   pierce_ranged_3_fire_hazard: { min: 1, max: 3 }, // Holy Lance
   pierce_ranged_2_dash: { min: 1, max: 2 }, // Gungnir
   pierce_ranged_2_lifesteal_3: { min: 1, max: 2 }, // Blood Lance
+  gungnir_pierce: { min: 1, max: 2 }, // Vajra
 };
 
 export const FREE_SWAP_PASSIVES = new Set(['free_swap']);
@@ -799,6 +805,9 @@ export const WEAPON_EFFECT_LABEL: Partial<Record<string, string>> = {
   execute_chance_5: '5% Execute Chance',
   max_hp_minus_10_equipped: '-10 Max HP while Equipped',
   kill_refund_turns_3: 'Kill Refunds 3 Turns',
+  cremate: '2x Damage vs Burning',
+  gungnir_pierce: 'Range 1-2, Pierces, Guaranteed Stun',
+  shatter_execute: 'Executes Chilled Enemies Below 25% HP',
 };
 
 export const ACCESSORY_EFFECT_LABEL: Partial<Record<string, string>> = {
@@ -1075,7 +1084,7 @@ export function rollEnemyDrop(rng: Rng, kind: EnemyKind, id: string): Item | nul
 const LATE_TIER_WEAPON_KEYS: WeaponKey[] = [
   'FIRAGA_EDGE', 'ICE_BRAND', 'BLITZ_WHIP', 'RUNE_AXE', 'EXCALIBUR', 'HOLY_LANCE',
   'ULTIMA_WEAPON', 'RAGNAROK', 'GUNGNIR', 'SAVE_THE_QUEEN', 'BLOOD_LANCE',
-  'DEATHBRINGER', 'APOCALYPSE', 'MASAMUNE',
+  'DEATHBRINGER', 'APOCALYPSE', 'MASAMUNE', 'LAEVATEINN', 'VAJRA', 'NIFLHEIM',
 ];
 
 const MID_TIER_WEAPON_KEYS: WeaponKey[] = [

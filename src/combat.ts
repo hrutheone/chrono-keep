@@ -126,13 +126,16 @@ const LIFESTEAL_ON_HIT: Partial<Record<string, number>> = { lifesteal_2_on_hit: 
 const BONUS_VS_STATUS: Partial<Record<string, { status: StatusEffect; mult: number }>> = {
   bonus_vs_chilled_2x: { status: 'CHILLED', mult: 2 },
   bonus_vs_burning_2x: { status: 'BURN', mult: 2 },
+  cremate: { status: 'BURN', mult: 2 },
 };
 const STUN_VS_CHILLED_CHANCE: Partial<Record<string, number>> = { stun_50_vs_chilled: 0.5 };
 const EXECUTE_HP_THRESHOLD: Partial<Record<string, number>> = { execute_20_heavy: 0.2 };
 const EXECUTE_CHANCE: Partial<Record<string, number>> = { execute_chance_5: 0.05 };
 const IGNORE_DEF_PCT: Partial<Record<string, number>> = { ignore_def_50: 0.5 };
+// Shatter Execute (Niflheim): Chilled + below this HP fraction is an instant kill, same as the other execute passives.
+const SHATTER_EXECUTE_HP_THRESHOLD = 0.25;
 // Passive groupings.
-const PIERCE_PASSIVES = new Set(['pierce_ranged_2', 'pierce_ranged_3_fire_hazard', 'pierce_ranged_2_dash', 'pierce_ranged_2_lifesteal_3']);
+const PIERCE_PASSIVES = new Set(['pierce_ranged_2', 'pierce_ranged_3_fire_hazard', 'pierce_ranged_2_dash', 'pierce_ranged_2_lifesteal_3', 'gungnir_pierce']);
 const KNOCKBACK_1_PASSIVES = new Set(['knockback_1', 'ranged_push_3']);
 const HEAVY_STAMINA_PASSIVES = new Set(['heavy_stamina', 'execute_20_heavy']);
 const KILL_TURN_REFUND: Partial<Record<string, number>> = { kill_refund_turn: 1, kill_refund_turns_3: 3 };
@@ -451,7 +454,9 @@ export function playerAttackEnemy(state: GameState, enemy: Enemy): void {
     const execChance = EXECUTE_CHANCE[weapon.passive];
     const thresholdMet = execThreshold !== undefined && enemy.hp / enemy.maxHp <= execThreshold;
     const chanceMet = execChance !== undefined && Math.random() < execChance;
-    if (thresholdMet || chanceMet) {
+    const shatterMet =
+      weapon.passive === 'shatter_execute' && enemy.status === 'CHILLED' && enemy.hp / enemy.maxHp <= SHATTER_EXECUTE_HP_THRESHOLD;
+    if (thresholdMet || chanceMet || shatterMet) {
       logLine(state, `${weapon.name} executes ${ENEMY_NAME[enemy.kind]}!`);
       notifyFloatingText(enemy.x, enemy.y, 'EXECUTED', 'crit');
       markHitStop();
@@ -500,6 +505,11 @@ export function playerAttackEnemy(state: GameState, enemy: Enemy): void {
     state.run.staticGenCharged = false;
     applyEnemyStatus(enemy, 'STUN', 1);
     logLine(state, 'Static Generator discharges — Stunned!');
+  }
+
+  if (weapon?.passive === 'gungnir_pierce') {
+    applyEnemyStatus(enemy, 'STUN', 1);
+    logLine(state, `${ENEMY_NAME[enemy.kind]} is Stunned!`);
   }
 
   if (weapon?.passive === 'cure_chill_on_attack' && state.run.status === 'CHILLED') {
