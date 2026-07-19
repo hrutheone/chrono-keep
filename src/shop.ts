@@ -16,9 +16,9 @@ export const STAT_TRACKS: { track: StatTrack; label: string }[] = [
   { track: 'baseAtkUpgrade', label: 'Base ATK (+1/lvl)' },
 ];
 
-// Standard Curve (Max HP, Max Stamina, Turn Bonus): Levels 1-10, then +750/level with no cap.
-const STANDARD_CURVE = [50, 100, 200, 350, 500, 750, 1000, 1350, 1800, 2500];
-const STANDARD_CURVE_STEP_AFTER = 750;
+// Standard Curve (Max HP, Max Stamina, Turn Bonus): Levels 1-10, then +200/level with no cap.
+const STANDARD_CURVE = [25, 50, 100, 150, 200, 300, 400, 500, 650, 800];
+const STANDARD_CURVE_STEP_AFTER = 200;
 
 function standardTrackCost(level: number): number {
   if (level < STANDARD_CURVE.length) return STANDARD_CURVE[level];
@@ -26,7 +26,7 @@ function standardTrackCost(level: number): number {
 }
 
 // Base ATK: mathematically the strongest stat, capped at 5 levels.
-const BASE_ATK_COSTS = [100, 300, 750, 1500, 3000];
+const BASE_ATK_COSTS = [50, 150, 300, 600, 1200];
 
 export function statTrackCost(state: GameState, track: StatTrack): number | null {
   const level = state.persistent[track];
@@ -51,9 +51,9 @@ export function skillLevel(state: GameState, skillId: string): number {
 
 // Skill Cost Tiers (Section 6B/7): Core/Setup, Advanced/Tactical, Chronomancer/Endgame.
 const SKILL_COSTS_BY_TIER: Record<SkillTier, number[]> = {
-  1: [50, 100, 200],
-  2: [150, 300, 600],
-  3: [500, 1000, 2000],
+  1: [25, 50, 100],
+  2: [75, 150, 300],
+  3: [200, 400, 800],
 };
 export const MAX_SKILL_LEVEL = 3;
 
@@ -101,9 +101,9 @@ export interface OneTimeUpgrade {
 }
 
 export const ONE_TIME_UPGRADES: readonly OneTimeUpgrade[] = [
-  { id: 'weaponSlot2', label: 'Second Weapon Slot (hold 2, swap active)', cost: 2500, flag: 'weaponSlot2Unlocked' },
-  { id: 'accessorySlot2', label: 'Second Accessory Slot', cost: 1500, flag: 'accessorySlot2Unlocked' },
-  { id: 'accessorySlot3', label: 'Third Accessory Slot', cost: 5000, flag: 'accessorySlot3Unlocked', prereqFlag: 'accessorySlot2Unlocked' },
+  { id: 'weaponSlot2', label: 'Second Weapon Slot (hold 2, swap active)', cost: 800, flag: 'weaponSlot2Unlocked' },
+  { id: 'accessorySlot2', label: 'Second Accessory Slot', cost: 600, flag: 'accessorySlot2Unlocked' },
+  { id: 'accessorySlot3', label: 'Third Accessory Slot', cost: 1500, flag: 'accessorySlot3Unlocked', prereqFlag: 'accessorySlot2Unlocked' },
 ];
 
 export function oneTimeUpgradeAvailable(state: GameState, upgrade: OneTimeUpgrade): boolean {
