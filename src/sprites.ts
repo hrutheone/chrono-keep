@@ -193,15 +193,15 @@ export const WEAPON_SPRITE_BY_NAME: Record<string, SpriteRef> = {
   'Ragnarok': { col: 33, row: 9 },
   'Gungnir': { col: 42, row: 7 },
   'Save the Queen': { col: 36, row: 8 },
-  'Blood Lance': { col: 39, row: 7 },
+  'Blood Lance': { col: 36, row: 3 },
   'Deathbringer': { col: 36, row: 9 },
   'Apocalypse': { col: 35, row: 9 },
   'Masamune': { col: 34, row: 9 },
 
   // --- Ultimate Elemental (F80-99 chase weapons) ---
-  'Laevateinn': { col: 37, row: 6 }, // tinted blade, fire sword
-  'Vajra': { col: 41, row: 6 }, // tinted blade, thunder spear
-  'Niflheim': { col: 42, row: 6 }, // tinted blade, faceted/shattered look, ice sword
+  'Laevateinn': { col: 33, row: 9 }, // tinted blade, fire sword
+  'Vajra': { col: 38, row: 7 }, // tinted blade, thunder spear
+  'Niflheim': { col: 39, row: 8 }, // axe
 };
 
 export const ACCESSORY_SPRITE_BY_NAME: Record<string, SpriteRef> = {
