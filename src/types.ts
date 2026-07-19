@@ -67,7 +67,9 @@ export interface GameState {
     recallMarkY: number | null;
     vanishCharges: number;
     reflectBarrierCharges: number;
+    reflectBarrierMult: number;
     reflectBarrierStuns: boolean;
+    timeStopTurnsLeft: number;
     tempAtkBonus: number;
     tempAtkBonusTurns: number;
     tempDefBonus: number;
@@ -143,6 +145,7 @@ export interface Enemy {
   defuseOriginalDef?: number;
   slowTurnsLeft?: number;
   slowOriginalSpeed?: number;
+  grappleMarked?: boolean;
 
   affix?: string;
   shieldedHitsLeft?: number;

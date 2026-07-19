@@ -2,11 +2,11 @@
 
 import { SKILLS, rollRandomConsumable } from './content';
 import { elementSynergyBonus, hasAccessoryPassive, pickupItemsAt, totalAtk } from './inventory';
-import { applyEnemyStatus, applyKnockback, skillDamageEnemy } from './combat';
+import { applyEnemyStatus, applyKnockback, isEliteOrBoss, skillDamageEnemy } from './combat';
 import { isWalkableAt, TILE } from './mapgen';
 import { consumeStunnedAction, tryDescendIfOnStairs } from './movement';
 import { isTurnBusy, resolvePlayerTurn } from './turnController';
-import { isRunOver, logLine, spendTurn } from './turns';
+import { isRunOver, logLine } from './turns';
 import { playSkillSfx } from './audio';
 import { spawnEffectParticles } from './animation';
 import { ELEMENT_COLOR } from './palette';
@@ -28,16 +28,7 @@ const ORTHO_DELTA: ReadonlyArray<{ dx: number; dy: number }> = [
   { dx: 0, dy: -1 },
 ];
 
-// Diagonal-inclusive delta array.
-const ALL_8_DELTA: ReadonlyArray<{ dx: number; dy: number }> = [
-  ...ORTHO_DELTA,
-  { dx: 1, dy: 1 },
-  { dx: 1, dy: -1 },
-  { dx: -1, dy: 1 },
-  { dx: -1, dy: -1 },
-];
-
-const FLAME_ARC_HAZARD_TURNS = 4;
+const FLAME_ARC_HAZARD_TURNS = 3;
 
 function walkableAt(state: GameState, x: number, y: number): boolean {
   return isWalkableAt(state, x, y);
@@ -47,8 +38,9 @@ function enemyAt(state: GameState, x: number, y: number): Enemy | undefined {
   return state.dungeon.enemies.find((e) => e.x === x && e.y === y);
 }
 
-// Track Ultima stamina.
+// Track "consume all Stamina" skills' spend, since currentStamina is already zeroed by the time the caster runs.
 let ultimaStaminaSpent = 0;
+let fortifyStaminaSpent = 0;
 
 /** Returns stamina cost for a skill. */
 function skillStaminaCost(state: GameState, skillId: string, level: number): number {
@@ -57,8 +49,11 @@ function skillStaminaCost(state: GameState, skillId: string, level: number): num
     ultimaStaminaSpent = state.run.currentStamina;
     return state.run.currentStamina;
   }
+  if (skillId === 'fortify') {
+    fortifyStaminaSpent = state.run.currentStamina;
+    return state.run.currentStamina;
+  }
   if (skillId === 'static_shift' && level >= 3) return 2;
-  if (skillId === 'dragoon_jump' && level >= 3) return 2;
   if (skillId === 'dash' && hasAccessoryPassive(state, 'dash_discount')) return 1;
   return SKILLS[skillId].stamina;
 }
@@ -209,41 +204,6 @@ function castBash(state: GameState, level: number): void {
   }
 }
 
-/** Dragoon Jump cast. */
-function castDragoonJump(state: GameState, level: number): void {
-  const dist = level >= 2 ? 4 : 3;
-  const { dx, dy } = FACING_DELTA[state.run.facing];
-  const startX = state.run.playerX;
-  const startY = state.run.playerY;
-  let landed = false;
-  let lastX = startX;
-  let lastY = startY;
-  for (let i = 1; i <= dist; i++) {
-    const nx = state.run.playerX + dx * i;
-    const ny = state.run.playerY + dy * i;
-    if (!walkableAt(state, nx, ny) || enemyAt(state, nx, ny)) break;
-    lastX = nx;
-    lastY = ny;
-    landed = true;
-  }
-  state.run.playerX = lastX;
-  state.run.playerY = lastY;
-  logLine(state, landed ? 'Dragoon Jump!' : 'Dragoon Jump fizzles — no room to leap.');
-  playSkillSfx('dragoon_jump');
-  if (!landed) return;
-  spawnEffectParticles(startX, startY, ELEMENT_COLOR.VOLT);
-  spawnEffectParticles(lastX, lastY, ELEMENT_COLOR.VOLT);
-  pickupItemsAt(state, lastX, lastY);
-  tryDescendIfOnStairs(state);
-  for (const { dx: adx, dy: ady } of ORTHO_DELTA) {
-    const enemy = enemyAt(state, startX + adx, startY + ady);
-    if (enemy) {
-      applyEnemyStatus(enemy, 'STUN', 1);
-      logLine(state, `${enemy.kind} is caught in the trap!`);
-    }
-  }
-}
-
 function castBlizzardWave(state: GameState, level: number): void {
   const mult = level >= 2 ? 1.3 : 1;
   const base = Math.round(4 * mult) + elementSynergyBonus(state, 'FROST');
@@ -277,7 +237,7 @@ function castMeteor(state: GameState, level: number): void {
     targetX = tx;
     targetY = ty;
   }
-  const mult = level >= 2 ? 1.3 : 1;
+  const mult = level >= 2 ? 3 : 2;
   const sourceAttack = Math.round((totalAtk(state) + elementSynergyBonus(state, 'FIRE')) * mult);
   for (let ax = -1; ax <= 1; ax++) {
     for (let ay = -1; ay <= 1; ay++) {
@@ -341,32 +301,61 @@ function castRecall(state: GameState, level: number): void {
   if (level >= 3) state.run.turnsRemaining += 1;
 }
 
-function castDarkWave(state: GameState, level: number): void {
-  const mult = level >= 2 ? 1.5 : 1.2;
-  const base = Math.round(totalAtk(state) * mult) + elementSynergyBonus(state, 'PHYSICAL');
-  let hits = 0;
-  for (const { dx, dy } of ALL_8_DELTA) {
-    const tx = state.run.playerX + dx;
-    const ty = state.run.playerY + dy;
-    spawnEffectParticles(tx, ty, ELEMENT_COLOR.PHYSICAL);
+/** Grapple cast. */
+function castGrapple(state: GameState, level: number): void {
+  const maxDist = level >= 2 ? 4 : 3;
+  const { dx, dy } = FACING_DELTA[state.run.facing];
+  let target: Enemy | undefined;
+  let dist = 0;
+  for (let i = 1; i <= maxDist; i++) {
+    const tx = state.run.playerX + dx * i;
+    const ty = state.run.playerY + dy * i;
+    if (!walkableAt(state, tx, ty)) break;
     const enemy = enemyAt(state, tx, ty);
-    if (!enemy) continue;
-    skillDamageEnemy(state, enemy, base, 'PHYSICAL', 'Dark Wave');
-    hits += 1;
+    if (enemy) {
+      target = enemy;
+      dist = i;
+      break;
+    }
   }
-  playSkillSfx('dark_wave');
-  if (level >= 3 && hits > 0) {
-    state.run.currentHp = Math.min(state.run.maxHp, state.run.currentHp + hits);
-    logLine(state, `Dark Wave heals ${hits} HP.`);
+  playSkillSfx('grapple');
+  if (!target) {
+    logLine(state, 'Grapple finds no target.');
+    return;
   }
+  spawnEffectParticles(target.x, target.y, ELEMENT_COLOR.PHYSICAL);
+  let landed = false;
+  for (let step = 1; step < dist; step++) {
+    const nx = state.run.playerX + dx * step;
+    const ny = state.run.playerY + dy * step;
+    if (!walkableAt(state, nx, ny) || enemyAt(state, nx, ny)) continue;
+    target.x = nx;
+    target.y = ny;
+    landed = true;
+    break;
+  }
+  logLine(state, landed ? `${target.kind} is yanked toward you!` : `${target.kind} resists the pull!`);
+  if (level >= 3) target.grappleMarked = true;
 }
 
 function castReflectBarrier(state: GameState, level: number): void {
-  state.run.reflectBarrierCharges = level >= 2 ? 2 : 1;
+  state.run.reflectBarrierCharges = 1;
+  state.run.reflectBarrierMult = level >= 2 ? 3 : 2;
   state.run.reflectBarrierStuns = level >= 3;
-  logLine(state, `Reflect Barrier raised (${state.run.reflectBarrierCharges} charge${state.run.reflectBarrierCharges > 1 ? 's' : ''}).`);
+  logLine(state, `Reflect Barrier raised (returns ${state.run.reflectBarrierMult}x ATK).`);
   playSkillSfx('reflect_barrier');
   spawnEffectParticles(state.run.playerX, state.run.playerY, ELEMENT_COLOR.VOLT);
+}
+
+/** Fortify cast. */
+function castFortify(state: GameState, level: number): void {
+  const perStamina = level >= 2 ? 3 : 2;
+  state.run.tempDefBonus = fortifyStaminaSpent * perStamina;
+  state.run.tempDefBonusTurns = 3;
+  if (level >= 3) state.run.statusImmuneTurns = 3;
+  logLine(state, `Fortify grants +${state.run.tempDefBonus} DEF for 3 turns.`);
+  playSkillSfx('fortify');
+  spawnEffectParticles(state.run.playerX, state.run.playerY, ELEMENT_COLOR.PHYSICAL);
 }
 
 function castVanish(state: GameState, level: number): void {
@@ -463,71 +452,76 @@ function castProvoke(state: GameState, level: number): void {
   }
 }
 
-function placeFrostHazard(state: GameState, x: number, y: number, turns: number): void {
-  const existing = state.dungeon.expiringTiles.find((t) => t.x === x && t.y === y);
-  if (existing) existing.turnsLeft = turns;
-  else state.dungeon.expiringTiles.push({ x, y, turnsLeft: turns, tileType: TILE.FROST_HAZARD });
-}
-
-function castScourge(state: GameState, level: number): void {
-  const turns = level >= 3 ? 5 : level >= 2 ? 4 : 3;
-  for (let ddx = -1; ddx <= 1; ddx++) {
-    for (let ddy = -1; ddy <= 1; ddy++) {
-      const tx = state.run.playerX + ddx;
-      const ty = state.run.playerY + ddy;
-      if (!walkableAt(state, tx, ty)) continue;
-      placeFrostHazard(state, tx, ty, turns);
-      spawnEffectParticles(tx, ty, ELEMENT_COLOR.FROST);
-    }
-  }
-  logLine(state, 'Scourge blights the ground beneath you.');
-  playSkillSfx('scourge');
-}
-
-function castLancet(state: GameState, level: number): void {
-  const { dx, dy } = FACING_DELTA[state.run.facing];
-  let target: Enemy | undefined;
-  for (let i = 1; i <= 3; i++) {
-    const tx = state.run.playerX + dx * i;
-    const ty = state.run.playerY + dy * i;
-    if (!walkableAt(state, tx, ty)) break;
-    target = enemyAt(state, tx, ty);
-    if (target) break;
-  }
-  playSkillSfx('lancet');
-  if (!target) {
-    logLine(state, 'Lancet finds no target.');
-    return;
-  }
-  const base = (level >= 2 ? 5 : 3) + elementSynergyBonus(state, 'VOLT');
-  const killed = skillDamageEnemy(state, target, base, 'VOLT', 'Lancet');
-  state.run.currentStamina = Math.min(state.run.maxStamina, state.run.currentStamina + 1);
-  logLine(state, 'Lancet siphons a spark — +1 Stamina.');
-  if (!killed && level >= 3) {
-    applyEnemyStatus(target, 'STUN', 1);
-    logLine(state, `${target.kind} is Stunned!`);
-  }
-}
-
-function castHoly(state: GameState, level: number): void {
+/** Chain Lightning cast. */
+function castChainLightning(state: GameState, level: number): void {
   const { dx, dy } = FACING_DELTA[state.run.facing];
   const tx = state.run.playerX + dx;
   const ty = state.run.playerY + dy;
-  spawnEffectParticles(tx, ty, ELEMENT_COLOR.FIRE);
-  playSkillSfx('holy');
-  spendTurn(state);
-  const enemy = enemyAt(state, tx, ty);
-  if (!enemy) {
-    logLine(state, 'Holy finds no target.');
+  spawnEffectParticles(tx, ty, ELEMENT_COLOR.VOLT);
+  playSkillSfx('chain_lightning');
+  const target = enemyAt(state, tx, ty);
+  if (!target) {
+    logLine(state, 'Chain Lightning finds no target.');
     return;
   }
-  const mult = level >= 2 ? 3 : 2.5;
-  const base = Math.round(totalAtk(state) * mult) + elementSynergyBonus(state, 'FIRE');
-  const killed = skillDamageEnemy(state, enemy, base, 'FIRE', 'Holy');
-  if (killed && level >= 3) {
-    const heal = Math.round(state.run.maxHp * 0.2);
-    state.run.currentHp = Math.min(state.run.maxHp, state.run.currentHp + heal);
-    logLine(state, `Holy restores ${heal} HP.`);
+  const base = totalAtk(state) + elementSynergyBonus(state, 'VOLT');
+  const hitIds = [target.id];
+  skillDamageEnemy(state, target, base, 'VOLT', 'Chain Lightning');
+  const arcCount = level >= 2 ? 3 : 2;
+  const arcTargets = state.dungeon.enemies
+    .filter((e) => e.id !== target.id)
+    .sort((a, b) => Math.abs(a.x - target.x) + Math.abs(a.y - target.y) - (Math.abs(b.x - target.x) + Math.abs(b.y - target.y)))
+    .slice(0, arcCount);
+  for (const enemy of arcTargets) {
+    spawnEffectParticles(enemy.x, enemy.y, ELEMENT_COLOR.VOLT);
+    skillDamageEnemy(state, enemy, base, 'VOLT', 'Chain Lightning');
+    hitIds.push(enemy.id);
+  }
+  if (level >= 3 && Math.random() < 0.25) {
+    for (const enemy of state.dungeon.enemies) {
+      if (hitIds.includes(enemy.id)) applyEnemyStatus(enemy, 'STUN', 1);
+    }
+    logLine(state, 'Chain Lightning stuns everything it hit!');
+  }
+}
+
+/** Time-Stop cast. */
+function castTimeStop(state: GameState, level: number): void {
+  const turns = level >= 3 ? 7 : level >= 2 ? 5 : 3;
+  state.run.timeStopTurnsLeft = turns;
+  logLine(state, `Time-Stop freezes the clock for ${turns} turns.`);
+  playSkillSfx('time_stop');
+  spawnEffectParticles(state.run.playerX, state.run.playerY, ELEMENT_COLOR.CHRONO);
+}
+
+/** Paradox cast. */
+function castParadox(state: GameState, level: number): void {
+  const { dx, dy } = FACING_DELTA[state.run.facing];
+  const tx = state.run.playerX + dx;
+  const ty = state.run.playerY + dy;
+  spawnEffectParticles(tx, ty, ELEMENT_COLOR.CHRONO);
+  playSkillSfx('paradox');
+  const target = enemyAt(state, tx, ty);
+  if (!target) {
+    logLine(state, 'Paradox finds no target.');
+    return;
+  }
+  const playerPct = state.run.currentHp / state.run.maxHp;
+  const targetPct = target.hp / target.maxHp;
+  state.run.currentHp = Math.max(1, Math.round(state.run.maxHp * targetPct));
+  target.hp = Math.max(1, Math.round(target.maxHp * playerPct));
+  logLine(state, 'Paradox swaps your fate with theirs!');
+  if (level >= 2) {
+    const status = state.run.status;
+    const statusTurns = state.run.statusTurns;
+    state.run.status = target.status;
+    state.run.statusTurns = target.statusTurns;
+    target.status = status;
+    target.statusTurns = statusTurns;
+  }
+  if (level >= 3 && isEliteOrBoss(target)) {
+    state.run.turnsRemaining += 2;
+    logLine(state, '+2 Turns.');
   }
 }
 
@@ -569,7 +563,7 @@ function castSlow(state: GameState, level: number): void {
     logLine(state, 'Slow finds no target.');
     return;
   }
-  const turns = level >= 2 ? 6 : 4;
+  const turns = level >= 2 ? 3 : 2;
   for (const enemy of targets) {
     if (!enemy.slowTurnsLeft || enemy.slowTurnsLeft <= 0) enemy.slowOriginalSpeed = enemy.speed;
     enemy.speed = 0;
@@ -614,21 +608,21 @@ const CASTERS: Record<string, (state: GameState, level: number) => void> = {
   static_shift: castStaticShift,
   ice_aegis: castIceAegis,
   bash: castBash,
-  dragoon_jump: castDragoonJump,
+  grapple: castGrapple,
   blizzard_wave: castBlizzardWave,
   meteor: castMeteor,
   chakra: castChakra,
   recall: castRecall,
-  dark_wave: castDarkWave,
+  fortify: castFortify,
   reflect_barrier: castReflectBarrier,
   vanish: castVanish,
   omnislash: castOmnislash,
   mug: castMug,
   haste: castHaste,
   provoke: castProvoke,
-  scourge: castScourge,
-  lancet: castLancet,
-  holy: castHoly,
+  chain_lightning: castChainLightning,
+  time_stop: castTimeStop,
+  paradox: castParadox,
   defuse: castDefuse,
   slow: castSlow,
   aura: castAura,

@@ -32,12 +32,12 @@ export const SPRITES = {
 
   // --- Terrain ---
   FLOOR: { col: 0, row: 0 }, // dark ground
-  WALL: { col: 8, row: 0 }, // straight wall segment, drawn vertical (N-S)
-  WALL_CORNER: { col: 9, row: 0 }, // wall corner, drawn connecting East+South
-  WALL_T: { col: 10, row: 0 }, // 3-way wall junction, drawn connecting North+East+South
-  WALL_CROSS: { col: 11, row: 0 }, // 4-way wall junction (symmetric)
-  WALL_END: { col: 12, row: 0 }, // wall dead-end, drawn connecting North only
-  DOOR: { col: 11, row: 3 }, // door arch
+  WALL: { col: 8, row: 1 }, // straight wall segment, drawn vertical (N-S)
+  WALL_CORNER: { col: 9, row: 1 }, // wall corner, drawn connecting East+South
+  WALL_T: { col: 10, row: 1 }, // 3-way wall junction, drawn connecting North+East+South
+  WALL_CROSS: { col: 11, row: 1 }, // 4-way wall junction (symmetric)
+  WALL_END: { col: 12, row: 1 }, // wall dead-end, drawn connecting North only
+  DOOR: { col: 0, row: 0 }, // door arch
   STAIRS: { col: 2, row: 6 }, // stairs
   SHORTCUT_GATE: { col: 1, row: 9 }, // blue gate
   BOSS_GATE: { col: 0, row: 9 }, // blue padlock
@@ -66,23 +66,23 @@ export const SKILL_SPRITE_BY_ID: Record<SkillId, SpriteRef> = {
   cleave: { col: 24, row: 11 }, // slash
   flame_arc: SPRITES.FIRE_HAZARD,
   static_shift: { col: 27, row: 13 }, // teleport
-  ice_aegis: { col: 33, row: 10 }, 
+  ice_aegis: { col: 33, row: 10 },
   bash: { col: 35, row: 2 }, // hammer (Mythril Hammer's cell)
-  dragoon_jump: { col: 33, row: 21 }, // rocket — launch upward
+  grapple: { col: 40, row: 7 }, // trident — hooks and pulls
   blizzard_wave: { col: 27, row: 12 }, // snowflake bloom
   meteor: { col: 15, row: 10 }, // flame (gunpowder_flask's 2nd flame cell)
   chakra: { col: 25, row: 12 }, // plus — restore HP
   recall: SPRITES.TIME_SHARD,
-  dark_wave: { col: 25, row: 11 }, // crescent slash
+  fortify: { col: 37, row: 2 }, // ornate circular shield (mirror_shield's cell)
   reflect_barrier: { col: 37, row: 4 }, //
   vanish: { col: 29, row: 11 }, // eye slash
   omnislash: { col: 26, row: 11 }, // double slash — multi-hit
   mug: SPRITES.RELIC, // gold coin — steal
   haste: { col: 34, row: 21 }, // rocket (2nd pose)
   provoke: { col: 27, row: 11 }, // starburst — shout
-  scourge: { col: 15, row: 18 }, // icicle
-  lancet: SPRITES.VOLT_TURRET,
-  holy: { col: 44, row: 11 }, // cross-circle
+  chain_lightning: { col: 34, row: 4 }, // Blitz Whip's cell — coiled live current
+  time_stop: { col: 41, row: 12 }, // grey hourglass outline (Shattered Hourglass's cell)
+  paradox: { col: 47, row: 0 }, // circular dial — a swapped fate
   defuse: { col: 30, row: 11 }, // X — negate
   slow: { col: 30, row: 12 }, // sparse snowflake
   aura: { col: 35, row: 11 }, // concentric circles

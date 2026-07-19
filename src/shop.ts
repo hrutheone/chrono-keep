@@ -1,6 +1,7 @@
 // Upgrade Shop state logic.
 
-import { SKILLS } from './content';
+import { SKILL_TIER, SKILLS, SKILL_REQUIREMENTS, SKILL_UNLOCK_COUNT_REQUIREMENT } from './content';
+import type { SkillId, SkillTier } from './content';
 import { logLine } from './turns';
 import { saveGame } from './persistence';
 import { playPurchaseSfx, playSkillUnlockSfx } from './audio';
@@ -15,20 +16,22 @@ export const STAT_TRACKS: { track: StatTrack; label: string }[] = [
   { track: 'baseAtkUpgrade', label: 'Base ATK (+1/lvl)' },
 ];
 
-// Stat upgrade costs.
-const STAT_TRACK_COSTS: Record<StatTrack, number[]> = {
-  maxHpUpgrade: [10, 20, 35, 55, 80, 120, 160, 200, 240, 280],
-  maxStamUpgrade: [10, 20, 35, 55, 80, 120, 160, 200, 240, 280],
-  turnBonusUpgrade: [10, 20, 35, 55, 80, 120, 160, 200, 240, 280],
-  baseAtkUpgrade: [50, 100, 200, 400, 800],
-};
-const SKILL_COSTS = [15, 25, 40];
-export const MAX_SKILL_LEVEL = SKILL_COSTS.length;
+// Standard Curve (Max HP, Max Stamina, Turn Bonus): Levels 1-10, then +750/level with no cap.
+const STANDARD_CURVE = [50, 100, 200, 350, 500, 750, 1000, 1350, 1800, 2500];
+const STANDARD_CURVE_STEP_AFTER = 750;
+
+function standardTrackCost(level: number): number {
+  if (level < STANDARD_CURVE.length) return STANDARD_CURVE[level];
+  return STANDARD_CURVE[STANDARD_CURVE.length - 1] + STANDARD_CURVE_STEP_AFTER * (level - STANDARD_CURVE.length + 1);
+}
+
+// Base ATK: mathematically the strongest stat, capped at 5 levels.
+const BASE_ATK_COSTS = [100, 300, 750, 1500, 3000];
 
 export function statTrackCost(state: GameState, track: StatTrack): number | null {
   const level = state.persistent[track];
-  const costs = STAT_TRACK_COSTS[track];
-  return level >= costs.length ? null : costs[level];
+  if (track === 'baseAtkUpgrade') return level >= BASE_ATK_COSTS.length ? null : BASE_ATK_COSTS[level];
+  return standardTrackCost(level);
 }
 
 export function buyStatUpgrade(state: GameState, track: StatTrack): boolean {
@@ -46,16 +49,39 @@ export function skillLevel(state: GameState, skillId: string): number {
   return state.persistent.skills[skillId] ?? 0;
 }
 
+// Skill Cost Tiers (Section 6B/7): Core/Setup, Advanced/Tactical, Chronomancer/Endgame.
+const SKILL_COSTS_BY_TIER: Record<SkillTier, number[]> = {
+  1: [50, 100, 200],
+  2: [150, 300, 600],
+  3: [500, 1000, 2000],
+};
+export const MAX_SKILL_LEVEL = 3;
+
 export function skillCost(state: GameState, skillId: string): number | null {
   const level = skillLevel(state, skillId);
-  return level >= MAX_SKILL_LEVEL ? null : SKILL_COSTS[level];
+  if (level >= MAX_SKILL_LEVEL) return null;
+  return SKILL_COSTS_BY_TIER[SKILL_TIER[skillId as SkillId]][level];
+}
+
+/** Whether a skill's Level 1 prerequisites (a skill-and-level, or an "unlock N skills" gate) are met. Dash has none. */
+export function isSkillUnlocked(state: GameState, skillId: SkillId): boolean {
+  const countRequirement = SKILL_UNLOCK_COUNT_REQUIREMENT[skillId];
+  if (countRequirement !== undefined) {
+    const unlockedCount = Object.values(state.persistent.skills).filter((level) => level > 0).length;
+    return unlockedCount >= countRequirement;
+  }
+  const requirement = SKILL_REQUIREMENTS[skillId];
+  if (!requirement) return true;
+  return requirement.anyOf.some(({ skillId: reqId, level }) => skillLevel(state, reqId) >= level);
 }
 
 export function buySkillUpgrade(state: GameState, skillId: string): boolean {
   const cost = skillCost(state, skillId);
   if (cost === null || state.persistent.echoes < cost) return false;
+  const level = skillLevel(state, skillId);
+  if (level === 0 && !isSkillUnlocked(state, skillId as SkillId)) return false;
   state.persistent.echoes -= cost;
-  state.persistent.skills[skillId] = (state.persistent.skills[skillId] ?? 0) + 1;
+  state.persistent.skills[skillId] = level + 1;
   logLine(state, `${SKILLS[skillId].name} upgraded to Lv${state.persistent.skills[skillId]}.`);
   playSkillUnlockSfx();
   saveGame(state);
@@ -75,9 +101,9 @@ export interface OneTimeUpgrade {
 }
 
 export const ONE_TIME_UPGRADES: readonly OneTimeUpgrade[] = [
-  { id: 'weaponSlot2', label: 'Second Weapon Slot (hold 2, swap active)', cost: 1000, flag: 'weaponSlot2Unlocked' },
-  { id: 'accessorySlot2', label: 'Second Accessory Slot', cost: 1000, flag: 'accessorySlot2Unlocked' },
-  { id: 'accessorySlot3', label: 'Third Accessory Slot', cost: 2500, flag: 'accessorySlot3Unlocked', prereqFlag: 'accessorySlot2Unlocked' },
+  { id: 'weaponSlot2', label: 'Second Weapon Slot (hold 2, swap active)', cost: 2500, flag: 'weaponSlot2Unlocked' },
+  { id: 'accessorySlot2', label: 'Second Accessory Slot', cost: 1500, flag: 'accessorySlot2Unlocked' },
+  { id: 'accessorySlot3', label: 'Third Accessory Slot', cost: 5000, flag: 'accessorySlot3Unlocked', prereqFlag: 'accessorySlot2Unlocked' },
 ];
 
 export function oneTimeUpgradeAvailable(state: GameState, upgrade: OneTimeUpgrade): boolean {

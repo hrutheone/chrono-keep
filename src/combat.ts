@@ -124,8 +124,22 @@ const PIERCE_PASSIVES = new Set(['pierce_ranged_2', 'pierce_ranged_3_fire_hazard
 const KNOCKBACK_1_PASSIVES = new Set(['knockback_1', 'ranged_push_3']);
 const HEAVY_STAMINA_PASSIVES = new Set(['heavy_stamina', 'execute_20_heavy']);
 const KILL_TURN_REFUND: Partial<Record<string, number>> = { kill_refund_turn: 1, kill_refund_turns_3: 3 };
-// Bosses exempt from execute passives.
+// Bosses exempt from execute passives; also Paradox Lvl 3's Elite/Boss turn-refund check.
 const BOSS_KINDS = new Set<Enemy['kind']>(['INFERNO_GOLEM', 'STORM_CALLER', 'GLACIAL_KNIGHT', 'CHRONO_LICH']);
+
+/** True for any Elite-Affix enemy or Mini-Boss/Boss kind (Paradox Lvl 3). */
+export function isEliteOrBoss(enemy: Enemy): boolean {
+  return enemy.affix !== undefined || BOSS_KINDS.has(enemy.kind);
+}
+
+const GRAPPLE_MARK_MULT = 1.5;
+
+/** Consumes a Grapple Lvl 3 mark, boosting the next hit against that enemy. */
+function applyGrappleMarkBonus(enemy: Enemy, dmg: number): number {
+  if (!enemy.grappleMarked) return dmg;
+  enemy.grappleMarked = false;
+  return Math.round(dmg * GRAPPLE_MARK_MULT);
+}
 
 // --- Relic/Elite Affix combat hooks ---
 const EXECUTIONERS_COIN_THRESHOLD = 0.3;
@@ -376,7 +390,7 @@ function applyDamageInstance(
 ): boolean {
   // Check dodge/block before applying damage.
   if (tryBlinkDodge(state, enemy) || tryShieldBlock(state, enemy)) return false;
-  const dmg = computeDamage(rawAtk, enemy.defense, element, enemy.element);
+  const dmg = applyGrappleMarkBonus(enemy, computeDamage(rawAtk, enemy.defense, element, enemy.element));
   const mult = elementalMultiplier(element, enemy.element);
   enemy.hp -= dmg;
   logLine(state, `${label} hits ${ENEMY_NAME[enemy.kind]} for ${dmg}.`);
@@ -452,6 +466,7 @@ export function playerAttackEnemy(state: GameState, enemy: Enemy): void {
   if (state.run.relics.includes('duelists_glove') && isDuelingAlone(state, enemy)) {
     dmg = Math.round(dmg * DUELISTS_GLOVE_MULT);
   }
+  dmg = applyGrappleMarkBonus(enemy, dmg);
 
   enemy.hp -= dmg;
   logLine(state, `You hit the ${ENEMY_NAME[enemy.kind]} for ${dmg}.`);
@@ -637,7 +652,7 @@ export function enemyAttackPlayer(state: GameState, enemy: Enemy): void {
   // Reflect Barrier logic.
   if (state.run.reflectBarrierCharges > 0) {
     state.run.reflectBarrierCharges -= 1;
-    const reflectDmg = computeDamage(totalAtk(state) * 3, enemy.defense, playerElement(state), enemy.element);
+    const reflectDmg = computeDamage(totalAtk(state) * state.run.reflectBarrierMult, enemy.defense, playerElement(state), enemy.element);
     enemy.hp -= reflectDmg;
     logLine(state, `Reflect Barrier blocks ${ENEMY_NAME[enemy.kind]} and returns ${reflectDmg}!`);
     notifyFloatingText(enemy.x, enemy.y, `${reflectDmg}`, 'damage');

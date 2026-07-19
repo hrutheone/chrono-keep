@@ -213,6 +213,12 @@ function runTickPhase(state: GameState, actionKind: PlayerActionKind): void {
     return;
   }
 
+  // Time-Stop: freezes the floor's turn counter instead of spending it.
+  if (state.run.timeStopTurnsLeft > 0) {
+    state.run.timeStopTurnsLeft -= 1;
+    return;
+  }
+
   const penalty = actionKind === 'move' && chilledBeforeTick ? 2 : 1;
   state.run.turnsRemaining = Math.max(0, state.run.turnsRemaining - penalty);
 }

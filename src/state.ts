@@ -76,7 +76,9 @@ export function createNewGameState(): GameState {
       recallMarkY: null,
       vanishCharges: 0,
       reflectBarrierCharges: 0,
+      reflectBarrierMult: 2,
       reflectBarrierStuns: false,
+      timeStopTurnsLeft: 0,
       tempAtkBonus: 0,
       tempAtkBonusTurns: 0,
       tempDefBonus: 0,
@@ -154,7 +156,9 @@ export function resetRunForNewLoop(state: GameState, startFloor = 1): void {
   state.run.recallMarkY = null;
   state.run.vanishCharges = 0;
   state.run.reflectBarrierCharges = 0;
+  state.run.reflectBarrierMult = 2;
   state.run.reflectBarrierStuns = false;
+  state.run.timeStopTurnsLeft = 0;
   state.run.tempAtkBonus = 0;
   state.run.tempAtkBonusTurns = 0;
   state.run.tempDefBonus = 0;

@@ -717,6 +717,14 @@ body {
   flex-shrink: 0;
 }
 
+/* Skill Tree branch headers (Skill tab + Upgrade Shop's Skills section). */
+.skill-tree-header {
+  font-size: 10px;
+  opacity: 0.7;
+  margin: 6px 0 4px;
+  flex-shrink: 0;
+}
+
 /* Stats/Upgrades/Skills scroll as one region; the detail panel and the
  * Continue/New Game buttons below stay put, never scrolled out of view. */
 .upgrade-shop-scroll {

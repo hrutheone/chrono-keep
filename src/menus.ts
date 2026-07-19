@@ -7,6 +7,7 @@ import {
   ENEMY_NAME,
   MONSTER_LORE,
   POTION_FIXED_TURN_COST,
+  SKILL_BRANCHES,
   SKILL_LEVEL_EFFECTS,
   SKILLS,
   WEAPON_EFFECT_LABEL,
@@ -16,6 +17,7 @@ import {
   relicEffectText,
   relicLore,
   relicName,
+  skillRequirementLabel,
 } from './content';
 import { spriteCssStyle } from './assets';
 import {
@@ -42,6 +44,7 @@ import {
   buyOneTimeUpgrade,
   buySkillUpgrade,
   buyStatUpgrade,
+  isSkillUnlocked,
   oneTimeUpgradeAvailable,
   ONE_TIME_UPGRADES,
   skillCost,
@@ -492,6 +495,10 @@ function renderSkillDetail(state: GameState, skillId: string | null): string {
   const effectLines = renderSkillLevelEffects(skillId, level);
 
   if (level === 0) {
+    const requirement = skillRequirementLabel(skillId as SkillId);
+    const lockedHint = requirement && !isSkillUnlocked(state, skillId as SkillId)
+      ? requirement
+      : 'Unlock in the Upgrade Shop to assign it to a slot.';
     return `
       <div class="item-detail">
         <div class="item-detail-header">
@@ -501,7 +508,7 @@ function renderSkillDetail(state: GameState, skillId: string | null): string {
             <div class="item-detail-stat">LOCKED</div>
           </div>
         </div>
-        <div class="item-detail-lore">${effectLines}<div class="skill-level-effect inactive">Unlock in the Upgrade Shop to assign it to a slot.</div></div>
+        <div class="item-detail-lore">${effectLines}<div class="skill-level-effect inactive">${lockedHint}</div></div>
         <div class="item-detail-actions"></div>
       </div>`;
   }
@@ -525,27 +532,33 @@ function renderSkillDetail(state: GameState, skillId: string | null): string {
     </div>`;
 }
 
+/** Renders one Skill Tree branch's grid of skill slot buttons. */
+function renderSkillBranchGrid(state: GameState, selectedId: string | null, dataAction: 'select-skill' | 'select-shop-skill'): string {
+  return SKILL_BRANCHES.map(({ label, skills }) => {
+    const rows = skills
+      .map((id) => {
+        const skill = SKILLS[id];
+        const level = state.persistent.skills[id] ?? 0;
+        const selected = id === selectedId ? ' selected' : '';
+        const iconStyle = iconStyleForSkill(id, INV_ICON_SIZE);
+        return `<button class="inv-slot${level === 0 ? ' locked' : ''}${selected}" data-action="${dataAction}" data-skill="${id}" aria-label="${skill.name}"><span class="item-icon" style="${iconStyle}"></span><span class="slot-name">${skill.name}</span></button>`;
+      })
+      .join('');
+    return `<h3 class="skill-tree-header">${label}</h3><div class="inventory-grid shop-stat-grid">${rows}</div>`;
+  }).join('');
+}
+
 /** Renders Skills tab. */
 function renderSkillsTab(state: GameState): string {
   const ids = Object.keys(SKILLS);
   if (selectedSkillId !== null && !ids.includes(selectedSkillId)) selectedSkillId = null;
-
-  const gridHtml = ids
-    .map((id) => {
-      const skill = SKILLS[id];
-      const locked = (state.persistent.skills[id] ?? 0) === 0;
-      const selected = id === selectedSkillId ? ' selected' : '';
-      const iconStyle = iconStyleForSkill(id, INV_ICON_SIZE);
-      return `<button class="inv-slot${locked ? ' locked' : ''}${selected}" data-action="select-skill" data-skill="${id}" aria-label="${skill.name}"><span class="item-icon" style="${iconStyle}"></span><span class="slot-name">${skill.name}</span></button>`;
-    })
-    .join('');
 
   const activeLine = SKILL_SLOTS.map((slot) => `${slot}: ${state.run.activeSkills[SLOT_INDEX[slot]] ?? '--'}`).join(' · ');
 
   return `
     <div class="menu-tab-body">
       <div class="stat-line">Active — ${activeLine}</div>
-      <div class="inventory-grid">${gridHtml}</div>
+      ${renderSkillBranchGrid(state, selectedSkillId, 'select-skill')}
       ${renderSkillDetail(state, selectedSkillId)}
     </div>`;
 }
@@ -626,14 +639,17 @@ function renderShopDetail(state: GameState): string {
   }
 
   if (selectedShopSkillId) {
-    const id = selectedShopSkillId;
+    const id = selectedShopSkillId as SkillId;
     const skill = SKILLS[id];
     const level = skillLevel(state, id);
     const cost = skillCost(state, id);
     const maxed = cost === null;
-    const disabled = maxed || state.persistent.echoes < (cost ?? 0);
-    const buyLabel = maxed ? 'MAX' : level === 0 ? `Unlock (${cost})` : `Upgrade (${cost})`;
+    const prereqUnmet = level === 0 && !isSkillUnlocked(state, id);
+    const disabled = maxed || prereqUnmet || state.persistent.echoes < (cost ?? 0);
+    const buyLabel = maxed ? 'MAX' : prereqUnmet ? 'Locked' : level === 0 ? `Unlock (${cost})` : `Upgrade (${cost})`;
     const effectLines = renderSkillLevelEffects(id, level);
+    const requirement = skillRequirementLabel(id);
+    const lockedHint = prereqUnmet && requirement ? `<div class="skill-level-effect inactive">${requirement}</div>` : '';
     return `
       <div class="item-detail">
         <div class="item-detail-header">
@@ -643,7 +659,7 @@ function renderShopDetail(state: GameState): string {
             <div class="item-detail-stat">${level === 0 ? 'Locked' : `Lv${level}${maxed ? ' (MAX)' : ''}`}</div>
           </div>
         </div>
-        <div class="item-detail-lore">${effectLines}</div>
+        <div class="item-detail-lore">${effectLines}${lockedHint}</div>
         <div class="item-detail-actions">
           <button data-action="buy-skill" data-skill="${id}" ${disabled ? 'disabled' : ''}>${buyLabel}</button>
         </div>
@@ -687,14 +703,7 @@ function renderUpgradeShop(state: GameState): string {
     return `<button class="inv-slot${selected}" data-action="select-stat" data-track="${track}" aria-label="${label}"><span class="item-icon" style="${iconStyle}"></span><span class="slot-name">${shortStatLabel(label)}</span></button>`;
   }).join('');
 
-  const skillGridHtml = Object.keys(SKILLS)
-    .map((id) => {
-      const skill = SKILLS[id];
-      const selected = id === selectedShopSkillId ? ' selected' : '';
-      const iconStyle = iconStyleForSkill(id, INV_ICON_SIZE);
-      return `<button class="inv-slot${selected}" data-action="select-shop-skill" data-skill="${id}" aria-label="${skill.name}"><span class="item-icon" style="${iconStyle}"></span><span class="slot-name">${skill.name}</span></button>`;
-    })
-    .join('');
+  const skillGridHtml = renderSkillBranchGrid(state, selectedShopSkillId, 'select-shop-skill');
 
   const continueLabel =
     state.run.currentFloor === HUB_FLOOR ? 'Close' : `Continue — Loop ${state.persistent.loopCount + 1}`;
@@ -717,7 +726,7 @@ function renderUpgradeShop(state: GameState): string {
         <h3>Upgrades</h3>
         <div class="inventory-grid shop-stat-grid">${upgradeGridHtml}</div>
         <h3>Skills</h3>
-        <div class="inventory-grid shop-stat-grid">${skillGridHtml}</div>
+        ${skillGridHtml}
       </div>
       ${renderShopDetail(state)}
       <button class="continue-btn" data-action="shop-continue">${continueLabel}</button>

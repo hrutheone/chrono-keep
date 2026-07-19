@@ -830,32 +830,39 @@ export function rollChestItem(rng: () => number, floorNumber: number, id: string
   return pool[Math.floor(rng() * pool.length)](id);
 }
 
-// Skills.
+// Skills. Four Branches radiating from the starter Dash skill (Section 6B).
 export const SKILLS: Record<string, { name: string; element: Element; stamina: number }> = {
+  // --- Branch A: The Striker (Mobility, Positioning, Assassination) ---
   dash: { name: 'Dash', element: 'PHYSICAL', stamina: 2 },
-  cleave: { name: 'Cleave', element: 'PHYSICAL', stamina: 3 },
-  flame_arc: { name: 'Flame Arc', element: 'FIRE', stamina: 4 },
-  static_shift: { name: 'Static Shift', element: 'VOLT', stamina: 3 },
-  ice_aegis: { name: 'Ice Aegis', element: 'FROST', stamina: 4 },
   bash: { name: 'Bash', element: 'PHYSICAL', stamina: 2 },
-  dragoon_jump: { name: 'Dragoon Jump', element: 'VOLT', stamina: 3 },
-  blizzard_wave: { name: 'Blizzard Wave', element: 'FROST', stamina: 4 },
-  meteor: { name: 'Meteor', element: 'FIRE', stamina: 5 },
-  chakra: { name: 'Chakra', element: 'PHYSICAL', stamina: 3 },
-  recall: { name: 'Recall', element: 'CHRONO', stamina: 4 },
-  dark_wave: { name: 'Dark Wave', element: 'PHYSICAL', stamina: 4 },
-  reflect_barrier: { name: 'Reflect Barrier', element: 'VOLT', stamina: 3 },
-  vanish: { name: 'Vanish', element: 'CHRONO', stamina: 2 },
-  omnislash: { name: 'Omnislash', element: 'PHYSICAL', stamina: 3 },
   mug: { name: 'Mug', element: 'PHYSICAL', stamina: 2 },
-  haste: { name: 'Haste', element: 'CHRONO', stamina: 4 },
+  grapple: { name: 'Grapple', element: 'PHYSICAL', stamina: 2 },
+  static_shift: { name: 'Static Shift', element: 'VOLT', stamina: 3 },
+  omnislash: { name: 'Omnislash', element: 'PHYSICAL', stamina: 3 },
+  vanish: { name: 'Vanish', element: 'CHRONO', stamina: 2 },
+
+  // --- Branch B: The Sentinel (Defense, Survival, Brawling) ---
+  cleave: { name: 'Cleave', element: 'PHYSICAL', stamina: 3 },
+  ice_aegis: { name: 'Ice Aegis', element: 'FROST', stamina: 4 },
   provoke: { name: 'Provoke', element: 'FIRE', stamina: 2 },
-  scourge: { name: 'Scourge', element: 'FROST', stamina: 3 },
-  lancet: { name: 'Lancet', element: 'VOLT', stamina: 2 },
-  holy: { name: 'Holy', element: 'FIRE', stamina: 5 },
-  defuse: { name: 'Defuse', element: 'VOLT', stamina: 2 },
-  slow: { name: 'Slow', element: 'FROST', stamina: 3 },
+  reflect_barrier: { name: 'Reflect Barrier', element: 'VOLT', stamina: 3 },
+  chakra: { name: 'Chakra', element: 'PHYSICAL', stamina: 3 },
+  fortify: { name: 'Fortify', element: 'PHYSICAL', stamina: 0 }, // "ALL Stamina" — see skills.ts's skillStaminaCost
   aura: { name: 'Aura', element: 'PHYSICAL', stamina: 3 },
+
+  // --- Branch C: The Weaver (Magic, Area Control, Debuffs) ---
+  flame_arc: { name: 'Flame Arc', element: 'FIRE', stamina: 4 },
+  defuse: { name: 'Defuse', element: 'VOLT', stamina: 2 },
+  blizzard_wave: { name: 'Blizzard Wave', element: 'FROST', stamina: 4 },
+  slow: { name: 'Slow', element: 'FROST', stamina: 3 },
+  chain_lightning: { name: 'Chain Lightning', element: 'VOLT', stamina: 4 },
+  meteor: { name: 'Meteor', element: 'FIRE', stamina: 5 },
+
+  // --- Branch D: The Chronomancer (Time Manipulation, Endgame) ---
+  recall: { name: 'Recall', element: 'CHRONO', stamina: 4 },
+  haste: { name: 'Haste', element: 'CHRONO', stamina: 4 },
+  time_stop: { name: 'Time-Stop', element: 'CHRONO', stamina: 5 },
+  paradox: { name: 'Paradox', element: 'CHRONO', stamina: 4 },
   ultima: { name: 'Ultima', element: 'CHRONO', stamina: 0 }, // "ALL Stamina" — see skills.ts's skillStaminaCost
 };
 
@@ -864,31 +871,105 @@ export type SkillId = keyof typeof SKILLS;
 // Skill level effects.
 export const SKILL_LEVEL_EFFECTS: Record<SkillId, readonly [string, string, string]> = {
   dash: ['Move 2 tiles in one turn.', 'Move 3 tiles.', '+1 Turn refunded on use.'],
-  cleave: ['Deal 1.2x ATK to 3 front tiles.', 'Deal 1.5x ATK.', 'Inflicts Knockback.'],
-  flame_arc: ['Deal 5 Fire DMG to adjacent enemies.', 'Chance to Burn.', 'Leaves fire hazard on floor.'],
+  bash: ['1x ATK + Knockback 2 tiles.', '1.5x ATK + Knockback 2.', 'Stuns instead if it hits a wall.'],
+  mug: ['0.5x ATK, 25% chance to steal a Consumable.', '35% chance to steal.', '50% chance to steal.'],
+  grapple: ['Pulls target up to 3 tiles directly to you.', 'Pulls up to 4 tiles.', 'Next attack against them deals 1.5x damage.'],
   static_shift: ['Teleport 3 tiles, Stun adjacent.', 'Range becomes 4 tiles.', 'Costs 2 Stamina instead of 3.'],
-  ice_aegis: ['Block next attack.', 'Block next 2 attacks.', 'Attackers are Chilled.'],
-  bash: ['1x ATK + Knockback 2.', '1.5x ATK + Knockback 2.', 'Stuns instead if it hits a wall.'],
-  dragoon_jump: ['Teleport 3 tiles, leaves a Stun trap.', 'Range becomes 4 tiles.', 'Costs 2 Stamina instead of 3.'],
-  blizzard_wave: ['3x3 AOE Frost damage + Chilled.', '1.3x damage.', 'Also Knocks back 1 tile.'],
-  meteor: ['4-range, 1-turn-delay 3x3 explosion.', '1.3x damage.', 'Leaves a Fire Hazard at the center.'],
-  chakra: ['0 Turns; restores 20% Max HP.', 'Restores 30% Max HP.', '+2 ATK for 3 turns.'],
-  recall: ['Mark a tile, recast to teleport back.', 'Recast restores 1 Stamina.', 'Recast costs 0 Turns.'],
-  dark_wave: ['Hits all 8 adjacent tiles for 1.2x ATK.', '1.5x ATK.', 'Heals 1 HP per enemy hit.'],
-  reflect_barrier: ['Blocks 1 hit, returns 3x ATK.', 'Blocks the next 2 hits.', 'The reflected hit also Stuns.'],
-  vanish: ['Next move ignores collision.', 'Next 2 moves ignore collision.', 'Grants +1 Turn.'],
-  omnislash: ['1.5x ATK (3x vs. Stunned/Chilled).', '2x ATK (4x vs. Stunned/Chilled).', 'Resets Stamina on a kill.'],
-  mug: ['Low damage, 25% chance to steal a Consumable.', '35% chance.', '50% chance.'],
-  haste: ['Next 2 actions cost 0 Turns.', 'Also restores 1 Stamina.', 'Next 3 actions instead of 2.'],
-  provoke: ['+5 DEF for 1 turn, pulls enemies within 5 tiles closer.', '+7 DEF for 1 turn.', 'Also Burns adjacent enemies.'],
-  scourge: ['Leaves a 3x3 DEF-piercing Frost hazard, 3 turns.', 'Hazard lasts 4 turns.', 'Hazard lasts 5 turns.'],
-  lancet: ['Range 3 Volt damage, +1 Stamina restored.', 'More damage.', 'Also Stuns the target.'],
-  holy: ['Massive single-target Fire damage, costs 2 Turns.', 'Even more damage.', 'Heals 20% Max HP if it kills.'],
+  omnislash: ['1.5x ATK (3x vs. Stunned/Chilled).', '2x ATK (4x vs. Stunned/Chilled).', 'Resets Stamina to Max on a kill.'],
+  vanish: ['Next move ignores enemy/wall collision.', 'Next 2 moves ignore collision.', 'Grants +1 Turn on cast.'],
+
+  cleave: ['Deal 1.2x ATK to 3 front tiles.', 'Deal 1.5x ATK.', 'Inflicts Knockback 1.'],
+  ice_aegis: ['Block the next 1 attack entirely.', 'Blocks the next 2 attacks.', 'Attackers are Chilled.'],
+  provoke: ['+5 DEF for 1 turn, pulls enemies within 5 tiles closer.', '+7 DEF for 1 turn.', 'Also Burns adjacent enemies on cast.'],
+  reflect_barrier: ['Block 1 hit, return 2x ATK to attacker.', 'Block 1 hit, return 3x ATK.', 'The reflected hit also Stuns them.'],
+  chakra: ['Costs 0 Turns; restores 20% Max HP.', 'Restores 30% Max HP.', 'Also grants +2 ATK for 3 turns.'],
+  fortify: ['Consumes all Stamina. Grants +2 DEF per Stamina spent for 3 turns.', '+3 DEF per Stamina spent.', 'Also grants status immunity while active.'],
+  aura: ['Cleanses Status, grants immunity for 3 turns.', 'Immunity lasts 4 turns.', 'Heals 20 HP on cast.'],
+
+  flame_arc: ['Deal 5 Fire DMG to adjacent enemies.', 'Chance to Burn (50%).', 'Leaves Fire Hazard on floor (3 turns).'],
   defuse: ["Strips a target's DEF to 0 for 1 turn.", 'Lasts 2 turns.', 'Lasts 3 turns.'],
-  slow: ["Cripples a target's Speed for a few turns.", 'Lasts longer.', 'Affects a 3x3 area instead of one target.'],
-  aura: ['Cleanses Status, grants immunity for 3 turns.', 'Immunity lasts 4 turns.', 'Also heals 20 HP.'],
-  ultima: ['Consumes all Stamina; 5x5 AOE for Stamina x2 damage.', 'Stamina x2.5 damage.', 'Stamina x3 damage.'],
+  blizzard_wave: ['3x3 AOE Frost damage + Chilled.', '1.3x damage.', 'Also Knocks back 1 tile.'],
+  slow: ["Target's speed becomes 0 for 2 turns.", 'Lasts 3 turns.', 'Affects a 3x3 area instead of single target.'],
+  chain_lightning: ['Hits target, arcs to 2 nearest enemies for 1x ATK.', 'Arcs to 3 enemies.', '25% chance to Stun all hit targets.'],
+  meteor: ['4-range, 1-turn-delay 3x3 explosion (2x ATK).', '3x ATK.', 'Leaves Fire Hazard at center.'],
+
+  recall: ['Mark a tile, recast to teleport back instantly.', 'Recast restores 1 Stamina.', 'Recast costs 0 Turns.'],
+  haste: ['Next 2 actions (Move/Attack) cost 0 Turns.', 'Also restores 1 Stamina on cast.', 'Next 3 actions cost 0 Turns.'],
+  time_stop: ["Freezes the floor's 100-Turn counter for 3 turns.", 'Freezes for 5 turns.', 'Freezes for 7 turns.'],
+  paradox: ['Swaps your current HP % with target\'s HP %.', 'Also swaps Status effects.', 'Refunds 2 Turns if used on an Elite/Boss.'],
+  ultima: ['Consumes all Stamina; 5x5 AOE for (Stamina x2) DMG.', '(Stamina x2.5) DMG.', '(Stamina x3) DMG.'],
 };
+
+// Skill Cost Tiers (Section 6B/7): Core/Setup, Advanced/Tactical, Chronomancer/Endgame.
+export type SkillTier = 1 | 2 | 3;
+
+export const SKILL_TIER: Record<SkillId, SkillTier> = {
+  dash: 1, bash: 1, cleave: 1, mug: 1, flame_arc: 1, ice_aegis: 1, defuse: 1,
+  grapple: 2, static_shift: 2, omnislash: 2, provoke: 2, reflect_barrier: 2, chakra: 2, blizzard_wave: 2, slow: 2, chain_lightning: 2, vanish: 2,
+  recall: 3, haste: 3, time_stop: 3, paradox: 3, meteor: 3, fortify: 3, aura: 3, ultima: 3,
+};
+
+/** One skill-and-level prerequisite, or an "any of" list for skills reachable from two branches. */
+export interface SkillRequirement {
+  anyOf: readonly { skillId: SkillId; level: number }[];
+}
+
+function req(skillId: SkillId, level: number): SkillRequirement {
+  return { anyOf: [{ skillId, level }] };
+}
+
+// Prerequisites gating a skill's Level 1 unlock. Absent = no prerequisite (Dash, the starter).
+export const SKILL_REQUIREMENTS: Partial<Record<SkillId, SkillRequirement>> = {
+  bash: req('dash', 1),
+  mug: req('dash', 1),
+  grapple: req('bash', 1),
+  static_shift: req('dash', 2),
+  omnislash: { anyOf: [{ skillId: 'grapple', level: 1 }, { skillId: 'static_shift', level: 1 }] },
+  vanish: req('mug', 2),
+
+  cleave: req('dash', 1),
+  ice_aegis: req('dash', 1),
+  provoke: req('cleave', 1),
+  reflect_barrier: req('ice_aegis', 1),
+  chakra: req('provoke', 1),
+  fortify: req('reflect_barrier', 2),
+  aura: req('chakra', 2),
+
+  flame_arc: { anyOf: [{ skillId: 'bash', level: 1 }, { skillId: 'cleave', level: 1 }] },
+  defuse: req('flame_arc', 1),
+  blizzard_wave: req('flame_arc', 1),
+  slow: req('defuse', 1),
+  chain_lightning: req('defuse', 2),
+  meteor: req('blizzard_wave', 2),
+
+  haste: req('recall', 1),
+  time_stop: req('recall', 2),
+  paradox: req('haste', 2),
+};
+
+// Recall and Ultima unlock once the player has purchased this many *other* skills (any level), instead of a specific prerequisite skill.
+export const SKILL_UNLOCK_COUNT_REQUIREMENT: Partial<Record<SkillId, number>> = {
+  recall: 10,
+  ultima: 15,
+};
+
+/** Human-readable prerequisite text for the locked-skill tooltip, e.g. "Requires: Cleave Lvl 1". */
+export function skillRequirementLabel(skillId: SkillId): string | null {
+  const count = SKILL_UNLOCK_COUNT_REQUIREMENT[skillId];
+  if (count !== undefined) return `Requires: Unlock ${count} Skills`;
+  const requirement = SKILL_REQUIREMENTS[skillId];
+  if (!requirement) return null;
+  const parts = requirement.anyOf.map(({ skillId: reqId, level }) => `${SKILLS[reqId].name} Lvl ${level}`);
+  return `Requires: ${parts.join(' or ')}`;
+}
+
+// Skill Tree branch grouping, for the Skill tab / Upgrade Shop UI (Section 8).
+export const SKILL_BRANCHES: readonly { label: string; skills: readonly SkillId[] }[] = [
+  { label: 'The Striker', skills: ['dash', 'bash', 'mug', 'grapple', 'static_shift', 'omnislash', 'vanish'] },
+  { label: 'The Sentinel', skills: ['cleave', 'ice_aegis', 'provoke', 'reflect_barrier', 'chakra', 'fortify', 'aura'] },
+  { label: 'The Weaver', skills: ['flame_arc', 'defuse', 'blizzard_wave', 'slow', 'chain_lightning', 'meteor'] },
+  { label: 'The Chronomancer', skills: ['recall', 'haste', 'time_stop', 'paradox', 'ultima'] },
+];
 
 // Enemy death drops.
 type DropRoll = (id: string) => Item;
