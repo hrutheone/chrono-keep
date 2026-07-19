@@ -47,7 +47,7 @@ export const SPRITES = {
   WALL_CORNER: { col: 9, row: 1 }, // wall corner, drawn connecting East+South
   WALL_T: { col: 10, row: 1 }, // 3-way wall junction, drawn connecting North+East+South
   WALL_CROSS: { col: 11, row: 1 }, // 4-way wall junction (symmetric)
-  WALL_END: { col: 12, row: 1 }, // wall dead-end, drawn connecting North only
+  WALL_END: { col: 12, row: 1 }, // wall dead-end, drawn connecting South only
   DOOR: { col: 0, row: 0 }, // no door
   STAIRS: { col: 2, row: 6 }, // stairs
   SHORTCUT_GATE: { col: 1, row: 9 }, // blue gate

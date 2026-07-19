@@ -161,10 +161,10 @@ interface WallVariant {
 }
 const WALL_VARIANT_BY_MASK: Record<number, WallVariant> = {
   0: { ref: SPRITES.WALL, rot: 0 }, // isolated
-  1: { ref: SPRITES.WALL_END, rot: 0 }, // N
-  2: { ref: SPRITES.WALL_END, rot: 1 }, // E
-  4: { ref: SPRITES.WALL_END, rot: 2 }, // S
-  8: { ref: SPRITES.WALL_END, rot: 3 }, // W
+  1: { ref: SPRITES.WALL_END, rot: 2 }, // N (base art connects S, so flip 180)
+  2: { ref: SPRITES.WALL_END, rot: 3 }, // E
+  4: { ref: SPRITES.WALL_END, rot: 0 }, // S
+  8: { ref: SPRITES.WALL_END, rot: 1 }, // W
   5: { ref: SPRITES.WALL, rot: 0 }, // N+S
   10: { ref: SPRITES.WALL, rot: 1 }, // E+W
   6: { ref: SPRITES.WALL_CORNER, rot: 0 }, // E+S
@@ -175,7 +175,7 @@ const WALL_VARIANT_BY_MASK: Record<number, WallVariant> = {
   14: { ref: SPRITES.WALL_T, rot: 1 }, // E+S+W
   13: { ref: SPRITES.WALL_T, rot: 2 }, // S+W+N
   11: { ref: SPRITES.WALL_T, rot: 3 }, // W+N+E
-  15: { ref: SPRITES.WALL_CROSS, rot: 0 }, // N+E+S+W
+  15: { ref: SPRITES.WALL, rot: 0 }, // N+E+S+W, fully interior — plain wall, WALL_CROSS punches a visible hole here
 };
 
 const WALL_NEIGHBOR_OFFSETS: readonly [number, number, number][] = [
