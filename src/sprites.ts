@@ -153,17 +153,17 @@ export const RELIC_SPRITE_BY_EFFECT: Record<string, SpriteRef> = {
 // Item icons.
 export const WEAPON_SPRITE_BY_NAME: Record<string, SpriteRef> = {
   // --- Early game (F1-F20) ---
-  'Rusty Sword': { col: 32, row: 2 },
+  'Rusty Sword': { col: 36, row: 7 },
   'Bone Dagger': { col: 34, row: 6 },
   'Mythril Hammer': { col: 35, row: 2 },
   'Mage Masher': { col: 32, row: 6 },
-  'Flametongue': { col: 33, row: 7 },
+  'Flametongue': { col: 36, row: 6 },
   'Ice Lance': { col: 35, row: 3 },
   'Partisan': { col: 36, row: 3 },
   'Glass Sword': { col: 33, row: 2 },
   'Broadsword': { col: 34, row: 2 },
   'Ash Wand': { col: 32, row: 4 },
-  'Bone Club': { col: 36, row: 2 },
+  'Bone Club': { col: 33, row: 2 },
   'Defender': { col: 33, row: 6 },
 
   // --- Mid game (F21-F50) ---
@@ -177,24 +177,24 @@ export const WEAPON_SPRITE_BY_NAME: Record<string, SpriteRef> = {
   'Flamberge': { col: 32, row: 7 },
   'Trident': { col: 40, row: 7 }, // the sheet's actual trident icon
   'Bio-Blade': { col: 35, row: 7 },
-  'Murasame': { col: 36, row: 7 },
-  'Gale Bow': { col: 38, row: 5 },
+  'Murasame': { col: 33, row: 7 },
+  'Gale Bow': { col: 40, row: 6 },
   'Kotetsu': { col: 32, row: 8 },
-  'Diamond Mace': { col: 37, row: 7 },
+  'Diamond Mace': { col: 36, row: 4 },
 
   // --- Late game (F51-F99) ---
   'Firaga Edge': { col: 33, row: 8 },
   'Ice Brand': { col: 34, row: 8 },
-  'Blitz Whip': { col: 34, row: 4 },
+  'Blitz Whip': { col: 41, row: 5 },
   'Rune Axe': { col: 41, row: 7 }, // the sheet's actual (double-headed) axe icon
   'Excalibur': { col: 35, row: 8 },
   'Holy Lance': { col: 35, row: 5 },
-  'Ultima Weapon': { col: 32, row: 9 },
+  'Ultima Weapon': { col: 38, row: 8 },
   'Ragnarok': { col: 33, row: 9 },
   'Gungnir': { col: 42, row: 7 },
   'Save the Queen': { col: 36, row: 8 },
   'Blood Lance': { col: 36, row: 3 },
-  'Deathbringer': { col: 36, row: 9 },
+  'Deathbringer': { col: 36, row: 2 },
   'Apocalypse': { col: 35, row: 9 },
   'Masamune': { col: 34, row: 9 },
 
