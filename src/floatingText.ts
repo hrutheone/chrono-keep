@@ -211,17 +211,20 @@ export const GLYPH_SPACING = 1;
 /** Draws `text` in the pixel glyph font at pixel (px, py). */
 export function drawGlyphText(ctx: CanvasRenderingContext2D, text: string, px: number, py: number, color: string): void {
   ctx.fillStyle = color;
+  ctx.beginPath();
   let cursor = px;
   for (const ch of text.toUpperCase()) {
     const glyph = G[ch] ?? G[' '];
     for (let y = 0; y < GLYPH_H; y++) {
       for (let x = 0; x < GLYPH_W; x++) {
-        if (glyph[y][x]) ctx.fillRect(cursor + x, py + y, 1, 1);
+        if (glyph[y][x]) ctx.rect(cursor + x, py + y, 1, 1);
       }
     }
     cursor += GLYPH_W + GLYPH_SPACING;
   }
+  ctx.fill();
 }
+
 
 export function measureGlyphText(text: string): number {
   return text.length * (GLYPH_W + GLYPH_SPACING) - GLYPH_SPACING;

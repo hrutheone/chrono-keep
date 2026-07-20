@@ -22,8 +22,6 @@ const STATUS_LABEL: Record<StatusEffect, string> = {
   CHILLED: 'CHILL',
 };
 
-let lastTurns: number | null = null;
-
 const SKILL_SLOT_IDS: readonly [string, string][] = [
   ['skill-q', 'Q'],
   ['skill-e', 'E'],
@@ -39,10 +37,6 @@ const TOUCH_SKILL_BTN_CLASS: readonly [string, string][] = [
   ['skill-btn-f', 'F'],
 ];
 
-function el(id: string): HTMLElement {
-  return document.getElementById(id)!;
-}
-
 /** The 3-4 keys most relevant to the current screen, always visible in the HUD. */
 const HINT_STRIP: Record<GameState['ui']['currentScreen'], string> = {
   TITLE: 'Enter: Start',
@@ -57,6 +51,76 @@ const HINT_STRIP: Record<GameState['ui']['currentScreen'], string> = {
   VICTORY: 'Esc: Continue',
   DIALOGUE: 'Click anywhere · Space/Esc: Continue',
 };
+
+// Cached DOM element references
+interface HudDomElements {
+  turnCounter: HTMLElement;
+  hpFill: HTMLElement;
+  stamFill: HTMLElement;
+  braceIcon: HTMLElement;
+  statusIcon: HTMLElement;
+  immunityTray: HTMLElement;
+  relicTray: HTMLElement;
+  relicTooltip: HTMLElement;
+  eliteWarning: HTMLElement;
+  actionLog: HTMLElement;
+  weaponInfo: HTMLElement;
+  skillSlots: HTMLElement[];
+  touchSkillBtns: (HTMLElement | null)[];
+  hintStrip: HTMLElement;
+  hudTop: HTMLElement;
+  hudBottom: HTMLElement;
+  touchControls: HTMLElement | null;
+  vignette: HTMLElement;
+}
+
+let dom: HudDomElements | null = null;
+
+// Last rendered values for dirty checking
+let lastTurns: number | null = null;
+let lastHpPct: number | null = null;
+let lastStamPct: number | null = null;
+let lastBraced: boolean | null = null;
+let lastStatus: StatusEffect | null = null;
+let lastImmunityKey: string | null = null;
+let lastRelicsKey: string | null = null;
+let lastEliteKey: string | null = null;
+let lastWeaponText: string | null = null;
+let lastSkillKey: string | null = null;
+let lastTouchSkillKey: string | null = null;
+let lastLogKey: string | null = null;
+let lastHintText: string | null = null;
+let lastHideHud: boolean | null = null;
+let lastHideHudBottom: boolean | null = null;
+let lastLowHp: boolean | null = null;
+
+function getDom(): HudDomElements {
+  if (!dom) {
+    dom = {
+      turnCounter: document.getElementById('turn-counter')!,
+      hpFill: document.getElementById('hp-fill')!,
+      stamFill: document.getElementById('stam-fill')!,
+      braceIcon: document.getElementById('brace-icon')!,
+      statusIcon: document.getElementById('status-icon')!,
+      immunityTray: document.getElementById('immunity-tray')!,
+      relicTray: document.getElementById('relic-tray')!,
+      relicTooltip: document.getElementById('relic-tooltip')!,
+      eliteWarning: document.getElementById('elite-warning')!,
+      actionLog: document.getElementById('action-log')!,
+      weaponInfo: document.getElementById('weapon-info')!,
+      skillSlots: SKILL_SLOT_IDS.map(([id]) => document.getElementById(id)!),
+      touchSkillBtns: TOUCH_SKILL_BTN_CLASS.map(([cls]) =>
+        document.querySelector<HTMLElement>(`#touch-controls .${cls}`),
+      ),
+      hintStrip: document.getElementById('hint-strip')!,
+      hudTop: document.getElementById('hud-top')!,
+      hudBottom: document.getElementById('hud-bottom')!,
+      touchControls: document.getElementById('touch-controls'),
+      vignette: document.getElementById('vignette')!,
+    };
+  }
+  return dom;
+}
 
 /** Builds the HUD DOM once into the #hud-top / #hud-bottom overlay containers. */
 export function initHud(): void {
@@ -91,114 +155,195 @@ export function initHud(): void {
     </div>
     <div id="hint-strip" class="hint-strip"></div>`;
 
+  dom = null; // force re-query on next getDom call
+  lastTurns = null;
+  lastHpPct = null;
+  lastStamPct = null;
+  lastBraced = null;
+  lastStatus = null;
+  lastImmunityKey = null;
+  lastRelicsKey = null;
+  lastEliteKey = null;
+  lastWeaponText = null;
+  lastSkillKey = null;
+  lastTouchSkillKey = null;
+  lastLogKey = null;
+  lastHintText = null;
+  lastHideHud = null;
+  lastHideHudBottom = null;
+  lastLowHp = null;
+
   // Delegated tooltip toggling for rebuilt tray children.
   document.addEventListener('click', (ev) => {
     const target = ev.target as HTMLElement;
     const icon = target.closest<HTMLElement>('.relic-icon');
-    const tooltip = el('relic-tooltip');
+    const elements = getDom();
     if (icon) {
       const effect = icon.dataset.relic!;
-      tooltip.innerHTML = `<strong>${relicName(effect)}</strong><br>${relicLore(effect)}`;
-      tooltip.classList.add('visible');
+      elements.relicTooltip.innerHTML = `<strong>${relicName(effect)}</strong><br>${relicLore(effect)}`;
+      elements.relicTooltip.classList.add('visible');
     } else if (!target.closest('#relic-tooltip')) {
-      tooltip.classList.remove('visible');
+      elements.relicTooltip.classList.remove('visible');
     }
   });
 }
 
-function setBar(fillId: string, current: number, max: number): void {
-  const fill = el(fillId);
-  const pct = max > 0 ? Math.max(0, Math.min(1, current / max)) * 100 : 0;
-  fill.style.width = `${pct}%`;
-}
-
-/** Refreshes the HUD from the current game state. Call once per frame. */
+/** Refreshes the HUD from the current game state with change detection. */
 export function updateHud(state: GameState): void {
   const { run } = state;
+  const elements = getDom();
 
-  const turnEl = el('turn-counter');
-  turnEl.textContent = `${run.turnsRemaining}`;
-  if (lastTurns !== null && lastTurns !== run.turnsRemaining) {
-    turnEl.classList.remove('tick');
-    void turnEl.offsetWidth; // restart the CSS animation
-    turnEl.classList.add('tick');
+  // 1. Turn counter
+  if (lastTurns !== run.turnsRemaining) {
+    elements.turnCounter.textContent = `${run.turnsRemaining}`;
+    if (lastTurns !== null) {
+      elements.turnCounter.classList.remove('tick');
+      void elements.turnCounter.offsetWidth; // restart CSS animation
+      elements.turnCounter.classList.add('tick');
+    }
+    lastTurns = run.turnsRemaining;
   }
-  lastTurns = run.turnsRemaining;
 
-  setBar('hp-fill', run.currentHp, run.maxHp);
-  setBar('stam-fill', run.currentStamina, run.maxStamina);
+  // 2. HP & Stamina Bars
+  const hpPct = run.maxHp > 0 ? Math.max(0, Math.min(1, run.currentHp / run.maxHp)) * 100 : 0;
+  if (lastHpPct !== hpPct) {
+    elements.hpFill.style.width = `${hpPct}%`;
+    lastHpPct = hpPct;
+  }
 
-  const braceEl = el('brace-icon');
-  braceEl.textContent = run.braced ? 'BRACED +1DEF' : '';
-  braceEl.className = `brace-icon${run.braced ? ' active' : ''}`;
+  const stamPct = run.maxStamina > 0 ? Math.max(0, Math.min(1, run.currentStamina / run.maxStamina)) * 100 : 0;
+  if (lastStamPct !== stamPct) {
+    elements.stamFill.style.width = `${stamPct}%`;
+    lastStamPct = stamPct;
+  }
 
-  const statusEl = el('status-icon');
-  statusEl.textContent = STATUS_LABEL[run.status];
-  statusEl.className = `status-icon status-${run.status.toLowerCase()}`;
+  // 3. Brace Icon
+  if (lastBraced !== run.braced) {
+    elements.braceIcon.textContent = run.braced ? 'BRACED +1DEF' : '';
+    elements.braceIcon.className = `brace-icon${run.braced ? ' active' : ''}`;
+    lastBraced = run.braced;
+  }
 
-  // Shielded/greyed icon per status the player is currently immune to via an equipped accessory.
-  el('immunity-tray').innerHTML = (Object.keys(STATUS_IMMUNITY) as StatusEffect[])
-    .filter((status) => hasAccessoryPassive(state, STATUS_IMMUNITY[status]!))
-    .map((status) => `<span class="immunity-icon" title="Immune: ${STATUS_LABEL[status]}">${STATUS_LABEL[status]}</span>`)
-    .join('');
+  // 4. Status Icon
+  if (lastStatus !== run.status) {
+    elements.statusIcon.textContent = STATUS_LABEL[run.status];
+    elements.statusIcon.className = `status-icon status-${run.status.toLowerCase()}`;
+    lastStatus = run.status;
+  }
 
-  // Icon strip for held Relics.
-  el('relic-tray').innerHTML = run.relics
-    .map((effect) => {
-      const ref = RELIC_SPRITE_BY_EFFECT[effect] ?? SPRITES.RELIC;
-      return `<button class="relic-icon" data-relic="${effect}" style="${spriteCssStyle(ref, RELIC_ICON_SIZE)}"></button>`;
-    })
-    .join('');
+  // 5. Immunity Tray
+  const immunities = (Object.keys(STATUS_IMMUNITY) as StatusEffect[])
+    .filter((status) => hasAccessoryPassive(state, STATUS_IMMUNITY[status]!));
+  const immunityKey = immunities.join(',');
+  if (lastImmunityKey !== immunityKey) {
+    elements.immunityTray.innerHTML = immunities
+      .map((status) => `<span class="immunity-icon" title="Immune: ${STATUS_LABEL[status]}">${STATUS_LABEL[status]}</span>`)
+      .join('');
+    lastImmunityKey = immunityKey;
+  }
 
-  const eliteWarning = el('elite-warning');
+  // 6. Relic Tray
+  const relicsKey = run.relics.join(',');
+  if (lastRelicsKey !== relicsKey) {
+    elements.relicTray.innerHTML = run.relics
+      .map((effect) => {
+        const ref = RELIC_SPRITE_BY_EFFECT[effect] ?? SPRITES.RELIC;
+        return `<button class="relic-icon" data-relic="${effect}" style="${spriteCssStyle(ref, RELIC_ICON_SIZE)}"></button>`;
+      })
+      .join('');
+    lastRelicsKey = relicsKey;
+  }
+
+  // 7. Elite Warning
   const nearbyElite = state.dungeon.enemies.find(
     (e) => e.awake && e.affix && Math.abs(e.x - run.playerX) + Math.abs(e.y - run.playerY) <= ELITE_WARNING_RADIUS,
   );
-  if (state.ui.currentScreen === 'GAME' && nearbyElite) {
-    eliteWarning.textContent = `⚠ ELITE DETECTED: [${eliteAffixName(nearbyElite.affix!)}] ${ENEMY_NAME[nearbyElite.kind]}`;
-    eliteWarning.classList.add('visible');
-  } else {
-    eliteWarning.classList.remove('visible');
+  const eliteKey = state.ui.currentScreen === 'GAME' && nearbyElite ? `${nearbyElite.affix}_${nearbyElite.kind}` : '';
+  if (lastEliteKey !== eliteKey) {
+    if (eliteKey) {
+      elements.eliteWarning.textContent = `⚠ ELITE DETECTED: [${eliteAffixName(nearbyElite!.affix!)}] ${ENEMY_NAME[nearbyElite!.kind]}`;
+      elements.eliteWarning.classList.add('visible');
+    } else {
+      elements.eliteWarning.classList.remove('visible');
+    }
+    lastEliteKey = eliteKey;
   }
 
-  el('weapon-info').textContent = run.equippedWeapon ? itemDisplayName(run.equippedWeapon) : 'Unarmed';
-  SKILL_SLOT_IDS.forEach(([elId, label], i) => {
-    const skillId = run.activeSkills[i];
-    if (!skillId) {
-      el(elId).innerHTML = `${label}: --`;
-      return;
-    }
-    const iconStyle = spriteCssStyle(SKILL_SPRITE_BY_ID[skillId as SkillId], SKILL_ICON_SIZE);
-    el(elId).innerHTML = `${label}: <span class="skill-slot-icon" style="${iconStyle}"></span> Lv${state.persistent.skills[skillId] ?? 0}`;
-  });
+  // 8. Weapon Info
+  const weaponText = run.equippedWeapon ? itemDisplayName(run.equippedWeapon) : 'Unarmed';
+  if (lastWeaponText !== weaponText) {
+    elements.weaponInfo.textContent = weaponText;
+    lastWeaponText = weaponText;
+  }
 
-  // Mirror the same icons onto the mobile touch action-pad buttons.
-  TOUCH_SKILL_BTN_CLASS.forEach(([className, label], i) => {
-    const btn = document.querySelector<HTMLElement>(`#touch-controls .${className}`);
-    if (!btn) return;
-    const skillId = run.activeSkills[i];
-    if (!skillId) {
-      btn.innerHTML = label;
-      return;
-    }
-    const iconStyle = spriteCssStyle(SKILL_SPRITE_BY_ID[skillId as SkillId], TOUCH_SKILL_ICON_SIZE);
-    btn.innerHTML = `<span class="skill-slot-icon" style="${iconStyle}"></span>`;
-  });
+  // 9. Desktop Skill Slots
+  const skillKey = run.activeSkills.map((id) => `${id}_${state.persistent.skills[id] ?? 0}`).join('|');
+  if (lastSkillKey !== skillKey) {
+    SKILL_SLOT_IDS.forEach(([_, label], i) => {
+      const slotEl = elements.skillSlots[i];
+      if (!slotEl) return;
+      const skillId = run.activeSkills[i];
+      if (!skillId) {
+        slotEl.innerHTML = `${label}: --`;
+      } else {
+        const iconStyle = spriteCssStyle(SKILL_SPRITE_BY_ID[skillId as SkillId], SKILL_ICON_SIZE);
+        slotEl.innerHTML = `${label}: <span class="skill-slot-icon" style="${iconStyle}"></span> Lv${state.persistent.skills[skillId] ?? 0}`;
+      }
+    });
+    lastSkillKey = skillKey;
+  }
 
-  // Title Screen's overlay is transparent so its canvas art shows through — hide the gameplay HUD (and, on mobile, the touch d-pad) so neither bleeds in behind it.
+  // 10. Touch Skill Buttons
+  const touchSkillKey = run.activeSkills.join('|');
+  if (lastTouchSkillKey !== touchSkillKey) {
+    TOUCH_SKILL_BTN_CLASS.forEach(([_, label], i) => {
+      const btn = elements.touchSkillBtns[i] ?? document.querySelector<HTMLElement>(`#touch-controls .${TOUCH_SKILL_BTN_CLASS[i][0]}`);
+      if (!btn) return;
+      const skillId = run.activeSkills[i];
+      if (!skillId) {
+        btn.innerHTML = label;
+      } else {
+        const iconStyle = spriteCssStyle(SKILL_SPRITE_BY_ID[skillId as SkillId], TOUCH_SKILL_ICON_SIZE);
+        btn.innerHTML = `<span class="skill-slot-icon" style="${iconStyle}"></span>`;
+      }
+    });
+    lastTouchSkillKey = touchSkillKey;
+  }
+
+  // 11. HUD Visibility
   const hideHud = state.ui.currentScreen === 'TITLE';
-  el('hud-top').style.display = hideHud ? 'none' : '';
-  el('touch-controls').style.display = hideHud ? 'none' : '';
-  // Hide bottom HUD while menu is open to prevent mobile overlay bleed.
+  if (lastHideHud !== hideHud) {
+    elements.hudTop.style.display = hideHud ? 'none' : '';
+    if (elements.touchControls) elements.touchControls.style.display = hideHud ? 'none' : '';
+    lastHideHud = hideHud;
+  }
+
   const hideHudBottom = hideHud || state.ui.currentScreen === 'MENU';
-  el('hud-bottom').style.display = hideHudBottom ? 'none' : '';
-  el('action-log').innerHTML = state.ui.log
-    .slice(-3)
-    .map((line) => `<div>${line}</div>`)
-    .join('');
+  if (lastHideHudBottom !== hideHudBottom) {
+    elements.hudBottom.style.display = hideHudBottom ? 'none' : '';
+    lastHideHudBottom = hideHudBottom;
+  }
 
-  el('hint-strip').textContent = HINT_STRIP[state.ui.currentScreen] ?? '';
+  // 12. Action Log
+  const recentLog = state.ui.log.slice(-3);
+  const logKey = recentLog.join('||');
+  if (lastLogKey !== logKey) {
+    elements.actionLog.innerHTML = recentLog.map((line) => `<div>${line}</div>`).join('');
+    lastLogKey = logKey;
+  }
 
+  // 13. Hint Strip
+  const hintText = HINT_STRIP[state.ui.currentScreen] ?? '';
+  if (lastHintText !== hintText) {
+    elements.hintStrip.textContent = hintText;
+    lastHintText = hintText;
+  }
+
+  // 14. Low HP Vignette
   const lowHp = state.ui.currentScreen === 'GAME' && run.currentHp / run.maxHp < 0.25;
-  el('vignette').classList.toggle('low-hp', lowHp);
+  if (lastLowHp !== lowHp) {
+    elements.vignette.classList.toggle('low-hp', lowHp);
+    lastLowHp = lowHp;
+  }
 }
+

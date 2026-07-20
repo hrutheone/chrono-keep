@@ -597,11 +597,14 @@ export function updateMusicForState(state: GameState): void {
     stopTrack();
   } else {
     playTrack(choice.track);
-    if (activeSource) activeSource.playbackRate.value = choice.rate;
+    if (activeSource && activeSource.playbackRate.value !== choice.rate) {
+      activeSource.playbackRate.value = choice.rate;
+    }
     // Tactical muffling: the Menu always ducks the filter regardless of the underlying track's own value.
     rampMusicFilter(screen === 'MENU' ? 500 : choice.filter);
   }
 }
+
 
 // --- The Anxiety Clock ---
 // A continuous background tick that accelerates as remaining turns decrease.

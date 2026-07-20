@@ -115,6 +115,8 @@ function drawRef(ctx: CanvasRenderingContext2D, ref: SpriteRef, dx: number, dy: 
   else drawTile(ctx, ref.col, ref.row, dx, dy, flipX, size, rotQuarters);
 }
 
+const tintedTileCache = new Map<string, HTMLCanvasElement>();
+
 /** Draws a wall sprite washed with the current Biome's tint (untinted Biome 1 falls back to plain drawTile). */
 function drawTintedRef(ctx: CanvasRenderingContext2D, ref: SpriteRef, dx: number, dy: number, tint: string | null, rotQuarters = 0): void {
   if (!tint) {
@@ -122,24 +124,32 @@ function drawTintedRef(ctx: CanvasRenderingContext2D, ref: SpriteRef, dx: number
     return;
   }
 
-  scratchCtx.globalCompositeOperation = 'source-over';
-  scratchCtx.clearRect(0, 0, SPRITE_PX, SPRITE_PX);
+  const key = `${ref.col}_${ref.row}_${tint}_${rotQuarters}`;
+  let cached = tintedTileCache.get(key);
+  if (!cached) {
+    cached = document.createElement('canvas');
+    cached.width = SPRITE_PX;
+    cached.height = SPRITE_PX;
+    const cCtx = cached.getContext('2d')!;
+    cCtx.imageSmoothingEnabled = false;
 
-  scratchCtx.save();
-  if (rotQuarters > 0) {
-    scratchCtx.translate(SPRITE_PX / 2, SPRITE_PX / 2);
-    scratchCtx.rotate((Math.PI / 2) * rotQuarters);
-    scratchCtx.translate(-SPRITE_PX / 2, -SPRITE_PX / 2);
+    if (rotQuarters > 0) {
+      cCtx.translate(SPRITE_PX / 2, SPRITE_PX / 2);
+      cCtx.rotate((Math.PI / 2) * rotQuarters);
+      cCtx.translate(-SPRITE_PX / 2, -SPRITE_PX / 2);
+    }
+    cCtx.drawImage(spritesheet, ref.col * SPRITE_PX, ref.row * SPRITE_PX, SPRITE_PX, SPRITE_PX, 0, 0, SPRITE_PX, SPRITE_PX);
+
+    cCtx.globalCompositeOperation = 'source-atop';
+    cCtx.fillStyle = tint;
+    cCtx.fillRect(0, 0, SPRITE_PX, SPRITE_PX);
+
+    tintedTileCache.set(key, cached);
   }
-  scratchCtx.drawImage(spritesheet, ref.col * SPRITE_PX, ref.row * SPRITE_PX, SPRITE_PX, SPRITE_PX, 0, 0, SPRITE_PX, SPRITE_PX);
-  scratchCtx.restore();
 
-  scratchCtx.globalCompositeOperation = 'source-atop';
-  scratchCtx.fillStyle = tint;
-  scratchCtx.fillRect(0, 0, SPRITE_PX, SPRITE_PX);
-
-  ctx.drawImage(scratch, 0, 0, SPRITE_PX, SPRITE_PX, dx, dy, TILE_SIZE, TILE_SIZE);
+  ctx.drawImage(cached, 0, 0, SPRITE_PX, SPRITE_PX, dx, dy, TILE_SIZE, TILE_SIZE);
 }
+
 
 const TILE_REFS: Partial<Record<number, SpriteRef>> = {
   [TILE.FLOOR]: SPRITES.FLOOR,
