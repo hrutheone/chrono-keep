@@ -159,7 +159,7 @@ export const WEAPON_SPRITE_BY_NAME: Record<string, SpriteRef> = {
   // --- Early game (F1-F20) ---
   'Rusty Sword': { col: 36, row: 7 },
   'Bone Dagger': { col: 34, row: 6 },
-  'Mythril Hammer': { col: 35, row: 2 },
+  'Mythril Hammer': { col: 37, row: 7 },
   'Mage Masher': { col: 32, row: 4 },
   'Flametongue': { col: 36, row: 6 },
   'Ice Lance': { col: 35, row: 3 },
