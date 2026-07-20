@@ -1,6 +1,7 @@
 // Combat, elemental mechanics, and statuses.
 
 import {
+  DYNAMIC_LOOT_HP_THRESHOLD,
   ENEMY_NAME,
   TIME_SHARD_DROP_CHANCE,
   WEAPON_RANGE,
@@ -8,6 +9,7 @@ import {
   createRelicItemByEffect,
   createTimeShard,
   createWeapon,
+  enemyKillBounty,
   pickRandomUnheldRelic,
   rollEliteDrop,
   rollEnemyDrop,
@@ -147,6 +149,10 @@ export function isEliteOrBoss(enemy: Enemy): boolean {
   return enemy.affix !== undefined || BOSS_KINDS.has(enemy.kind);
 }
 
+// Weakness Exploit: Stamina refund for hitting a Mini-Boss/Final Boss's Elemental Weakness.
+const WEAKNESS_EXPLOIT_STAMINA_REFUND = 1;
+const WEAKNESS_EXPLOIT_COOLDOWN_TURNS = 3;
+
 const GRAPPLE_MARK_MULT = 1.5;
 
 /** Consumes a Grapple Lvl 3 mark, boosting the next hit against that enemy. */
@@ -199,7 +205,7 @@ export function applyEnemyStatus(enemy: Enemy, status: StatusEffect, turns: numb
   playStatusApplySfx(status);
 }
 
-const STATUS_IMMUNITY: Partial<Record<StatusEffect, string>> = {
+export const STATUS_IMMUNITY: Partial<Record<StatusEffect, string>> = {
   BURN: 'burn_immune',
   CHILLED: 'chill_immune',
   STUN: 'stun_immune',
@@ -317,9 +323,10 @@ export function killEnemy(state: GameState, enemy: Enemy, source: 'bump' | 'skil
       awardEchoes(state, 25, 'Wealthy Elite kill (all Relics held)');
     }
   } else {
+    const lowHp = state.run.currentHp / state.run.maxHp < DYNAMIC_LOOT_HP_THRESHOLD;
     const drop = enemy.affix
       ? rollEliteDrop(`${enemy.id}-drop`, state.run.relics)
-      : rollEnemyDrop(Math.random, enemy.kind, `${enemy.id}-drop`);
+      : rollEnemyDrop(Math.random, enemy.kind, `${enemy.id}-drop`, lowHp);
     if (drop) state.dungeon.items.push({ item: drop, x: enemy.x, y: enemy.y });
   }
 
@@ -358,7 +365,7 @@ export function killEnemy(state: GameState, enemy: Enemy, source: 'bump' | 'skil
 
   if (comboEnemyId === enemy.id) comboEnemyId = null;
 
-  if (NORMAL_ENEMY_KINDS.has(enemy.kind)) awardEchoes(state, 1, 'kill');
+  if (NORMAL_ENEMY_KINDS.has(enemy.kind)) awardEchoes(state, enemyKillBounty(state.run.currentFloor), 'kill');
   else if (ELITE_ENEMY_KINDS.has(enemy.kind)) awardEchoes(state, 5, 'Elite kill');
 
   if (source === 'skill') {
@@ -494,6 +501,13 @@ export function playerAttackEnemy(state: GameState, enemy: Enemy): void {
   playAttackSfx(element, mult);
   if (mult > 1) markHitStop();
   notifyFloatingText(enemy.x, enemy.y, mult > 1 ? `${dmg} CRIT!` : `${dmg}`, mult > 1 ? 'crit' : 'damage');
+
+  // Weakness Exploit: refund Stamina for a Weakness hit on a Mini-Boss/Final Boss, gated by a per-boss cooldown.
+  if (mult > 1 && BOSS_KINDS.has(enemy.kind) && (enemy.weaknessRefundCooldown ?? 0) <= 0) {
+    enemy.weaknessRefundCooldown = WEAKNESS_EXPLOIT_COOLDOWN_TURNS;
+    state.run.currentStamina = Math.min(state.run.maxStamina, state.run.currentStamina + WEAKNESS_EXPLOIT_STAMINA_REFUND);
+    logLine(state, `Weakness Exploit: +${WEAKNESS_EXPLOIT_STAMINA_REFUND} Stamina.`);
+  }
 
   // Ranged weapon stamina cost.
   if (WEAPON_RANGE[weapon?.passive ?? '']) {

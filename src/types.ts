@@ -104,6 +104,8 @@ export interface GameState {
       sourceAttack: number;
       hazard?: boolean;
       hazardTurns?: number;
+      // Set on Mini-Boss/Final Boss telegraphed AOEs, for Tactical Brace's Stamina refund.
+      isBossAoe?: boolean;
     }[];
   };
 
@@ -156,6 +158,8 @@ export interface Enemy {
   slowTurnsLeft?: number;
   slowOriginalSpeed?: number;
   grappleMarked?: boolean;
+  // Weakness Exploit: turns left before a Mini-Boss/Final Boss can refund Stamina again.
+  weaknessRefundCooldown?: number;
 
   affix?: string;
   shieldedHitsLeft?: number;
@@ -193,5 +197,4 @@ export interface WorldItem {
   x: number;
   y: number;
   chestLoot?: boolean;
-  isMimic?: boolean;
 }

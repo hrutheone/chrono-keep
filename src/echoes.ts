@@ -3,6 +3,7 @@
 import { logLine } from './turns';
 import { saveGame } from './persistence';
 import { hasAccessoryPassive } from './inventory';
+import { flawlessFloorBonus } from './content';
 import type { GameState } from './types';
 
 /** Calculates total echo multiplier. */
@@ -48,7 +49,7 @@ export function onFloorEntered(state: GameState): void {
 
 /** Called before leaving a floor. */
 export function onFloorCleared(state: GameState): void {
-  if (!state.run.floorDamageTaken) awardEchoes(state, 10, 'Flawless Floor');
+  if (!state.run.floorDamageTaken) awardEchoes(state, flawlessFloorBonus(state.run.currentFloor), 'Flawless Floor');
 }
 
 /** Marks the current floor as no longer eligible for the Flawless Floor bonus. */

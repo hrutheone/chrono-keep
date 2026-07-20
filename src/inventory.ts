@@ -2,19 +2,10 @@
 
 import { PLAYER_BASE_ATK, PLAYER_BASE_DEF } from './types';
 import type { Accessory, GameState, Item, Weapon } from './types';
-import {
-  createEnemy,
-  FREE_SWAP_PASSIVES,
-  itemMeltValue,
-  POTION_FIXED_TURN_COST,
-  rollChestItem,
-  scaleEnemyForDepth,
-  scaleEnemyForEchoMagnet,
-  scaleEnemyForNgPlus,
-} from './content';
+import { FREE_SWAP_PASSIVES, itemMeltValue, POTION_FIXED_TURN_COST, rollChestItem } from './content';
 import { spendTurn, logLine } from './turns';
 import { awardEchoes } from './echoes';
-import { playAnchorSfx, playBossTelegraphSfx, playEquipSfx, playMeltSound, playPickupSfx, playPotionSfx, playTimeShardSfx, playUnequipSfx, playUnlockSfx } from './audio';
+import { playAnchorSfx, playEquipSfx, playMeltSound, playPickupSfx, playPotionSfx, playTimeShardSfx, playUnequipSfx, playUnlockSfx } from './audio';
 import { notifyFloatingText } from './floatingText';
 
 // Matches the 5x5 grid in menus.ts/style.css's .inventory-grid.
@@ -217,19 +208,6 @@ export function pickupItemsAt(state: GameState, x: number, y: number): void {
     if (idx === -1) return;
     const worldItem = state.dungeon.items[idx];
     const item = worldItem.item;
-
-    if (worldItem.isMimic) {
-      state.dungeon.items.splice(idx, 1);
-      const enemy = createEnemy('TIME_WEAVER', `f${state.run.currentFloor}-mimic-${x}-${y}`, x, y);
-      scaleEnemyForDepth(enemy, state.run.currentFloor);
-      scaleEnemyForNgPlus(enemy, state.persistent.ngPlusLevel);
-      scaleEnemyForEchoMagnet(enemy, state.run.relics.includes('echo_magnet'));
-      enemy.awake = true;
-      state.dungeon.enemies.push(enemy);
-      logLine(state, 'The chest was a Time-Mimic!');
-      playBossTelegraphSfx();
-      continue;
-    }
 
     if (item.kind === 'ANCHOR') {
       state.dungeon.items.splice(idx, 1);

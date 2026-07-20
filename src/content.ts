@@ -186,6 +186,22 @@ export function depthMultiplier(floorNumber: number): number {
   return Math.pow(1.08, Math.floor((floorNumber - 1) / 5));
 }
 
+// Base Echo bounty for a normal-enemy kill (before Depth Multiplier scaling).
+const ENEMY_KILL_BASE_BOUNTY = 1;
+
+/** Normal-enemy kill Echo reward, tied to the Depth Multiplier so it grows far slower than escalating Upgrade Shop costs. */
+export function enemyKillBounty(floorNumber: number): number {
+  return Math.max(ENEMY_KILL_BASE_BOUNTY, Math.round(ENEMY_KILL_BASE_BOUNTY * depthMultiplier(floorNumber)));
+}
+
+// Base Flawless Floor reward (before Depth Multiplier scaling); ~7 on early floors, ~30 by Floor 99.
+const FLAWLESS_FLOOR_BASE_BONUS = 7;
+
+/** Flawless Floor bonus, scaled by the Depth Multiplier. */
+export function flawlessFloorBonus(floorNumber: number): number {
+  return Math.round(FLAWLESS_FLOOR_BASE_BONUS * depthMultiplier(floorNumber));
+}
+
 /** Applies Depth Multiplier to spawned enemies. */
 export function scaleEnemyForDepth(enemy: Enemy, floorNumber: number): void {
   const mult = depthMultiplier(floorNumber);
@@ -1061,24 +1077,32 @@ export const SKILL_BRANCHES: readonly { label: string; skills: readonly SkillId[
 
 // Enemy death drops.
 type DropRoll = (id: string) => Item;
+interface DropEntry {
+  roll: DropRoll;
+  isPotion?: boolean;
+}
 
-const ENEMY_DROPS: Partial<Record<EnemyKind, DropRoll[]>> = {
-  BONE_GRUNT: [(id) => createWeapon('RUSTY_SWORD', id), (id) => createPotion('POTION', id)],
-  EMBER_BAT: [(id) => createWeapon('FLAMETONGUE', id)],
-  VOLT_TURRET: [(id) => createWeapon('MAGE_MASHER', id)],
-  FROST_WRAITH: [(id) => createWeapon('ICE_LANCE', id)],
-  TIME_WEAVER: [(id) => createWeapon('ASSASSINS_DAGGER', id), (id) => createPotion('MAX_POTION', id)],
-  BONE_KNIGHT: [(id) => createWeapon('DARK_KNIGHTS_BLADE', id), (id) => createPotion('POTION', id)],
-  CINDER_SHAMAN: [(id) => createConsumable('LIQUID_FIRE_FLASK', id), (id) => createWeapon('FLAMBERGE', id)],
-  VOLT_HOUND: [(id) => createWeapon('CORAL_SWORD', id), (id) => createConsumable('STAMINA_DRAUGHT', id)],
-  FROST_SENTINEL: [(id) => createWeapon('DIAMOND_MACE', id), (id) => createWeapon('SAVE_THE_QUEEN', id)],
+const ENEMY_DROPS: Partial<Record<EnemyKind, DropEntry[]>> = {
+  BONE_GRUNT: [{ roll: (id) => createWeapon('RUSTY_SWORD', id) }, { roll: (id) => createPotion('POTION', id), isPotion: true }],
+  EMBER_BAT: [{ roll: (id) => createWeapon('FLAMETONGUE', id) }],
+  VOLT_TURRET: [{ roll: (id) => createWeapon('MAGE_MASHER', id) }],
+  FROST_WRAITH: [{ roll: (id) => createWeapon('ICE_LANCE', id) }],
+  TIME_WEAVER: [{ roll: (id) => createWeapon('ASSASSINS_DAGGER', id) }, { roll: (id) => createPotion('MAX_POTION', id), isPotion: true }],
+  BONE_KNIGHT: [{ roll: (id) => createWeapon('DARK_KNIGHTS_BLADE', id) }, { roll: (id) => createPotion('POTION', id), isPotion: true }],
+  CINDER_SHAMAN: [{ roll: (id) => createConsumable('LIQUID_FIRE_FLASK', id) }, { roll: (id) => createWeapon('FLAMBERGE', id) }],
+  VOLT_HOUND: [{ roll: (id) => createWeapon('CORAL_SWORD', id) }, { roll: (id) => createConsumable('STAMINA_DRAUGHT', id) }],
+  FROST_SENTINEL: [{ roll: (id) => createWeapon('DIAMOND_MACE', id) }, { roll: (id) => createWeapon('SAVE_THE_QUEEN', id) }],
 };
 
+// Below this HP fraction, Potion/Minor Potion entries count twice in the drop roll (Dynamic Loot).
+export const DYNAMIC_LOOT_HP_THRESHOLD = 0.3;
+
 /** Rolls one item from this enemy kind's drop table (null if it has none, e.g. the Boss). */
-export function rollEnemyDrop(rng: Rng, kind: EnemyKind, id: string): Item | null {
+export function rollEnemyDrop(rng: Rng, kind: EnemyKind, id: string, lowHp = false): Item | null {
   const table = ENEMY_DROPS[kind];
   if (!table || table.length === 0) return null;
-  return table[Math.floor(rng() * table.length)](id);
+  const weighted = lowHp ? table.flatMap((e) => (e.isPotion ? [e, e] : [e])) : table;
+  return weighted[Math.floor(rng() * weighted.length)].roll(id);
 }
 
 const LATE_TIER_WEAPON_KEYS: WeaponKey[] = [

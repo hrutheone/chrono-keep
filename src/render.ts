@@ -10,6 +10,7 @@ import {
   COLOR_FLASH,
   COLOR_FIRE,
   COLOR_FROST,
+  COLOR_CHRONO,
   BIOME_WALL_TINTS,
 } from './palette';
 import { TILE, effectiveTileAt } from './mapgen';
@@ -224,6 +225,9 @@ const ENEMY_REFS: Record<Enemy['kind'], SpriteRef> = {
   GLACIAL_MONOLITH: SPRITES.GLACIAL_MONOLITH,
 };
 
+// Cursed Rift ambient aura radius, in tiles.
+const RIFT_AURA_RADIUS = 2;
+
 // 2x scale enemies.
 const BIG_ENEMY_KINDS = new Set<Enemy['kind']>(['INFERNO_GOLEM', 'STORM_CALLER', 'GLACIAL_KNIGHT', 'CHRONO_LICH']);
 const BIG_TILE_SIZE = TILE_SIZE * 2;
@@ -411,10 +415,30 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     ctx.globalAlpha = 1;
   }
 
-  // Draw Cursed Rift.
+  // Draw Cursed Rift, with a pulsing purple anomaly aura bleeding into the tiles around it.
   if (state.dungeon.riftX !== null && state.dungeon.riftY !== null) {
-    const tileSx = state.dungeon.riftX - camX;
-    const tileSy = state.dungeon.riftY - camY;
+    const rx = state.dungeon.riftX;
+    const ry = state.dungeon.riftY;
+    const pulse = 0.6 + 0.4 * Math.sin(performance.now() / 400);
+    ctx.fillStyle = COLOR_CHRONO;
+    for (let dx = -RIFT_AURA_RADIUS; dx <= RIFT_AURA_RADIUS; dx++) {
+      for (let dy = -RIFT_AURA_RADIUS; dy <= RIFT_AURA_RADIUS; dy++) {
+        if (dx === 0 && dy === 0) continue;
+        const dist = Math.max(Math.abs(dx), Math.abs(dy));
+        const tx = rx + dx;
+        const ty = ry + dy;
+        if (tx < 0 || tx >= width || ty < 0 || ty >= height) continue;
+        const tileSx = tx - camX;
+        const tileSy = ty - camY;
+        if (tileSx < -1 || tileSx >= VIEWPORT_TILES_W + 1 || tileSy < -1 || tileSy >= VIEWPORT_TILES_H + 1) continue;
+        ctx.globalAlpha = (dist === 1 ? 0.3 : 0.14) * pulse;
+        ctx.fillRect(Math.round(tileSx * TILE_SIZE), Math.round(tileSy * TILE_SIZE), TILE_SIZE, TILE_SIZE);
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    const tileSx = rx - camX;
+    const tileSy = ry - camY;
     if (tileSx >= -1 && tileSx < VIEWPORT_TILES_W + 1 && tileSy >= -1 && tileSy < VIEWPORT_TILES_H + 1) {
       drawRef(ctx, SPRITES.CURSED_RIFT, Math.round(tileSx * TILE_SIZE), Math.round(tileSy * TILE_SIZE));
     }

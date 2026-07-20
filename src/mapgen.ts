@@ -41,9 +41,8 @@ export const TILE = {
 /** Turn-budget guarantee: spawn -> Stairs within 40 walked tiles. */
 export const PATH_BUDGET = 40;
 
-const ECHO_WELL_CHANCE = 0.05;
-const CHRONO_ANVIL_CHANCE = 0.05;
-const MIMIC_CHANCE = 0.02;
+const ECHO_WELL_CHANCE = 0.2;
+const CHRONO_ANVIL_CHANCE = 0.1;
 
 const MAX_ATTEMPTS = 50;
 const N = DUNGEON_SIZE;
@@ -403,7 +402,6 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
       x: pos.x,
       y: pos.y,
       chestLoot: true,
-      isMimic: rng() < MIMIC_CHANCE,
     });
   }
 

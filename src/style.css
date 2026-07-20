@@ -261,6 +261,21 @@ body {
   color: var(--color-light);
 }
 
+.immunity-tray {
+  display: flex;
+  gap: 3px;
+}
+
+.immunity-icon {
+  font-size: 9px;
+  padding: 1px 4px;
+  border: 1px solid var(--color-mid);
+  border-radius: 2px;
+  color: var(--color-mid);
+  opacity: 0.4;
+  filter: grayscale(1);
+}
+
 .brace-icon {
   min-width: 5.5em;
   text-align: right;
@@ -1038,6 +1053,10 @@ body {
   .status-icon,
   .brace-icon {
     font-size: 15px;
+  }
+
+  .immunity-icon {
+    font-size: 11px;
   }
 
   /* Overlays (Inventory, Skill Menu, Upgrade Shop, Help, Title/Death/Victory) */

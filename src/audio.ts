@@ -20,6 +20,7 @@ let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let musicGain: GainNode | null = null;
 let musicFilter: BiquadFilterNode | null = null;
+let tickDuckGain: GainNode | null = null;
 
 // Master volume and mute: applied when AudioContext is unlocked or created.
 let masterVolume = 0.5;
@@ -119,6 +120,12 @@ function ensureContext(): AudioContext {
     musicFilter.connect(musicGain);
     musicGain.connect(master);
 
+    // Anxiety Clock tick bus: ducked whenever combat SFX plays, so the tick is felt as a
+    // low heartbeat under the action instead of piercing through it.
+    tickDuckGain = ctx.createGain();
+    tickDuckGain.gain.value = 1;
+    tickDuckGain.connect(master);
+
     // Exposed for verification (Chrome DevTools MCP evaluate_script) and debugging.
     (window as unknown as { __chronoAudio: { ctx: AudioContext; master: GainNode; musicGain: GainNode; musicFilter: BiquadFilterNode } }).__chronoAudio =
       { ctx, master, musicGain, musicFilter };
@@ -152,11 +159,12 @@ interface ToneOpts {
   gain?: number;
   freqEnd?: number; // optional pitch slide (up or down)
   delay?: number; // seconds, for staggered chords/arpeggios
+  dest?: GainNode; // defaults to master; the Anxiety Clock routes through tickDuckGain instead
 }
 
 function tone(opts: ToneOpts): void {
   if (!ctx || !master) return; // Not unlocked yet — silently skip, never blocks gameplay.
-  const { freq, duration, type = 'square', gain = 0.25, freqEnd, delay = 0 } = opts;
+  const { freq, duration, type = 'square', gain = 0.25, freqEnd, delay = 0, dest = master } = opts;
   const t0 = ctx.currentTime + delay;
   const osc = ctx.createOscillator();
   const g = ctx.createGain();
@@ -166,7 +174,7 @@ function tone(opts: ToneOpts): void {
   g.gain.setValueAtTime(gain, t0);
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
   osc.connect(g);
-  g.connect(master);
+  g.connect(dest);
   osc.start(t0);
   osc.stop(t0 + duration);
 }
@@ -250,6 +258,7 @@ const ELEMENT_TYPE: Record<Element, OscillatorType> = {
 
 /** Elemental attack sound. */
 export function playAttackSfx(element: Element, multiplier: number): void {
+  duckAnxietyClock();
   const freq = ELEMENT_FREQ[element];
   const type = ELEMENT_TYPE[element];
   if (multiplier > 1) {
@@ -263,6 +272,7 @@ export function playAttackSfx(element: Element, multiplier: number): void {
 }
 
 export function playEnemyHitPlayerSfx(): void {
+  duckAnxietyClock();
   noiseBurst(0.08, 0.22);
   tone({ freq: 140, duration: 0.12, type: 'sawtooth', gain: 0.2, freqEnd: 90 });
 }
@@ -344,6 +354,7 @@ const SKILL_SFX: Record<string, () => void> = {
 };
 
 export function playSkillSfx(skillId: string): void {
+  duckAnxietyClock();
   SKILL_SFX[skillId]?.();
 }
 
@@ -611,13 +622,28 @@ let anxietyTimer: ReturnType<typeof setTimeout> | null = null;
 let anxietyStateRef: GameState | null = null;
 let lastAnxietyThreshold: AnxietyThreshold | null = null;
 
+// Sidechain ducking: combat SFX pulls the tick bus down, then it releases back to full volume.
+const TICK_DUCK_GAIN = 0.2;
+const TICK_DUCK_ATTACK_SEC = 0.03;
+const TICK_DUCK_RELEASE_SEC = 0.3;
+
+/** Ducks the Anxiety Clock tick bus so it reads as a felt heartbeat under combat SFX. */
+function duckAnxietyClock(): void {
+  if (!ctx || !tickDuckGain) return;
+  const now = ctx.currentTime;
+  tickDuckGain.gain.cancelScheduledValues(now);
+  tickDuckGain.gain.setValueAtTime(tickDuckGain.gain.value, now);
+  tickDuckGain.gain.linearRampToValueAtTime(TICK_DUCK_GAIN, now + TICK_DUCK_ATTACK_SEC);
+  tickDuckGain.gain.linearRampToValueAtTime(1, now + TICK_DUCK_ATTACK_SEC + TICK_DUCK_RELEASE_SEC);
+}
+
 function scheduleAnxietyTick(): void {
   if (!anxietyStateRef) return;
   const t = anxietyThreshold(anxietyStateRef.run.turnsRemaining);
   lastAnxietyThreshold = t;
   anxietyTimer = setTimeout(() => {
     if (!anxietyStateRef) return;
-    tone({ freq: t.freq, duration: 0.06, type: 'square', gain: t.gain });
+    tone({ freq: t.freq, duration: 0.06, type: 'square', gain: t.gain, dest: tickDuckGain ?? undefined });
     scheduleAnxietyTick();
   }, t.intervalMs);
 }
@@ -639,7 +665,10 @@ export function updateAnxietyClock(state: GameState): void {
   if (shouldRun) {
     const wasRunning = anxietyStateRef !== null;
     anxietyStateRef = state;
-    if (!wasRunning) scheduleAnxietyTick();
+    if (!wasRunning) {
+      if (tickDuckGain) tickDuckGain.gain.value = 1;
+      scheduleAnxietyTick();
+    }
   } else if (anxietyStateRef) {
     stopAnxietyClock();
   }

@@ -87,6 +87,9 @@ function tickEnemyOverrides(state: GameState): void {
         enemy.slowOriginalSpeed = undefined;
       }
     }
+    if (enemy.weaknessRefundCooldown !== undefined && enemy.weaknessRefundCooldown > 0) {
+      enemy.weaknessRefundCooldown -= 1;
+    }
   }
 }
 
@@ -110,8 +113,16 @@ function tickExpiringTiles(state: GameState): void {
 // Default Fire Hazard turns.
 const DEFAULT_FIRE_HAZARD_TURNS = 2;
 
+// Tactical Brace: Stamina refund for Bracing right before a Boss's telegraphed AOE lands.
+const TACTICAL_BRACE_STAMINA_REFUND = 2;
+
 function detonateTelegraph(state: GameState, t: GameState['dungeon']['telegraphTiles'][number]): void {
   const hitsPlayer = state.run.playerX === t.x && state.run.playerY === t.y;
+
+  if (hitsPlayer && t.isBossAoe && state.run.braced) {
+    state.run.currentStamina = Math.min(state.run.maxStamina, state.run.currentStamina + TACTICAL_BRACE_STAMINA_REFUND);
+    logLine(state, `Tactical Brace absorbs the blow — +${TACTICAL_BRACE_STAMINA_REFUND} Stamina!`);
+  }
 
   if (t.payload === 'stun') {
     if (hitsPlayer) {

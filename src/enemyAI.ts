@@ -174,6 +174,16 @@ function erraticStep(state: GameState, enemy: Enemy, steps: number): void {
   }
 }
 
+/** Skittish behavior: flees once the player is adjacent instead of bump-attacking, so it must be herded into chokepoints. */
+function scarabAct(state: GameState, enemy: Enemy): void {
+  const dist = Math.abs(enemy.x - state.run.playerX) + Math.abs(enemy.y - state.run.playerY);
+  if (dist <= 1) {
+    fleeStep(state, enemy, enemy.speed);
+    return;
+  }
+  chaseStep(state, enemy, enemy.speed, true);
+}
+
 /** Turret behavior. */
 function turretAct(state: GameState, enemy: Enemy, range = 4): void {
   const count = (activationCounters.get(enemy.id) ?? 0) + 1;
@@ -215,6 +225,7 @@ interface AreaBombOptions {
   damageMultiplier: number;
   hazardTurns: number;
   logMessage: string;
+  isBossAoe?: boolean;
 }
 
 function castAreaBomb(state: GameState, enemy: Enemy, opts: AreaBombOptions): void {
@@ -233,6 +244,7 @@ function castAreaBomb(state: GameState, enemy: Enemy, opts: AreaBombOptions): vo
         sourceAttack: Math.round(enemy.attack * opts.damageMultiplier),
         hazard: dx === 0 && dy === 0,
         hazardTurns: opts.hazardTurns,
+        isBossAoe: opts.isBossAoe,
       });
     }
   }
@@ -257,6 +269,7 @@ function castMagmaSlam(state: GameState, enemy: Enemy): void {
     damageMultiplier: 1.5,
     hazardTurns: 3,
     logMessage: `${ENEMY_NAME[enemy.kind]} rears back for a Magma Slam!`,
+    isBossAoe: true,
   });
 }
 
@@ -576,6 +589,7 @@ function castTimeBlast(state: GameState, enemy: Enemy): void {
       turnsUntil: TIME_BLAST_WARNING_TURNS,
       payload: 'stun',
       sourceAttack: enemy.attack,
+      isBossAoe: true,
     });
   }
   logLine(state, `${ENEMY_NAME[enemy.kind]} channels a Time-Blast!`);
@@ -657,8 +671,10 @@ function actEnemy(state: GameState, enemy: Enemy): void {
     case 'VOLT_HOUND':
     case 'DREAD_LEGION':
     case 'STORM_STALKER':
-    case 'CLOCKWORK_SCARAB':
       chaseStep(state, enemy, speed, true);
+      break;
+    case 'CLOCKWORK_SCARAB':
+      scarabAct(state, enemy);
       break;
     case 'EMBER_BAT':
     case 'ASH_FIEND':

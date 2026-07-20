@@ -4,6 +4,8 @@ import { ENEMY_NAME, eliteAffixName, relicLore, relicName } from './content';
 import type { SkillId } from './content';
 import { spriteCssStyle } from './assets';
 import { RELIC_SPRITE_BY_EFFECT, SKILL_SPRITE_BY_ID, SPRITES } from './sprites';
+import { STATUS_IMMUNITY } from './combat';
+import { hasAccessoryPassive } from './inventory';
 import type { GameState, StatusEffect } from './types';
 
 const RELIC_ICON_SIZE = 16;
@@ -69,6 +71,7 @@ export function initHud(): void {
       </div>
       <span id="brace-icon" class="brace-icon"></span>
       <span id="status-icon" class="status-icon"></span>
+      <div id="immunity-tray" class="immunity-tray"></div>
     </div>
     <div id="relic-tray" class="relic-tray"></div>
     <div id="relic-tooltip" class="tooltip"></div>`;
@@ -131,6 +134,12 @@ export function updateHud(state: GameState): void {
   const statusEl = el('status-icon');
   statusEl.textContent = STATUS_LABEL[run.status];
   statusEl.className = `status-icon status-${run.status.toLowerCase()}`;
+
+  // Shielded/greyed icon per status the player is currently immune to via an equipped accessory.
+  el('immunity-tray').innerHTML = (Object.keys(STATUS_IMMUNITY) as StatusEffect[])
+    .filter((status) => hasAccessoryPassive(state, STATUS_IMMUNITY[status]!))
+    .map((status) => `<span class="immunity-icon" title="Immune: ${STATUS_LABEL[status]}">${STATUS_LABEL[status]}</span>`)
+    .join('');
 
   // Icon strip for held Relics.
   el('relic-tray').innerHTML = run.relics
