@@ -12,9 +12,9 @@ import { isTurnBusy, resolvePlayerTurn } from './turnController';
 import { isRunOver, logLine } from './turns';
 import { playBlockedSfx, playEquipSfx, playMoveSfx, playPotionSfx } from './audio';
 import { saveRunSnapshot } from './persistence';
-import { ETERNITY_TREE_FLAVOR, eternityTreeStage, rollLateTierWeapon } from './content';
+import { rollLateTierWeapon } from './content';
 import { isSilasAt } from './npc';
-import { openDialogue } from './dialogue';
+import { openDialogue, openTreeDialogue } from './dialogue';
 import type { GameState } from './types';
 
 type Facing = GameState['run']['facing'];
@@ -101,9 +101,8 @@ function tryHubBump(state: GameState, nx: number, ny: number): boolean {
   }
   const tile = effectiveTileAt(state, nx, ny);
   if (tile === TILE.TREE) {
-    const stage = eternityTreeStage(state.persistent.unlockedAnchors.length);
-    logLine(state, ETERNITY_TREE_FLAVOR[stage]);
-    playBlockedSfx();
+    openTreeDialogue(state);
+    state.ui.currentScreen = 'DIALOGUE';
     return true;
   }
   if (tile === TILE.SMUGGLER) {

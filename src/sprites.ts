@@ -25,7 +25,7 @@ export const SPRITES = {
   VOLT_TURRET: { col: 31, row: 5 }, // small critter — reads electric/squat
   FROST_WRAITH: { col: 24, row: 8 }, // hollow/outline humanoid — genuinely ghostly
   TIME_WEAVER: { col: 24, row: 0 }, // robed, hooded, arms down
-  CHRONO_LICH: { col: 29, row: 3 }, // clean front-facing skull icon
+  CHRONO_LICH: { col: 29, row: 2 }, // clean front-facing skull icon
   BONE_KNIGHT: { col: 30, row: 6 }, // blocky bust with mechanical arms — armored
   CINDER_SHAMAN: { col: 24, row: 1 }, // robed bust, arms raised mid-cast
   VOLT_HOUND: { col: 28, row: 7 }, // horse — the sheet's only four-legged beast

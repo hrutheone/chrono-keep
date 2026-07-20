@@ -42,7 +42,7 @@ import { logLine } from './turns';
 import { awardEchoes } from './echoes';
 import { resetRunForNewLoop, resetToNewGame, rerollSeedKeepProgress } from './state';
 import { enterShatteringTutorial, isShatteringTutorial } from './shattering';
-import { closeDialogue, getActiveDialogueText } from './dialogue';
+import { closeDialogue, getActiveDialogue } from './dialogue';
 import {
   getMasterVolume,
   getMusicVolume,
@@ -450,7 +450,6 @@ function renderStatusTab(state: GameState): string {
       <div class="stat-line">Status: ${run.status === 'NONE' ? 'Normal' : run.status}</div>
       ${weaponSlots}
       ${accessorySlots}
-      ${danger ? '<div class="danger-banner">DANGER — actions cost 1 turn</div>' : ''}
     </div>`;
 }
 
@@ -820,15 +819,15 @@ function resolveRiftPact(state: GameState, accept: boolean): void {
   saveGame(state);
 }
 
-/** Renders Silas's dialogue box — a small bottom-anchored popup, not a full-screen modal. Instant text, no typing animation. */
+/** Renders the active speaker's (Silas or the Eternity Tree) dialogue box — a small centered popup, not a full-screen modal. Instant text, no typing animation. */
 function renderDialogue(): string {
-  const text = getActiveDialogueText() ?? '...';
+  const active = getActiveDialogue();
   return `
     <div class="dialogue-box">
-      <span class="item-detail-icon dialogue-icon" style="${spriteCssStyle(SPRITES.SILAS_FACE, DETAIL_ICON_SIZE)}"></span>
+      <span class="item-detail-icon dialogue-icon" style="${spriteCssStyle(active?.speakerIcon ?? SPRITES.SILAS_FACE, DETAIL_ICON_SIZE)}"></span>
       <div class="dialogue-body">
-        <div class="item-detail-name">Silas, the Old Watchwarden</div>
-        <div class="item-detail-lore dialogue-text">"${text}"</div>
+        <div class="item-detail-name">${active?.speakerName ?? 'Silas, the Old Watchwarden'}</div>
+        <div class="item-detail-lore dialogue-text">"${active?.text ?? '...'}"</div>
       </div>
     </div>`;
 }

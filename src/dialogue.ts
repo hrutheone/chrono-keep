@@ -1,6 +1,8 @@
 // Silas, the Old Watchwarden — data-driven dialogue pool and selection.
 
 import { saveGame } from './persistence';
+import { ETERNITY_TREE_FLAVOR, eternityTreeStage } from './content';
+import { SPRITES, TREE_STAGE_SPRITES, type SpriteRef } from './sprites';
 import type { GameState } from './types';
 
 /** Per-Hub-visit state; reset by resetDialogueSession() whenever the player enters the Hub. */
@@ -379,13 +381,21 @@ export function selectDialogueLine(state: GameState): DialogueLine | null {
   return pickRandom(eligible.filter((line) => line.priority === topPriority));
 }
 
-let activeDialogueText: string | null = null;
+export interface ActiveDialogue {
+  text: string;
+  speakerName: string;
+  speakerIcon: SpriteRef;
+}
+
+const SILAS_NAME = 'Silas, the Old Watchwarden';
+
+let activeDialogue: ActiveDialogue | null = null;
 
 /** Selects a line for the current bump and opens the modal; no-op if nothing is eligible. */
 export function openDialogue(state: GameState): void {
   const line = selectDialogueLine(state);
   if (!line) return;
-  activeDialogueText = line.text;
+  activeDialogue = { text: line.text, speakerName: SILAS_NAME, speakerIcon: SPRITES.SILAS_FACE };
   if (line.priority === 1) {
     state.persistent.dialogueSeenIds.push(line.id);
     saveGame(state);
@@ -393,10 +403,20 @@ export function openDialogue(state: GameState): void {
   session.talkedToSilasThisHubVisit += 1;
 }
 
-export function getActiveDialogueText(): string | null {
-  return activeDialogueText;
+/** Opens the modal on the Eternity Tree's current growth-stage lore. */
+export function openTreeDialogue(state: GameState): void {
+  const stage = eternityTreeStage(state.persistent.unlockedAnchors.length);
+  activeDialogue = {
+    text: ETERNITY_TREE_FLAVOR[stage],
+    speakerName: 'The Eternity Tree',
+    speakerIcon: TREE_STAGE_SPRITES[stage],
+  };
+}
+
+export function getActiveDialogue(): ActiveDialogue | null {
+  return activeDialogue;
 }
 
 export function closeDialogue(): void {
-  activeDialogueText = null;
+  activeDialogue = null;
 }

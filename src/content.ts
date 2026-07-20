@@ -1147,10 +1147,10 @@ export function createTimeShard(id: string): Item {
 
 // --- The Eternity Tree (Hub decoration) ---
 export const ETERNITY_TREE_FLAVOR: readonly string[] = [
-  'A frail seedling.',
-  'It is growing.',
-  'A strong temporal tree.',
-  'It blooms across stabilized time!',
+  "A frail seedling. Its roots struggle to grip this fractured reality. It needs more Temporal Anchors to stabilize the Keep.",
+  "The Eternity Tree is growing. The anchors you've driven into the rift are giving it strength. The air around it feels peacefully still.",
+  "A strong temporal tree. Its amber leaves hum with stored time. The Lich's grasp on the upper floors is visibly weakening.",
+  'The Tree blooms across stabilized time! Its roots have completely pierced the anomaly. The path to the Chrono-Lich is forever secured.',
 ];
 
 /** Growth stage (0-3) from how many Biomes have been anchored. */

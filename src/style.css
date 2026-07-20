@@ -491,14 +491,6 @@ body {
   vertical-align: middle;
 }
 
-.danger-banner {
-  color: var(--color-light);
-  border: 1px solid var(--color-light);
-  padding: 3px 5px;
-  text-align: center;
-  animation: turn-pulse 0.6s ease-in-out infinite alternate;
-}
-
 /* Cheat toggle */
 .cheat-toggle {
   margin-top: 6px;
@@ -872,12 +864,11 @@ body {
   gap: 10px;
 }
 
-/* Silas's dialogue box — a small bottom-anchored popup over the still-visible Hub, not a full-screen modal. */
+/* NPC/Eternity Tree dialogue box — centered over the still-visible Hub, not a full-screen modal. */
 #screen-overlay.dialogue-open {
   background: transparent;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
-  padding-bottom: 14px;
 }
 
 /* Title Screen wordmark/dust/player are canvas-drawn; the overlay stays transparent so they show through. */
