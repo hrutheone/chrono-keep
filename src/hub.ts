@@ -49,7 +49,8 @@ function buildHub(smugglerPresent: boolean): HubLayout {
   tiles[originY + 2][originX + HUB_W - 3] = TILE.SHORTCUT_GATE;
   // The Eternity Tree — a fixed decorative corner, always present.
   tiles[originY][originX] = TILE.TREE;
-  if (smugglerPresent) tiles[originY + 3][originX + 4] = TILE.SMUGGLER;
+  // One tile diagonally down-right of the Shortcut Gate.
+  if (smugglerPresent) tiles[originY + 3][originX + HUB_W - 2] = TILE.SMUGGLER;
 
   // Silas wanders the open floor near the back corner, clear of every fixture and the spawn tile.
   const npcX = originX + HUB_W - 2;
@@ -62,7 +63,10 @@ function buildHub(smugglerPresent: boolean): HubLayout {
 export function enterHub(state: GameState): void {
   resetVisualLerps();
   resetCameraLerp();
-  state.run.smugglerPresent = state.persistent.loopCount > SMUGGLER_MIN_LOOP_COUNT && Math.random() < SMUGGLER_SPAWN_CHANCE;
+  // Guaranteed once any Biome is anchored (a resource sink for deep runs); otherwise the original early-game chance.
+  state.run.smugglerPresent =
+    state.persistent.unlockedAnchors.length > 0 ||
+    (state.persistent.loopCount > SMUGGLER_MIN_LOOP_COUNT && Math.random() < SMUGGLER_SPAWN_CHANCE);
   const hub = buildHub(state.run.smugglerPresent);
   state.run.currentFloor = HUB_FLOOR;
   state.run.turnsRemaining = floorTurnLimit(state);

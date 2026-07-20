@@ -784,6 +784,15 @@ export function loreForItem(name: string): string | undefined {
   return LORE_BY_NAME[name];
 }
 
+/** Display text for an item's name — appends a Weapon's upgradeBonus suffix (e.g. "Flametongue +2"); base `name` never changes. */
+export function itemDisplayName(item: Item): string {
+  if (item.kind === 'WEAPON') {
+    const bonus = (item as Weapon).upgradeBonus;
+    if (bonus) return `${item.name} +${bonus}`;
+  }
+  return item.name;
+}
+
 const MELT_VALUE_BY_NAME: Record<string, number> = {};
 for (const a of Object.values(ACCESSORIES)) MELT_VALUE_BY_NAME[a.name] = a.melt;
 for (const c of Object.values(CONSUMABLES)) MELT_VALUE_BY_NAME[c.name] = c.melt;
@@ -1130,6 +1139,18 @@ const MID_TIER_WEAPON_KEYS: WeaponKey[] = [
   'MURASAME', 'GALE_BOW', 'KOTETSU', 'DIAMOND_MACE',
 ];
 
+// Excludes Rusty Sword — the starter weapon isn't a meaningful Elite reward.
+const EARLY_TIER_WEAPON_KEYS: WeaponKey[] = [
+  'BONE_DAGGER', 'MYTHRIL_HAMMER', 'MAGE_MASHER', 'FLAMETONGUE', 'ICE_LANCE',
+  'PARTISAN', 'GLASS_SWORD', 'BROADSWORD', 'ASH_WAND', 'BONE_CLUB', 'DEFENDER',
+];
+
+/** Rolls a random weapon strictly from the Early Tier (F1-20) pool. */
+export function rollEarlyTierWeapon(id: string): Weapon {
+  const key = EARLY_TIER_WEAPON_KEYS[Math.floor(Math.random() * EARLY_TIER_WEAPON_KEYS.length)];
+  return createWeapon(key, id);
+}
+
 /** Rolls a random weapon strictly from the Mid Tier (F21-50) pool. */
 export function rollMidTierWeapon(id: string): Weapon {
   const key = MID_TIER_WEAPON_KEYS[Math.floor(Math.random() * MID_TIER_WEAPON_KEYS.length)];
@@ -1142,14 +1163,27 @@ export function rollLateTierWeapon(id: string): Weapon {
   return createWeapon(key, id);
 }
 
-/** Rolls regular Elite drop. */
-export function rollEliteDrop(id: string, heldRelics: readonly string[]): Item {
+// Elite weapon-drop ATK bonus range, layered on top of the tier's base atk and mirrored into upgradeBonus for the UI suffix.
+const ELITE_DROP_ATK_BONUS_LATE: readonly [number, number] = [2, 4];
+const ELITE_DROP_ATK_BONUS_MID: readonly [number, number] = [1, 3];
+const ELITE_DROP_ATK_BONUS_EARLY: readonly [number, number] = [1, 2];
+
+function getRandomBonus(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+/** Rolls regular Elite drop — weapon tier (and its ATK bonus range) scales with how deep the kill happened. */
+export function rollEliteDrop(id: string, heldRelics: readonly string[], currentFloor: number): Item {
   if (Math.random() < 0.5) {
     const relic = pickRandomUnheldRelic(heldRelics);
     if (relic) return createRelicItemByEffect(relic, id);
   }
-  const key = LATE_TIER_WEAPON_KEYS[Math.floor(Math.random() * LATE_TIER_WEAPON_KEYS.length)];
-  return createWeapon(key, id);
+  const weapon = currentFloor >= 51 ? rollLateTierWeapon(id) : currentFloor >= 21 ? rollMidTierWeapon(id) : rollEarlyTierWeapon(id);
+  const [min, max] = currentFloor >= 51 ? ELITE_DROP_ATK_BONUS_LATE : currentFloor >= 21 ? ELITE_DROP_ATK_BONUS_MID : ELITE_DROP_ATK_BONUS_EARLY;
+  const bonus = getRandomBonus(min, max);
+  weapon.atk += bonus;
+  weapon.upgradeBonus = bonus;
+  return weapon;
 }
 
 export const TIME_SHARD_DROP_CHANCE = 0.25;

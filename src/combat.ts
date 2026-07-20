@@ -334,7 +334,7 @@ export function killEnemy(state: GameState, enemy: Enemy, source: 'bump' | 'skil
   } else {
     const lowHp = state.run.currentHp / state.run.maxHp < DYNAMIC_LOOT_HP_THRESHOLD;
     const drop = enemy.affix
-      ? rollEliteDrop(`${enemy.id}-drop`, state.run.relics)
+      ? rollEliteDrop(`${enemy.id}-drop`, state.run.relics, state.run.currentFloor)
       : rollEnemyDrop(Math.random, enemy.kind, `${enemy.id}-drop`, lowHp);
     if (drop) state.dungeon.items.push({ item: drop, x: enemy.x, y: enemy.y });
   }

@@ -234,6 +234,8 @@ export interface Weapon extends Item {
   atk: number;
   element: Element;
   passive: string;
+  // Tracks bonus ATK from Elite drops/the Blood-Infused Anvil for the UI's "+N" suffix; base `name` never changes.
+  upgradeBonus?: number;
 }
 
 export interface Accessory extends Item {

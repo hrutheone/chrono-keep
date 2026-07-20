@@ -17,6 +17,7 @@ import {
   SMUGGLER_OFFERS,
   WEAPON_EFFECT_LABEL,
   createPotion,
+  itemDisplayName,
   itemMeltValue,
   loreForItem,
   pickRandomUnheldRelic,
@@ -384,7 +385,7 @@ function renderItemDetail(state: GameState, item: Item | undefined): string {
       <div class="item-detail-header">
         <span class="item-detail-icon" style="${iconStyleForItem(item, DETAIL_ICON_SIZE)}"></span>
         <div class="item-detail-heading">
-          <div class="item-detail-name">${item.name}${countBadge}</div>
+          <div class="item-detail-name">${itemDisplayName(item)}${countBadge}</div>
           ${stat ? `<div class="item-detail-stat">${stat}</div>` : ''}
         </div>
       </div>
@@ -429,7 +430,7 @@ function renderGearSlot(
   const titleAttr = lore ? ` title="${lore.replace(/"/g, '&quot;')}"` : '';
   return `
     <div class="equip-slot-wrap">
-      <button class="equip-slot${item ? ' equipped' : ''}" data-action="${unequipAction}"${titleAttr}>${label}: ${item ? item.name : 'None'}${item ? ' <span class="equipped-badge">EQUIPPED</span>' : ''}</button>
+      <button class="equip-slot${item ? ' equipped' : ''}" data-action="${unequipAction}"${titleAttr}>${label}: ${item ? itemDisplayName(item) : 'None'}${item ? ' <span class="equipped-badge">EQUIPPED</span>' : ''}</button>
       ${stat ? `<div class="equip-stat">${stat}</div>` : ''}
       ${lore ? `<div class="equip-lore">${lore}</div>` : ''}
     </div>`;
@@ -476,7 +477,7 @@ function renderInventoryTab(state: GameState): string {
       const titleAttr = lore ? ` title="${lore.replace(/"/g, '&quot;')}"` : '';
       const selected = i === selectedInvIndex ? ' selected' : '';
       const countBadge = item.count && item.count > 1 ? `<span class="item-count">x${item.count}</span>` : '';
-      return `<button class="inv-slot${selected}" data-action="select-item" data-index="${i}"${titleAttr} aria-label="${item.name}"><span class="item-icon" style="${iconStyleForItem(item, INV_ICON_SIZE)}"></span><span class="slot-name">${item.name}</span>${countBadge}</button>`;
+      return `<button class="inv-slot${selected}" data-action="select-item" data-index="${i}"${titleAttr} aria-label="${itemDisplayName(item)}"><span class="item-icon" style="${iconStyleForItem(item, INV_ICON_SIZE)}"></span><span class="slot-name">${itemDisplayName(item)}</span>${countBadge}</button>`;
     })
     .join('');
 
@@ -829,7 +830,7 @@ function renderCursedRift(state: GameState): string {
     const weapon = state.run.equippedWeapon;
     const cost = Math.floor(state.run.currentHp * 0.5);
     const detail = weapon
-      ? `Sacrifice ${cost} HP (50% current) for +2 permanent ATK on ${weapon.name}.`
+      ? `Sacrifice ${cost} HP (50% current) for +2 permanent ATK on ${itemDisplayName(weapon)}.`
       : 'You have no weapon for the Anvil to sharpen.';
     return `
       <div class="menu cursed-rift-menu">

@@ -126,6 +126,7 @@ export function resolveBloodAnvil(state: GameState, accept: boolean): void {
     const cost = Math.floor(state.run.currentHp * BLOOD_ANVIL_HP_COST_FRACTION);
     state.run.currentHp = Math.max(1, state.run.currentHp - cost);
     state.run.equippedWeapon.atk += BLOOD_ANVIL_ATK_BONUS;
+    state.run.equippedWeapon.upgradeBonus = (state.run.equippedWeapon.upgradeBonus ?? 0) + BLOOD_ANVIL_ATK_BONUS;
     logLine(state, `The Anvil drinks ${cost} HP — ${state.run.equippedWeapon.name} is permanently sharper (+${BLOOD_ANVIL_ATK_BONUS} ATK).`);
     playEquipSfx();
   } else if (accept) {

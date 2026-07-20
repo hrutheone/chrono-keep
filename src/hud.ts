@@ -1,6 +1,6 @@
 // HTML/CSS HUD overlays layered above the canvas.
 
-import { ENEMY_NAME, eliteAffixName, relicLore, relicName } from './content';
+import { ENEMY_NAME, eliteAffixName, itemDisplayName, relicLore, relicName } from './content';
 import type { SkillId } from './content';
 import { spriteCssStyle } from './assets';
 import { RELIC_SPRITE_BY_EFFECT, SKILL_SPRITE_BY_ID, SPRITES } from './sprites';
@@ -161,7 +161,7 @@ export function updateHud(state: GameState): void {
     eliteWarning.classList.remove('visible');
   }
 
-  el('weapon-info').textContent = run.equippedWeapon ? run.equippedWeapon.name : 'Unarmed';
+  el('weapon-info').textContent = run.equippedWeapon ? itemDisplayName(run.equippedWeapon) : 'Unarmed';
   SKILL_SLOT_IDS.forEach(([elId, label], i) => {
     const skillId = run.activeSkills[i];
     if (!skillId) {
