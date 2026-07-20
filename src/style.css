@@ -880,6 +880,18 @@ body {
   padding-bottom: 14px;
 }
 
+/* Title Screen wordmark/dust/player are canvas-drawn; the overlay stays transparent so they show through. */
+#screen-overlay.title-open {
+  background: transparent;
+}
+
+/* Clears the canvas-drawn wordmark + patrolling player (bottom edge ~50% down the canvas) before menu text starts. */
+.title-menu::before {
+  content: '';
+  display: block;
+  flex: 0 0 52%;
+}
+
 .dialogue-box {
   width: 100%;
   max-width: 440px;
@@ -904,25 +916,9 @@ body {
   font-style: italic;
 }
 
-.title-menu h1,
 .victory-menu h1 {
   font-size: 22px;
   letter-spacing: 0.08em;
-}
-
-.title-menu h1 {
-  animation: title-pulse 3.5s ease-in-out infinite;
-}
-
-@keyframes title-pulse {
-  0%, 100% {
-    opacity: 0.85;
-    text-shadow: 0 0 4px var(--color-light);
-  }
-  50% {
-    opacity: 1;
-    text-shadow: 0 0 14px var(--color-light), 0 0 22px var(--color-mid);
-  }
 }
 
 .death-menu h2,
@@ -1053,6 +1049,19 @@ body {
 
   #touch-controls {
     order: 4;
+  }
+
+  /* Unlike the other full-screen overlays, the Title Screen's canvas art (logo/patrol) only
+   * lives inside #game's own letterboxed box, not the full #app column — so pull its overlay
+   * out of the absolute full-page stacking and into flow right after the canvas instead. */
+  #screen-overlay.title-open {
+    position: static;
+    order: 3;
+    height: auto;
+  }
+
+  .title-menu::before {
+    flex-basis: 0;
   }
 
   /* Text sizing & legibility */
@@ -1196,7 +1205,6 @@ body {
     font-size: 16px;
   }
 
-  .title-menu h1,
   .victory-menu h1 {
     font-size: 28px;
   }

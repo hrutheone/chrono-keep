@@ -1009,7 +1009,6 @@ function renderTitle(state: GameState): string {
     : '';
   return `
     <div class="menu title-menu">
-      <h1>Chrono-Keep</h1>
       <div class="stat-line">The 100-Turn Dungeon</div>
       ${progress}
       ${continueBtn}
@@ -1082,6 +1081,7 @@ function render(state: GameState): void {
   const isOpen = screen !== 'GAME';
   el.classList.toggle('active', isOpen);
   el.classList.toggle('dialogue-open', screen === 'DIALOGUE');
+  el.classList.toggle('title-open', screen === 'TITLE');
   // Reset selection on fresh menu open.
   if (screen === 'MENU' && lastScreen !== 'MENU') {
     selectedInvIndex = null;

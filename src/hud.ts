@@ -185,8 +185,12 @@ export function updateHud(state: GameState): void {
     btn.innerHTML = `<span class="skill-slot-icon" style="${iconStyle}"></span>`;
   });
 
+  // Title Screen's overlay is transparent so its canvas art shows through — hide the gameplay HUD (and, on mobile, the touch d-pad) so neither bleeds in behind it.
+  const hideHud = state.ui.currentScreen === 'TITLE';
+  el('hud-top').style.display = hideHud ? 'none' : '';
+  el('touch-controls').style.display = hideHud ? 'none' : '';
   // Hide bottom HUD while menu is open to prevent mobile overlay bleed.
-  const hideHudBottom = state.ui.currentScreen === 'MENU';
+  const hideHudBottom = hideHud || state.ui.currentScreen === 'MENU';
   el('hud-bottom').style.display = hideHudBottom ? 'none' : '';
   el('action-log').innerHTML = state.ui.log
     .slice(-3)

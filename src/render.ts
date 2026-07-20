@@ -340,16 +340,13 @@ function seedTitleDust(viewW: number, viewH: number): void {
   }
 }
 
-/** Renders the Title Screen's canvas backdrop only, isolated from world rendering to save perf during gameplay. */
-function renderTitleBackground(ctx: CanvasRenderingContext2D, viewW: number, viewH: number): void {
+/** Updates and draws the drifting dust motes only (background fill is the caller's job). */
+function updateAndDrawTitleDust(ctx: CanvasRenderingContext2D, viewW: number, viewH: number): void {
   if (titleDust.length === 0) seedTitleDust(viewW, viewH);
   const now = performance.now();
   // Clamp dt so a tab coming back from background doesn't fling motes off-screen in one jump.
   const dt = titleDustLastT ? Math.min(0.05, (now - titleDustLastT) / 1000) : 0;
   titleDustLastT = now;
-
-  ctx.fillStyle = COLOR_BG;
-  ctx.fillRect(0, 0, viewW, viewH);
 
   for (const p of titleDust) {
     p.y -= p.speed * dt;
@@ -365,13 +362,89 @@ function renderTitleBackground(ctx: CanvasRenderingContext2D, viewW: number, vie
   ctx.globalAlpha = 1;
 }
 
+// Title Screen "CHRONO / KEEP" wordmark, sprite-stamped one glyph cell per non-space character.
+const TITLE_ASCII = [
+  "  /$$$$$$  /$$   /$$ /$$$$$$$   /$$$$$$  /$$   /$$  /$$$$$$ ",
+  " /$$__  $$| $$  | $$| $$__  $$ /$$__  $$| $$$ | $$ /$$__  $$",
+  "| $$  \\__/| $$  | $$| $$  \\ $$| $$  \\ $$| $$$$| $$| $$  \\ $$",
+  "| $$      | $$$$$$$$| $$$$$$$/| $$  | $$| $$ $$ $$| $$  | $$",
+  "| $$      | $$__  $$| $$__  $$| $$  | $$| $$  $$$$| $$  | $$",
+  "| $$    $$| $$  | $$| $$  \\ $$| $$  | $$| $$\\  $$$| $$  | $$",
+  "|  $$$$$$/| $$  | $$| $$  | $$|  $$$$$$/| $$ \\  $$|  $$$$$$/",
+  " \\______/ |__/  |__/|__/  |__/ \\______/ |__/  \\__/ \\______/ ",
+  "                                                            ",
+  " /$$   /$$ /$$$$$$$$ /$$$$$$$$ /$$$$$$$                     ",
+  "| $$  /$$/| $$_____/| $$_____/| $$__  $$                    ",
+  "| $$ /$$/ | $$      | $$      | $$  \\ $$                    ",
+  "| $$$$$/  | $$$$$   | $$$$$   | $$$$$$$/                    ",
+  "| $$  $$  | $$__/   | $$__/   | $$____/                     ",
+  "| $$\\  $$ | $$      | $$      | $$                          ",
+  "| $$ \\  $$| $$$$$$$$| $$$$$$$$| $$                          ",
+  "|__/  \\__/|________/|________/|__/                          ",
+];
+const TITLE_ASCII_COLS = 60;
+// Row 8 (the blank separator between CHRONO and KEEP) is where the player patrols.
+const TITLE_LOGO_GAP_ROW = 8;
+
+// Layout was authored against the 480x320 desktop canvas; everything below scales off of that,
+// so mobile's smaller 320x240 canvas gets a shrunk-but-proportional logo/patrol instead of clipping.
+const TITLE_BASE_W = 480;
+const TITLE_BASE_H = 320;
+const TITLE_BASE_SPRITE_SIZE = 7;
+const TITLE_BASE_START_Y = 40;
+const TITLE_BASE_PLAYER_MIN_X = 60;
+const TITLE_BASE_PLAYER_MAX_X = 400;
+const TITLE_BASE_PLAYER_SPEED = 0.2;
+const TITLE_BASE_PLAYER_SIZE = 20;
+
+function drawTitleLogo(ctx: CanvasRenderingContext2D, spriteSize: number, startX: number, startY: number): void {
+  for (let row = 0; row < TITLE_ASCII.length; row++) {
+    const line = TITLE_ASCII[row];
+    for (let col = 0; col < line.length; col++) {
+      if (line[col] === ' ') continue;
+      drawTile(ctx, 47, 4, startX + col * spriteSize, startY + row * spriteSize, false, spriteSize);
+    }
+  }
+}
+
+// Title Screen patrolling player, pacing back and forth in the CHRONO/KEEP gap.
+let titlePlayerX = 100;
+let titlePlayerDir = 1;
+
+function drawTitlePlayer(ctx: CanvasRenderingContext2D, scale: number, startY: number): void {
+  const minX = TITLE_BASE_PLAYER_MIN_X * scale;
+  const maxX = TITLE_BASE_PLAYER_MAX_X * scale;
+  titlePlayerX += TITLE_BASE_PLAYER_SPEED * scale * titlePlayerDir;
+  if (titlePlayerX >= maxX) titlePlayerDir = -1;
+  else if (titlePlayerX <= minX) titlePlayerDir = 1;
+
+  const size = TITLE_BASE_PLAYER_SIZE * scale;
+  const hopY = Math.abs(Math.sin(performance.now() / 150)) * 4 * scale;
+  const playerY = startY + TITLE_LOGO_GAP_ROW * TITLE_BASE_SPRITE_SIZE * scale - 4 * scale - hopY;
+  drawTile(ctx, SPRITES.PLAYER.col, SPRITES.PLAYER.row, titlePlayerX, playerY, titlePlayerDir === -1, size);
+}
+
+/** Renders the full canvas Title Screen: backdrop, dust, wordmark, patrolling player — before any HTML overlay draws on top. */
+function renderTitleScreen(ctx: CanvasRenderingContext2D, viewW: number, viewH: number): void {
+  ctx.fillStyle = COLOR_BG;
+  ctx.fillRect(0, 0, viewW, viewH);
+  updateAndDrawTitleDust(ctx, viewW, viewH);
+
+  const scale = Math.min(viewW / TITLE_BASE_W, viewH / TITLE_BASE_H);
+  const spriteSize = TITLE_BASE_SPRITE_SIZE * scale;
+  const startY = TITLE_BASE_START_Y * scale;
+  const startX = (viewW - TITLE_ASCII_COLS * spriteSize) / 2;
+  drawTitleLogo(ctx, spriteSize, startX, startY);
+  drawTitlePlayer(ctx, scale, startY);
+}
+
 /** Renders the full game world for the current frame: tiles, items, enemies, player. */
 export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, viewW: number, viewH: number): void {
   VIEWPORT_TILES_W = viewW / TILE_SIZE;
   VIEWPORT_TILES_H = viewH / TILE_SIZE;
 
   if (state.ui.currentScreen === 'TITLE') {
-    renderTitleBackground(ctx, viewW, viewH);
+    renderTitleScreen(ctx, viewW, viewH);
     return;
   }
 
