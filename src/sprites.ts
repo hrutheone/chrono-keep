@@ -240,7 +240,7 @@ export const POTION_SPRITE_BY_NAME: Record<string, SpriteRef> = {
 };
 
 export const CONSUMABLE_SPRITE_BY_NAME: Record<string, SpriteRef> = {
-  'Liquid Fire Flask': { col: 45, row: 5 }, // brown fuel canister
+  'Liquid Fire Flask': { col: 34, row: 13 }, // brown fuel canister
   'Shock Grenade': { col: 45, row: 9 }, // grey bomb
   'Ice-Barricade Scroll': { col: 46, row: 5 }, // brown scroll/map
   'Stamina Draught': { col: 44, row: 10 }, // blue cross/plus
