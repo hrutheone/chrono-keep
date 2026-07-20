@@ -165,7 +165,7 @@ export const WEAPON_SPRITE_BY_NAME: Record<string, SpriteRef> = {
   'Ice Lance': { col: 35, row: 3 },
   'Partisan': { col: 36, row: 3 },
   'Glass Sword': { col: 32, row: 6 },
-  'Broadsword': { col: 34, row: 2 },
+  'Broadsword': { col: 32, row: 7 },
   'Ash Wand': { col: 32, row: 4 },
   'Bone Club': { col: 33, row: 2 },
   'Defender': { col: 33, row: 6 },
