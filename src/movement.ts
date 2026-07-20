@@ -50,21 +50,6 @@ export function tryDescendIfOnStairs(state: GameState): boolean {
   return true;
 }
 
-/** Try Hub interaction. */
-function tryHubInteraction(state: GameState): boolean {
-  if (state.run.currentFloor !== HUB_FLOOR) return false;
-  const tile = state.dungeon.tiles[state.run.playerY][state.run.playerX];
-  if (tile === TILE.SHOP_TERMINAL) {
-    state.ui.currentScreen = 'UPGRADE_SHOP';
-    return true;
-  }
-  if (tile === TILE.SHORTCUT_GATE) {
-    state.ui.currentScreen = 'SHORTCUT_GATE';
-    return true;
-  }
-  return false;
-}
-
 /** Full HP/Stamina/status restore, then the well reverts to floor. */
 function tryEchoWell(state: GameState, x: number, y: number): void {
   if (effectiveTileAt(state, x, y) !== TILE.ECHO_WELL) return;
@@ -91,7 +76,7 @@ function tryChronoAnvil(state: GameState, x: number, y: number): void {
   playEquipSfx();
 }
 
-/** Bumping the Eternity Tree or the Temporal Smuggler blocks movement instead of walking onto them. */
+/** Bumping the Eternity Tree, Silas, the Smuggler, the Shop Terminal, or the Shortcut Gate blocks movement instead of walking onto them — the player stays put and the interaction opens in place. */
 function tryHubBump(state: GameState, nx: number, ny: number): boolean {
   if (state.run.currentFloor !== HUB_FLOOR) return false;
   if (isSilasAt(state, nx, ny)) {
@@ -107,6 +92,14 @@ function tryHubBump(state: GameState, nx: number, ny: number): boolean {
   }
   if (tile === TILE.SMUGGLER) {
     state.ui.currentScreen = 'SMUGGLER';
+    return true;
+  }
+  if (tile === TILE.SHOP_TERMINAL) {
+    state.ui.currentScreen = 'UPGRADE_SHOP';
+    return true;
+  }
+  if (tile === TILE.SHORTCUT_GATE) {
+    state.ui.currentScreen = 'SHORTCUT_GATE';
     return true;
   }
   return false;
@@ -201,7 +194,6 @@ export function tryMove(state: GameState, dx: number, dy: number, facing: Facing
   tryEchoWell(state, nx, ny);
   tryChronoAnvil(state, nx, ny);
   if (tryDescendIfOnStairs(state)) return Promise.resolve();
-  if (tryHubInteraction(state)) return Promise.resolve();
   if (tryRiftInteraction(state)) return Promise.resolve();
 
   return resolvePlayerTurn(state, 'move');

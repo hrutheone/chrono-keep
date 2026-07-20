@@ -85,7 +85,6 @@ import {
   equipWeaponSlot2,
   grantItem,
   meltItem,
-  isThreatNearby,
   reforgeWeapon,
   swapActiveWeapon,
   totalAtk,
@@ -427,7 +426,6 @@ function renderGearSlot(
 /** Renders Status tab. */
 function renderStatusTab(state: GameState): string {
   const { run, persistent } = state;
-  const danger = isThreatNearby(state);
 
   const weaponSlots = renderGearSlot(state, 'Weapon', run.equippedWeapon, 'unequip-weapon') +
     (persistent.weaponSlot2Unlocked

@@ -47,15 +47,14 @@ const CHRONO_ANVIL_CHANCE = 0.1;
 const MAX_ATTEMPTS = 50;
 const N = DUNGEON_SIZE;
 
-// Walkable tiles.
+// Walkable tiles. SHORTCUT_GATE/SHOP_TERMINAL are deliberately excluded — tryHubBump opens them
+// as a blocking bump (like the Eternity Tree/Silas/Smuggler) so the player never stands on top of them.
 const WALKABLE = new Set<number>([
   TILE.FLOOR,
   TILE.DOOR,
   TILE.STAIRS,
   TILE.FIRE_HAZARD,
   TILE.FROST_HAZARD,
-  TILE.SHORTCUT_GATE,
-  TILE.SHOP_TERMINAL,
   TILE.ECHO_WELL,
   TILE.CHRONO_ANVIL,
 ]);
