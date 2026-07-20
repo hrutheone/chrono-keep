@@ -4,9 +4,13 @@ import {
   ACCESSORY_EFFECT_LABEL,
   BESTIARY,
   CONSUMABLE_EFFECT_TEXT,
+  CURSED_RIFT_EVENT_INFO,
+  ECHO_GEODE_ECHOES_PER_TURN,
+  ECHO_GEODE_MAX_TURNS,
   ENEMY_NAME,
   MONSTER_LORE,
   POTION_FIXED_TURN_COST,
+  RIFT_SHOP_PRICES,
   SKILL_BRANCHES,
   SKILL_LEVEL_EFFECTS,
   SKILLS,
@@ -22,6 +26,14 @@ import {
   rollMidTierWeapon,
   skillRequirementLabel,
 } from './content';
+import {
+  buyRiftShopRelic,
+  closeCursedRiftEvent,
+  mineEchoGeode,
+  resolveBloodAnvil,
+  resolveFrozenWatchwarden,
+  resolveLichProjection,
+} from './cursedRift';
 import { spriteCssStyle } from './assets';
 import {
   ACCESSORY_SPRITE_BY_NAME,
@@ -39,7 +51,6 @@ import { clearRunSnapshot, clearSave, hasSave, saveAudioSettings, saveGame, save
 import { continueAfterDeath, resolvePlayerTurn } from './turnController';
 import { performDescend } from './movement';
 import { logLine } from './turns';
-import { awardEchoes } from './echoes';
 import { resetRunForNewLoop, resetToNewGame, rerollSeedKeepProgress } from './state';
 import { enterShatteringTutorial, isShatteringTutorial } from './shattering';
 import { closeDialogue, getActiveDialogue } from './dialogue';
@@ -66,6 +77,7 @@ import {
   buySkillUpgrade,
   buyStatUpgrade,
   isSkillUnlocked,
+  MAX_SKILL_LEVEL,
   oneTimeUpgradeAvailable,
   ONE_TIME_UPGRADES,
   skillCost,
@@ -783,38 +795,119 @@ function renderShortcutGate(state: GameState): string {
     </div>`;
 }
 
-/** Renders Cursed Rift modal. */
-function renderCursedRift(): string {
+/** Renders the Cursed Rift's active roulette event — a different modal per event kind. */
+function renderCursedRift(state: GameState): string {
+  const event = state.run.cursedRiftEvent;
+  if (!event) return '';
+  const info = CURSED_RIFT_EVENT_INFO[event.kind];
+  const header = `<h2>${info.title}</h2><div class="stat-line framing">"${info.flavor}"</div>`;
+
+  if (event.kind === 'rift_shop') {
+    const rows = event.shopOffers.length
+      ? event.shopOffers
+          .map((effect) => {
+            const price = RIFT_SHOP_PRICES[Math.min(event.shopPurchases, RIFT_SHOP_PRICES.length - 1)];
+            const disabled = state.persistent.echoes < price ? 'disabled' : '';
+            return `
+              <div class="shop-row">
+                <span class="shop-name">${relicName(effect)} (${price}) — ${relicEffectText(effect)}</span>
+                <button data-action="rift-shop-buy" data-relic="${effect}" ${disabled}>Buy</button>
+              </div>`;
+          })
+          .join('')
+      : '<div class="stat-line">The Rift has nothing left to offer.</div>';
+    return `
+      <div class="menu cursed-rift-menu">
+        ${header}
+        ${rows}
+        <button class="continue-btn close-btn" data-action="rift-close">Leave</button>
+        <div class="menu-hint">Esc: leave</div>
+      </div>`;
+  }
+
+  if (event.kind === 'blood_anvil') {
+    const weapon = state.run.equippedWeapon;
+    const cost = Math.floor(state.run.currentHp * 0.5);
+    const detail = weapon
+      ? `Sacrifice ${cost} HP (50% current) for +2 permanent ATK on ${weapon.name}.`
+      : 'You have no weapon for the Anvil to sharpen.';
+    return `
+      <div class="menu cursed-rift-menu">
+        ${header}
+        <div class="stat-line">${detail}</div>
+        <button class="rift-accept-btn" data-action="rift-accept" ${weapon ? '' : 'disabled'}>ACCEPT</button>
+        <button class="rift-decline-btn" data-action="rift-decline">DECLINE &amp; LEAVE</button>
+        <div class="menu-hint">Esc: decline</div>
+      </div>`;
+  }
+
+  if (event.kind === 'frozen_watchwarden') {
+    const hasPotion = state.run.inventory.some((i) => i.kind === 'POTION');
+    const hasEligibleSkill = state.run.activeSkills.some((id) => id && skillLevel(state, id) < MAX_SKILL_LEVEL);
+    const canAccept = hasPotion && hasEligibleSkill;
+    const detail = canAccept
+      ? 'Sacrifice 1 Potion to thaw him — a random active skill gains +1 Level.'
+      : !hasPotion
+        ? 'You have no Potion to spare — the Warden stays frozen.'
+        : 'Every active skill is already at max Level — nothing left to teach.';
+    return `
+      <div class="menu cursed-rift-menu">
+        ${header}
+        <div class="stat-line">${detail}</div>
+        <button class="rift-accept-btn" data-action="rift-accept" ${canAccept ? '' : 'disabled'}>ACCEPT</button>
+        <button class="rift-decline-btn" data-action="rift-decline">DECLINE &amp; LEAVE</button>
+        <div class="menu-hint">Esc: decline</div>
+      </div>`;
+  }
+
+  if (event.kind === 'lich_projection') {
+    return `
+      <div class="menu cursed-rift-menu">
+        ${header}
+        <div class="stat-line">Accept: -10 Max HP for a gilded chest (a guaranteed Late-Tier weapon). Decline: 2 Bone-Knights ambush you.</div>
+        <button class="rift-accept-btn" data-action="rift-accept">ACCEPT BARGAIN</button>
+        <button class="rift-decline-btn" data-action="rift-decline">DECLINE</button>
+        <div class="menu-hint">Esc: decline</div>
+      </div>`;
+  }
+
+  if (event.kind === 'paradox_mirror') {
+    return `
+      <div class="menu cursed-rift-menu">
+        ${header}
+        <div class="stat-line">A Shadow Warden steps out, mirroring your HP, ATK, and DEF exactly.</div>
+        <button class="continue-btn close-btn" data-action="rift-close">Face It</button>
+        <div class="menu-hint">Esc: continue</div>
+      </div>`;
+  }
+
+  // 'echo_geode'
+  const minedSoFar = event.geodeTurnsMined * ECHO_GEODE_ECHOES_PER_TURN;
   return `
     <div class="menu cursed-rift-menu">
-      <h2>A Dark Presence Demands a Sacrifice...</h2>
-      <div class="stat-line">"Sacrifice 20 Max HP for a random Relic."</div>
-      <button class="rift-accept-btn" data-action="rift-accept">ACCEPT PACT</button>
-      <button class="rift-decline-btn" data-action="rift-decline">DECLINE &amp; LEAVE</button>
-      <div class="menu-hint">Esc: decline</div>
+      ${header}
+      <div class="stat-line">Mined ${event.geodeTurnsMined}/${ECHO_GEODE_MAX_TURNS} turns — ${minedSoFar} Echoes so far. Each strike risks drawing an ambush.</div>
+      <button class="rift-accept-btn" data-action="rift-geode-mine">MINE (+${ECHO_GEODE_ECHOES_PER_TURN} Echoes)</button>
+      <button class="rift-decline-btn" data-action="rift-close">Stop &amp; Leave</button>
+      <div class="menu-hint">Esc: stop</div>
     </div>`;
 }
 
-/** Resolves the pact. */
-function resolveRiftPact(state: GameState, accept: boolean): void {
-  state.dungeon.riftX = null;
-  state.dungeon.riftY = null;
-  if (accept) {
-    state.run.maxHp = Math.max(1, state.run.maxHp - 20);
-    state.run.currentHp = Math.min(state.run.currentHp, state.run.maxHp);
-    const relic = pickRandomUnheldRelic(state.run.relics);
-    if (relic) {
-      state.run.relics.push(relic);
-      logLine(state, `The pact is sealed. Relic acquired: ${relicName(relic)}!`);
-    } else {
-      awardEchoes(state, 25, 'Cursed Rift (all Relics held)');
-      logLine(state, 'The pact is sealed, but every Relic is already yours — +25 Echoes instead.');
-    }
-  } else {
-    logLine(state, 'You step back from the Rift, pact undone.');
-  }
-  state.ui.currentScreen = 'GAME';
-  saveGame(state);
+/** Resolves the current Cursed Rift event's Accept button, dispatched by its kind. */
+function acceptCursedRift(state: GameState): void {
+  const kind = state.run.cursedRiftEvent?.kind;
+  if (kind === 'blood_anvil') resolveBloodAnvil(state, true);
+  else if (kind === 'frozen_watchwarden') resolveFrozenWatchwarden(state, true);
+  else if (kind === 'lich_projection') resolveLichProjection(state, true);
+}
+
+/** Resolves the current Cursed Rift event's Decline/Escape, dispatched by its kind. */
+function declineCursedRift(state: GameState): void {
+  const kind = state.run.cursedRiftEvent?.kind;
+  if (kind === 'blood_anvil') resolveBloodAnvil(state, false);
+  else if (kind === 'frozen_watchwarden') resolveFrozenWatchwarden(state, false);
+  else if (kind === 'lich_projection') resolveLichProjection(state, false);
+  else closeCursedRiftEvent(state);
 }
 
 /** Renders the active speaker's (Silas or the Eternity Tree) dialogue box — a small centered popup, not a full-screen modal. Instant text, no typing animation. */
@@ -1097,7 +1190,7 @@ function render(state: GameState): void {
   else if (screen === 'MENU') el.innerHTML = renderMenu(state);
   else if (screen === 'UPGRADE_SHOP') el.innerHTML = renderUpgradeShop(state);
   else if (screen === 'SHORTCUT_GATE') el.innerHTML = renderShortcutGate(state);
-  else if (screen === 'CURSED_RIFT') el.innerHTML = renderCursedRift();
+  else if (screen === 'CURSED_RIFT') el.innerHTML = renderCursedRift(state);
   else if (screen === 'SMUGGLER') el.innerHTML = renderSmuggler(state);
   else if (screen === 'DIALOGUE') el.innerHTML = renderDialogue();
   else if (screen === 'CONFIRM') el.innerHTML = renderConfirm();
@@ -1151,7 +1244,7 @@ export function initMenus(state: GameState): void {
     ) {
       ev.preventDefault();
       if (screen === 'CONFIRM') answerPendingConfirm(state, false);
-      else if (screen === 'CURSED_RIFT') resolveRiftPact(state, false);
+      else if (screen === 'CURSED_RIFT') declineCursedRift(state);
       else {
         if (screen === 'DIALOGUE') closeDialogue();
         state.ui.currentScreen = 'GAME';
@@ -1262,8 +1355,11 @@ export function initMenus(state: GameState): void {
       answerPendingConfirm(state, false);
       playSelectSound();
     }
-    else if (action === 'rift-accept') resolveRiftPact(state, true);
-    else if (action === 'rift-decline') resolveRiftPact(state, false);
+    else if (action === 'rift-accept') acceptCursedRift(state);
+    else if (action === 'rift-decline') declineCursedRift(state);
+    else if (action === 'rift-shop-buy') buyRiftShopRelic(state, relic!);
+    else if (action === 'rift-geode-mine') mineEchoGeode(state);
+    else if (action === 'rift-close') closeCursedRiftEvent(state);
     else if (action === 'smuggler-buy') resolveSmugglerPurchase(state, offer as SmugglerOfferId);
     else if (action === 'close-menu') {
       state.ui.currentScreen = 'GAME';

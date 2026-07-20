@@ -92,6 +92,7 @@ export function createNewGameState(): GameState {
       trollBloodCounter: 0,
       smugglerPresent: false,
       lastDamageSource: null,
+      cursedRiftEvent: null,
     },
 
     dungeon: {
@@ -176,4 +177,5 @@ export function resetRunForNewLoop(state: GameState, startFloor = 1): void {
   state.run.trollBloodCounter = 0;
   state.run.smugglerPresent = false;
   state.run.lastDamageSource = null;
+  state.run.cursedRiftEvent = null;
 }

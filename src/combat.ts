@@ -6,6 +6,7 @@ import {
   TIME_SHARD_DROP_CHANCE,
   WEAPON_RANGE,
   createAnchorItem,
+  createPotion,
   createRelicItemByEffect,
   createTimeShard,
   createWeapon,
@@ -309,6 +310,14 @@ export function killEnemy(state: GameState, enemy: Enemy, source: 'bump' | 'skil
   notifyDeath(enemy.id, enemy.kind, enemy.x, enemy.y);
   spawnDeathParticles(enemy.x, enemy.y);
   playEnemyDeathSfx(enemy.element);
+
+  // Cursed Rift's Paradox Mirror: a guaranteed drop instead of the normal kind-based loot tables.
+  if (enemy.isShadowWarden) {
+    state.dungeon.items.push({ item: createPotion('SOMA_DROP', `${enemy.id}-soma`), x: enemy.x, y: enemy.y });
+    state.dungeon.items.push({ item: createTimeShard(`${enemy.id}-shard`), x: enemy.x, y: enemy.y });
+    logLine(state, 'Your shadow unravels — a piece of stolen time falls free.');
+    return;
+  }
 
   // Ash-Fiend: leaves a Fire Hazard where it dies.
   if (enemy.kind === 'ASH_FIEND') placeFireHazard(state, enemy.x, enemy.y, 2);

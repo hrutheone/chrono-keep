@@ -1,6 +1,26 @@
 export type Element = 'PHYSICAL' | 'FIRE' | 'VOLT' | 'FROST' | 'CHRONO';
 export type StatusEffect = 'NONE' | 'BURN' | 'STUN' | 'CHILLED';
 
+export type CursedRiftEventKind =
+  | 'rift_shop'
+  | 'blood_anvil'
+  | 'frozen_watchwarden'
+  | 'paradox_mirror'
+  | 'lich_projection'
+  | 'echo_geode';
+
+/** The Cursed Rift's currently-active roulette event. Only 'rift_shop'/'echo_geode' use their own fields. */
+export interface CursedRiftEvent {
+  kind: CursedRiftEventKind;
+  // Where the triggering Rift tile was — 'lich_projection' spawns its chest here.
+  riftX: number;
+  riftY: number;
+  shopOffers: string[];
+  shopPurchases: number;
+  // 'echo_geode': mined entirely within this modal — no map presence.
+  geodeTurnsMined: number;
+}
+
 export const PLAYER_BASE_ATK = 2;
 export const PLAYER_BASE_DEF = 0;
 
@@ -88,6 +108,8 @@ export interface GameState {
 
     // Last hit the player took; read once at death to pick a Silas reaction line.
     lastDamageSource: { kind: string; element: Element } | null;
+
+    cursedRiftEvent: CursedRiftEvent | null;
   };
 
   dungeon: {
@@ -194,6 +216,8 @@ export interface Enemy {
   affix?: string;
   shieldedHitsLeft?: number;
   auraColor?: string;
+  // Cursed Rift's Paradox Mirror event: a mirror of the player's own stats, with its own guaranteed drop on kill.
+  isShadowWarden?: boolean;
 }
 
 export interface Item {

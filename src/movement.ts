@@ -15,6 +15,7 @@ import { saveRunSnapshot } from './persistence';
 import { rollLateTierWeapon } from './content';
 import { isSilasAt } from './npc';
 import { openDialogue, openTreeDialogue } from './dialogue';
+import { triggerCursedRiftEvent } from './cursedRift';
 import type { GameState } from './types';
 
 type Facing = GameState['run']['facing'];
@@ -109,7 +110,7 @@ function tryHubBump(state: GameState, nx: number, ny: number): boolean {
 function tryRiftInteraction(state: GameState): boolean {
   if (state.dungeon.riftX === null) return false;
   if (state.run.playerX !== state.dungeon.riftX || state.run.playerY !== state.dungeon.riftY) return false;
-  state.ui.currentScreen = 'CURSED_RIFT';
+  triggerCursedRiftEvent(state);
   return true;
 }
 

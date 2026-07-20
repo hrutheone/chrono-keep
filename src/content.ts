@@ -1,4 +1,4 @@
-import type { Accessory, Consumable, Element, Enemy, GameState, Item, Weapon } from './types';
+import type { Accessory, Consumable, CursedRiftEventKind, Element, Enemy, GameState, Item, Weapon } from './types';
 
 export type EnemyKind = Enemy['kind'];
 type Rng = () => number;
@@ -692,6 +692,19 @@ export function pickRandomUnheldRelic(held: readonly string[]): string | null {
   return available[Math.floor(Math.random() * available.length)];
 }
 
+/** Up to `count` distinct random unheld relic effect IDs — fewer if not enough remain unheld. */
+export function pickRandomUnheldRelics(held: readonly string[], count: number): string[] {
+  const picked: string[] = [];
+  const seen = [...held];
+  for (let i = 0; i < count; i++) {
+    const relic = pickRandomUnheldRelic(seen);
+    if (!relic) break;
+    picked.push(relic);
+    seen.push(relic);
+  }
+  return picked;
+}
+
 /** Builds a Relic Item from an effect ID. */
 export function createRelicItemByEffect(effect: string, id: string): Item {
   return { id, kind: 'RELIC', name: relicName(effect), value: 0, effect };
@@ -1176,3 +1189,69 @@ export const SMUGGLER_OFFERS: readonly SmugglerOffer[] = [
 ];
 export const SMUGGLER_SPAWN_CHANCE = 0.3;
 export const SMUGGLER_MIN_LOOP_COUNT = 2;
+
+// --- Cursed Rift Event Roulette ---
+// Rolled uniformly (1-6) the instant the player steps onto a Cursed Rift tile.
+export const CURSED_RIFT_EVENT_KINDS: readonly CursedRiftEventKind[] = [
+  'rift_shop',
+  'blood_anvil',
+  'frozen_watchwarden',
+  'paradox_mirror',
+  'lich_projection',
+  'echo_geode',
+];
+
+export function rollCursedRiftEvent(): CursedRiftEventKind {
+  return CURSED_RIFT_EVENT_KINDS[Math.floor(Math.random() * CURSED_RIFT_EVENT_KINDS.length)];
+}
+
+export interface CursedRiftEventInfo {
+  title: string;
+  flavor: string;
+}
+export const CURSED_RIFT_EVENT_INFO: Record<CursedRiftEventKind, CursedRiftEventInfo> = {
+  rift_shop: {
+    title: 'The Rift Shop',
+    flavor: 'A voice not quite Silas\'s offers you Relics for memories.',
+  },
+  blood_anvil: {
+    title: 'The Blood-Infused Anvil',
+    flavor: 'A crude altar, stained dark. It wants life, not Echoes.',
+  },
+  frozen_watchwarden: {
+    title: 'The Frozen Watchwarden',
+    flavor: 'A comrade, locked in ice mid-stride. Something could still thaw him.',
+  },
+  paradox_mirror: {
+    title: 'The Paradox Mirror',
+    flavor: 'The Rift shatters. Something wearing your face steps out of the pieces.',
+  },
+  lich_projection: {
+    title: "The Chrono-Lich's Projection",
+    flavor: 'A flickering echo of Him leans in, amused. He always has an offer.',
+  },
+  echo_geode: {
+    title: 'The Echo Geode',
+    flavor: 'A jagged crystal, humming with trapped memories, ready to be struck.',
+  },
+};
+
+// Event 1: Rift Shop.
+export const RIFT_SHOP_OFFER_COUNT = 3;
+export const RIFT_SHOP_PRICES: readonly number[] = [50, 150, 300];
+
+// Event 2: Blood-Infused Anvil.
+export const BLOOD_ANVIL_HP_COST_FRACTION = 0.5;
+export const BLOOD_ANVIL_ATK_BONUS = 2;
+
+// Event 3: Frozen Watchwarden.
+export const WATCHWARDEN_SKILL_LEVEL_BONUS = 1;
+
+// Event 5: The Chrono-Lich's Projection.
+export const LICH_PROJECTION_MAX_HP_COST = 10;
+
+// Event 6: Echo Geode.
+export const ECHO_GEODE_MAX_TURNS = 5;
+export const ECHO_GEODE_ECHOES_PER_TURN = 15;
+export const ECHO_GEODE_AMBUSH_TURNS: readonly number[] = [3, 5];
+export const ECHO_GEODE_AMBUSH_CHANCE = 0.5;
