@@ -56,12 +56,12 @@ export const SPRITES = {
   STAIRS: { col: 2, row: 6 }, // stairs
   SHORTCUT_GATE: { col: 1, row: 9 }, // blue gate
   BOSS_GATE: { col: 0, row: 9 }, // blue padlock
-  FIRE_HAZARD: { col: 14, row: 10 }, // orange flame
+  FIRE_HAZARD: { col: 15, row: 10 }, // orange flame
   FROST_HAZARD: { col: 14, row: 18 }, // blue water droplet
   SHOP_TERMINAL: { col: 0, row: 20 }, // tree brach
   CURSED_RIFT: { col: 13, row: 17 }, // dark red brick pattern — ominous texture
   ECHO_WELL: { col: 14, row: 5 }, // solid glowing-blue pool tile
-  CHRONO_ANVIL: { col: 48, row: 4 }, // same solid brown block used for the Giant's Anvil relic
+  CHRONO_ANVIL: { col: 9, row: 8 }, // same solid brown block used for the Giant's Anvil relic
   SMUGGLER: { col: 26, row: 1 }, // hooded bust, distinct silhouette from every other NPC/enemy
 
   // --- World-item pickups ---
@@ -80,10 +80,10 @@ export type SpriteName = keyof typeof SPRITES;
 
 // Faint floor decor, scattered procedurally — never gameplay-relevant.
 export const DECOR_DIRT: SpriteRef[] = [
-  { col: 1, row: 0 },
-  { col: 2, row: 0 },
-  { col: 3, row: 0 },
-  { col: 4, row: 0 },
+  { col: 19, row: 1 },
+  { col: 18, row: 3 },
+  { col: 19, row: 3 },
+  { col: 18, row: 4 },
 ];
 export const DECOR_GRASS: SpriteRef[] = [
   { col: 5, row: 0 },
@@ -94,8 +94,8 @@ export const DECOR_GRASS: SpriteRef[] = [
 // Eternity Tree growth stages (0-3), indexed by eternityTreeStage() in content.ts.
 export const TREE_STAGE_SPRITES: readonly SpriteRef[] = [
   { col: 0, row: 2 }, // frail seedling — sparse sprouts
-  { col: 2, row: 2 }, // growing — fuller sprout
-  { col: 0, row: 1 }, // strong temporal tree — solid pine
+  { col: 1, row: 2 }, // growing — fuller sprout
+  { col: 5, row: 1 }, // strong temporal tree — solid pine
   { col: 4, row: 2 }, // blooming — full canopy with visible trunk
 ];
 
