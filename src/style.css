@@ -1313,15 +1313,22 @@ body {
 
   /* Phase 18: Q/E/R/F in an ABXY-style diamond — same 3x3 CSS-grid technique
    * as .dpad above, just with the 4 skill buttons instead of movement. */
-  .skill-diamond {
+  .skill-grid {
     display: grid;
     grid-template-areas:
-      ".    q ."
-      "r    . e"
-      ".    f .";
+      "q e r"
+      "f c v";
     grid-template-columns: repeat(3, 56px);
-    grid-template-rows: repeat(3, 56px);
+    grid-template-rows: repeat(2, 56px);
     gap: 4px;
+  }
+
+  .skill-btn-c {
+    grid-area: c;
+  }
+
+  .skill-btn-v {
+    grid-area: v;
   }
 
   .skill-btn-q {

@@ -10,6 +10,8 @@ const BUTTON_KEYS: Record<string, string> = {
   'skill-e': 'e',
   'skill-r': 'r',
   'skill-f': 'f',
+  'skill-c': 'c',
+  'skill-v': 'v',
   // Opens the Menu directly on a specific tab.
   'open-status': 'u',
   'open-inv': 'i',

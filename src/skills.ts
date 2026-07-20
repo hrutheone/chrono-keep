@@ -111,7 +111,7 @@ function castCleave(state: GameState, level: number): void {
 }
 
 function castFlameArc(state: GameState, level: number): void {
-  const base = 5 + elementSynergyBonus(state, 'FIRE');
+  const base = Math.round(totalAtk(state) * 0.8) + elementSynergyBonus(state, 'FIRE');
   for (const { dx, dy } of ORTHO_DELTA) {
     spawnEffectParticles(state.run.playerX + dx, state.run.playerY + dy, ELEMENT_COLOR.FIRE);
     const enemy = enemyAt(state, state.run.playerX + dx, state.run.playerY + dy);
@@ -206,7 +206,7 @@ function castBash(state: GameState, level: number): void {
 
 function castBlizzardWave(state: GameState, level: number): void {
   const mult = level >= 2 ? 1.3 : 1;
-  const base = Math.round(4 * mult) + elementSynergyBonus(state, 'FROST');
+  const base = Math.round(totalAtk(state) * 1.2 * mult) + elementSynergyBonus(state, 'FROST');
   for (let ddx = -1; ddx <= 1; ddx++) {
     for (let ddy = -1; ddy <= 1; ddy++) {
       if (ddx === 0 && ddy === 0) continue;
@@ -236,6 +236,7 @@ function castMeteor(state: GameState, level: number): void {
     if (!walkableAt(state, tx, ty)) break;
     targetX = tx;
     targetY = ty;
+    if (enemyAt(state, tx, ty)) break;
   }
   const mult = level >= 2 ? 3 : 2;
   const sourceAttack = Math.round((totalAtk(state) + elementSynergyBonus(state, 'FIRE')) * mult);
@@ -489,7 +490,10 @@ function castChainLightning(state: GameState, level: number): void {
 function castTimeStop(state: GameState, level: number): void {
   const turns = level >= 3 ? 7 : level >= 2 ? 5 : 3;
   state.run.timeStopTurnsLeft = turns;
-  logLine(state, `Time-Stop freezes the clock for ${turns} turns.`);
+  for (const enemy of state.dungeon.enemies) {
+    applyEnemyStatus(enemy, 'STUN', turns);
+  }
+  logLine(state, `Time-Stop freezes the clock and all enemies for ${turns} turns.`);
   playSkillSfx('time_stop');
   spawnEffectParticles(state.run.playerX, state.run.playerY, ELEMENT_COLOR.CHRONO);
 }
@@ -511,6 +515,7 @@ function castParadox(state: GameState, level: number): void {
   state.run.currentHp = Math.max(1, Math.round(state.run.maxHp * targetPct));
   target.hp = Math.max(1, Math.round(target.maxHp * playerPct));
   logLine(state, 'Paradox swaps your fate with theirs!');
+  skillDamageEnemy(state, target, totalAtk(state), 'CHRONO', 'Paradox');
   if (level >= 2) {
     const status = state.run.status;
     const statusTurns = state.run.statusTurns;
@@ -587,7 +592,7 @@ function castAura(state: GameState, level: number): void {
 
 function castUltima(state: GameState, level: number): void {
   const mult = level >= 3 ? 3 : level >= 2 ? 2.5 : 2;
-  const dmg = Math.round(ultimaStaminaSpent * mult);
+  const dmg = Math.round(totalAtk(state) * mult) + (ultimaStaminaSpent * 5);
   playSkillSfx('ultima');
   for (let ddx = -2; ddx <= 2; ddx++) {
     for (let ddy = -2; ddy <= 2; ddy++) {
@@ -630,7 +635,7 @@ const CASTERS: Record<string, (state: GameState, level: number) => void> = {
 };
 
 /** Uses an equipped skill. */
-export function useSkill(state: GameState, slotIndex: 0 | 1 | 2 | 3): Promise<void> {
+export function useSkill(state: GameState, slotIndex: number): Promise<void> {
   if (consumeStunnedAction(state)) return Promise.resolve();
 
   const skillId = state.run.activeSkills[slotIndex];
@@ -674,7 +679,7 @@ export function useSkill(state: GameState, slotIndex: 0 | 1 | 2 | 3): Promise<vo
 }
 
 /** Slot mappings. */
-const SLOT_KEYS: Record<string, 0 | 1 | 2 | 3> = { q: 0, e: 1, r: 2, f: 3 };
+const SLOT_KEYS: Record<string, 0 | 1 | 2 | 3 | 4 | 5> = { q: 0, e: 1, r: 2, f: 3, c: 4, v: 5 };
 
 /** Wires Q/E/R/F to the game state. */
 export function installSkillInput(state: GameState): void {

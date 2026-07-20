@@ -1001,17 +1001,17 @@ export const SKILLS: Record<string, { name: string; element: Element; stamina: n
 
   // --- Branch C: The Weaver (Magic, Area Control, Debuffs) ---
   flame_arc: { name: 'Flame Arc', element: 'FIRE', stamina: 4 },
-  defuse: { name: 'Defuse', element: 'VOLT', stamina: 2 },
+  defuse: { name: 'Defuse', element: 'VOLT', stamina: 1 },
   blizzard_wave: { name: 'Blizzard Wave', element: 'FROST', stamina: 4 },
-  slow: { name: 'Slow', element: 'FROST', stamina: 3 },
+  slow: { name: 'Slow', element: 'FROST', stamina: 2 },
   chain_lightning: { name: 'Chain Lightning', element: 'VOLT', stamina: 4 },
   meteor: { name: 'Meteor', element: 'FIRE', stamina: 5 },
 
   // --- Branch D: The Chronomancer (Time Manipulation, Endgame) ---
-  recall: { name: 'Recall', element: 'CHRONO', stamina: 4 },
-  haste: { name: 'Haste', element: 'CHRONO', stamina: 4 },
+  recall: { name: 'Recall', element: 'CHRONO', stamina: 2 },
+  haste: { name: 'Haste', element: 'CHRONO', stamina: 3 },
   time_stop: { name: 'Time-Stop', element: 'CHRONO', stamina: 5 },
-  paradox: { name: 'Paradox', element: 'CHRONO', stamina: 4 },
+  paradox: { name: 'Paradox', element: 'CHRONO', stamina: 3 },
   ultima: { name: 'Ultima', element: 'CHRONO', stamina: 0 }, // "ALL Stamina" — see skills.ts's skillStaminaCost
 };
 
@@ -1035,18 +1035,18 @@ export const SKILL_LEVEL_EFFECTS: Record<SkillId, readonly [string, string, stri
   fortify: ['Consumes all Stamina. Grants +2 DEF per Stamina spent for 3 turns.', '+3 DEF per Stamina spent.', 'Also grants status immunity while active.'],
   aura: ['Cleanses Status, grants immunity for 3 turns.', 'Immunity lasts 4 turns.', 'Heals 20 HP on cast.'],
 
-  flame_arc: ['Deal 5 Fire DMG to adjacent enemies.', 'Chance to Burn (50%).', 'Leaves Fire Hazard on floor (3 turns).'],
+  flame_arc: ['Deal 0.8x ATK as Fire DMG.', 'Chance to Burn (50%).', 'Leaves Fire Hazard on floor (3 turns).'],
   defuse: ["Strips a target's DEF to 0 for 1 turn.", 'Lasts 2 turns.', 'Lasts 3 turns.'],
-  blizzard_wave: ['3x3 AOE Frost damage + Chilled.', '1.3x damage.', 'Also Knocks back 1 tile.'],
+  blizzard_wave: ['1.2x ATK 3x3 AOE Frost damage + Chilled.', '1.3x damage.', 'Also Knocks back 1 tile.'],
   slow: ["Target's speed becomes 0 for 2 turns.", 'Lasts 3 turns.', 'Affects a 3x3 area instead of single target.'],
   chain_lightning: ['Hits target, arcs to 2 nearest enemies for 1x ATK.', 'Arcs to 3 enemies.', '25% chance to Stun all hit targets.'],
-  meteor: ['4-range, 1-turn-delay 3x3 explosion (2x ATK).', '3x ATK.', 'Leaves Fire Hazard at center.'],
+  meteor: ['Auto-targets nearest enemy up to 4-range, 1-turn-delay 3x3 explosion (2x ATK).', '3x ATK.', 'Leaves Fire Hazard at center.'],
 
   recall: ['Mark a tile, recast to teleport back instantly.', 'Recast restores 1 Stamina.', 'Recast costs 0 Turns.'],
   haste: ['Next 2 actions (Move/Attack) cost 0 Turns.', 'Also restores 1 Stamina on cast.', 'Next 3 actions cost 0 Turns.'],
-  time_stop: ["Freezes the floor's 100-Turn counter for 3 turns.", 'Freezes for 5 turns.', 'Freezes for 7 turns.'],
+  time_stop: ["Freezes the clock and all enemies for 3 turns.", 'Freezes for 5 turns.', 'Freezes for 7 turns.'],
   paradox: ['Swaps your current HP % with target\'s HP %.', 'Also swaps Status effects.', 'Refunds 2 Turns if used on an Elite/Boss.'],
-  ultima: ['Consumes all Stamina; 5x5 AOE for (Stamina x2) DMG.', '(Stamina x2.5) DMG.', '(Stamina x3) DMG.'],
+  ultima: ['Consumes all Stamina; 5x5 AOE for (2x ATK + Stamina*5) DMG.', '(Stamina x2.5) DMG.', '(Stamina x3) DMG.'],
 };
 
 // Skill Cost Tiers (Section 6B/7): Core/Setup, Advanced/Tactical, Chronomancer/Endgame.

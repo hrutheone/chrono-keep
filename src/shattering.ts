@@ -6,7 +6,7 @@ import { logLine } from './turns';
 import type { GameState } from './types';
 
 // The pre-mapped Q/E/R/F loadout for the vision fight, all shown at Lv3.
-const TUTORIAL_LOADOUT = ['dash', 'cleave', 'flame_arc', 'ice_aegis'];
+const TUTORIAL_LOADOUT = ['dash', 'cleave', 'flame_arc', 'ice_aegis', 'chain_lightning', 'time_stop'];
 const TUTORIAL_MAX_HP = 100;
 const TUTORIAL_MAX_STAMINA = 10;
 const TUTORIAL_MAX_POTIONS = 4;
@@ -34,7 +34,7 @@ export function enterShatteringTutorial(state: GameState): void {
   run.equippedAccessory = null;
 
   // Vision-only mastery — reset back to the real defaults once the Shattering ends.
-  persistent.skills = { dash: 3, cleave: 3, flame_arc: 3, ice_aegis: 3 };
+  persistent.skills = { dash: 3, cleave: 3, flame_arc: 3, ice_aegis: 3, chain_lightning: 3, time_stop: 3 };
   persistent.skillLoadout = [...TUTORIAL_LOADOUT];
   run.activeSkills = [...TUTORIAL_LOADOUT];
 

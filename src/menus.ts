@@ -198,8 +198,8 @@ function openMenuTab(state: GameState, tab: MenuTabId): void {
   }
 }
 
-export type SkillSlot = 'Q' | 'E' | 'R' | 'F';
-const SLOT_INDEX: Record<SkillSlot, number> = { Q: 0, E: 1, R: 2, F: 3 };
+export type SkillSlot = 'Q' | 'E' | 'R' | 'F' | 'C' | 'V';
+const SLOT_INDEX: Record<SkillSlot, number> = { Q: 0, E: 1, R: 2, F: 3, C: 4, V: 5 };
 
 /** Assigns a skill to a slot. */
 function assignSkill(state: GameState, skillId: string, slot: SkillSlot): void {
@@ -511,7 +511,7 @@ function renderRelicsTab(state: GameState): string {
     </div>`;
 }
 
-const SKILL_SLOTS: readonly SkillSlot[] = ['Q', 'E', 'R', 'F'];
+const SKILL_SLOTS: readonly SkillSlot[] = ['Q', 'E', 'R', 'F', 'C', 'V'];
 
 /** Renders every level's effect line, bright for obtained levels, dim for ones not yet reached. */
 function renderSkillLevelEffects(skillId: string, level: number): string {

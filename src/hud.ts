@@ -27,6 +27,8 @@ const SKILL_SLOT_IDS: readonly [string, string][] = [
   ['skill-e', 'E'],
   ['skill-r', 'R'],
   ['skill-f', 'F'],
+  ['skill-c', 'C'],
+  ['skill-v', 'V'],
 ];
 
 // Mobile action-pad buttons — same Q/E/R/F order as SKILL_SLOT_IDS.
@@ -35,12 +37,14 @@ const TOUCH_SKILL_BTN_CLASS: readonly [string, string][] = [
   ['skill-btn-e', 'E'],
   ['skill-btn-r', 'R'],
   ['skill-btn-f', 'F'],
+  ['skill-btn-c', 'C'],
+  ['skill-btn-v', 'V'],
 ];
 
 /** The 3-4 keys most relevant to the current screen, always visible in the HUD. */
 const HINT_STRIP: Record<GameState['ui']['currentScreen'], string> = {
   TITLE: 'Enter: Start',
-  GAME: 'WASD Move · Space Brace · Q/E Skill · I Inv · K Skills · ? Help',
+  GAME: 'WASD Move · Space Brace · QERFCV Skills · I Inv · K Skills · ? Help',
   MENU: 'Click: Switch Tab, Equip/Use, Assign Q/E · I/K/?/Esc: Close',
   UPGRADE_SHOP: 'Click: Buy · Esc: Continue',
   SHORTCUT_GATE: 'Click: Warp · Esc: Cancel',
@@ -156,6 +160,8 @@ export function initHud(): void {
       <span id="skill-e" class="skill-slot">E: --</span>
       <span id="skill-r" class="skill-slot">R: --</span>
       <span id="skill-f" class="skill-slot">F: --</span>
+      <span id="skill-c" class="skill-slot">C: --</span>
+      <span id="skill-v" class="skill-slot">V: --</span>
     </div>
     <div id="hint-strip" class="hint-strip"></div>`;
 
