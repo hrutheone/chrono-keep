@@ -573,7 +573,15 @@ export function updateMusicForState(state: GameState): void {
   if (!ctx) return; // Not unlocked yet.
 
   const screen = state.ui.currentScreen;
-  const musicScreens = screen === 'GAME' || screen === 'MENU';
+  const isOverlay =
+    screen === 'MENU' ||
+    screen === 'UPGRADE_SHOP' ||
+    screen === 'SHORTCUT_GATE' ||
+    screen === 'CURSED_RIFT' ||
+    screen === 'SMUGGLER' ||
+    screen === 'CONFIRM' ||
+    screen === 'DIALOGUE';
+  const musicScreens = screen === 'GAME' || isOverlay;
 
   let choice: BgmChoice | null = null;
 
@@ -600,10 +608,11 @@ export function updateMusicForState(state: GameState): void {
     if (activeSource && activeSource.playbackRate.value !== choice.rate) {
       activeSource.playbackRate.value = choice.rate;
     }
-    // Tactical muffling: the Menu always ducks the filter regardless of the underlying track's own value.
-    rampMusicFilter(screen === 'MENU' ? 500 : choice.filter);
+    // Tactical muffling: overlay menus duck the filter regardless of the underlying track's own value.
+    rampMusicFilter(isOverlay ? 500 : choice.filter);
   }
 }
+
 
 
 // --- The Anxiety Clock ---
