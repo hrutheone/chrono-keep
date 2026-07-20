@@ -12,7 +12,7 @@ import { isTurnBusy, resolvePlayerTurn } from './turnController';
 import { isRunOver, logLine } from './turns';
 import { playBlockedSfx, playEquipSfx, playMoveSfx, playPotionSfx } from './audio';
 import { saveRunSnapshot } from './persistence';
-import { rollLateTierWeapon } from './content';
+import { rollWeaponForDepth } from './content';
 import { isSilasAt } from './npc';
 import { openDialogue, openTreeDialogue } from './dialogue';
 import { triggerCursedRiftEvent } from './cursedRift';
@@ -70,7 +70,9 @@ function tryChronoAnvil(state: GameState, x: number, y: number): void {
     logLine(state, 'You need to equip a weapon to reforge it.');
     return;
   }
-  const forged = rollLateTierWeapon(`f${state.run.currentFloor}-anvil-${x}-${y}`);
+  const floor = state.run.currentFloor;
+  const id = `f${floor}-anvil-${x}-${y}`;
+  const forged = rollWeaponForDepth(floor, id);
   reforgeWeapon(state, forged);
   state.dungeon.tiles[y][x] = TILE.FLOOR;
   logLine(state, 'The Anvil shatters your weapon and forges a masterpiece!');

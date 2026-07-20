@@ -24,7 +24,7 @@ import {
   relicEffectText,
   relicLore,
   relicName,
-  rollMidTierWeapon,
+  rollWeaponForDepth,
   skillRequirementLabel,
 } from './content';
 import {
@@ -976,7 +976,9 @@ function resolveSmugglerPurchase(state: GameState, offerId: SmugglerOfferId): vo
     logLine(state, `The Smuggler hands over a Relic: ${relicName(relic)}!`);
     playUnlockSfx();
   } else if (offerId === 'weapon') {
-    const weapon = rollMidTierWeapon(`smuggler-weapon-${state.persistent.loopCount}`);
+    const highestAnchor = Math.max(0, ...(state.persistent.unlockedAnchors ?? []));
+    const id = `smuggler-weapon-${state.persistent.loopCount}`;
+    const weapon = rollWeaponForDepth(highestAnchor, id);
     reforgeWeapon(state, weapon);
     logLine(state, `The Smuggler sharpens your edge: ${weapon.name}!`);
     playEquipSfx();

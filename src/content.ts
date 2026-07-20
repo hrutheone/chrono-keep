@@ -895,8 +895,8 @@ const CHEST_POOL_B1: ChestRoll[] = [
   (id) => createAccessory('RING_OF_VIGOR', id),
   (id) => createConsumable('STAMINA_DRAUGHT', id),
 ];
-const CHEST_POOL_B2: ChestRoll[] = [
-  ...CHEST_POOL_B1,
+
+const MID_STAGE_CHEST_ITEMS: ChestRoll[] = [
   (id) => createPotion('HI_POTION', id),
   (id) => createAccessory('BOOTS_OF_HASTE', id),
   (id) => createAccessory('ECHO_CHARM', id),
@@ -919,8 +919,8 @@ const CHEST_POOL_B2: ChestRoll[] = [
   (id) => createConsumable('WHETSTONE', id),
   (id) => createConsumable('QUICKSILVER_FLASK', id),
 ];
-const CHEST_POOL_B3: ChestRoll[] = [
-  ...CHEST_POOL_B2,
+
+const LATE_STAGE_CHEST_ITEMS: ChestRoll[] = [
   (id) => createPotion('MEGALIXIR', id),
   (id) => createPotion('SOMA_DROP', id),
   (id) => createAccessory('GROUNDING_BAND', id),
@@ -950,9 +950,16 @@ const CHEST_POOL_B3: ChestRoll[] = [
   (id) => createRelicItemByEffect(RELIC_EFFECT_KEYS[Math.floor(Math.random() * RELIC_EFFECT_KEYS.length)], id),
 ];
 
+// Stage-overlapping chest pools:
+// Biome 1-2 (F1-20): Early Stage items
+// Biome 3-5 (F21-50): Early + Mid Stage items
+// Biome 6+  (F51-99): Mid + Late Stage items (excludes Early Stage items)
+const CHEST_POOL_B2: ChestRoll[] = [...CHEST_POOL_B1, ...MID_STAGE_CHEST_ITEMS];
+const CHEST_POOL_B3: ChestRoll[] = [...MID_STAGE_CHEST_ITEMS, ...LATE_STAGE_CHEST_ITEMS];
+
 export function rollChestItem(rng: () => number, floorNumber: number, id: string): Item {
   const biome = biomeOf(floorNumber);
-  const pool = biome >= 3 ? CHEST_POOL_B3 : biome === 2 ? CHEST_POOL_B2 : CHEST_POOL_B1;
+  const pool = biome >= 6 ? CHEST_POOL_B3 : biome >= 3 ? CHEST_POOL_B2 : CHEST_POOL_B1;
   return pool[Math.floor(rng() * pool.length)](id);
 }
 
@@ -1163,6 +1170,19 @@ export function rollLateTierWeapon(id: string): Weapon {
   return createWeapon(key, id);
 }
 
+/** Rolls a weapon for a given floor depth using stage-overlapping pools (F1-20: Early; F21-50: Early+Mid; F51+: Mid+Late). */
+export function rollWeaponForDepth(floorNumber: number, id: string): Weapon {
+  if (floorNumber >= 51) {
+    const keys = [...MID_TIER_WEAPON_KEYS, ...LATE_TIER_WEAPON_KEYS];
+    return createWeapon(keys[Math.floor(Math.random() * keys.length)], id);
+  }
+  if (floorNumber >= 21) {
+    const keys = [...EARLY_TIER_WEAPON_KEYS, ...MID_TIER_WEAPON_KEYS];
+    return createWeapon(keys[Math.floor(Math.random() * keys.length)], id);
+  }
+  return rollEarlyTierWeapon(id);
+}
+
 // Elite weapon-drop ATK bonus range, layered on top of the tier's base atk and mirrored into upgradeBonus for the UI suffix.
 const ELITE_DROP_ATK_BONUS_LATE: readonly [number, number] = [2, 4];
 const ELITE_DROP_ATK_BONUS_MID: readonly [number, number] = [1, 3];
@@ -1178,7 +1198,7 @@ export function rollEliteDrop(id: string, heldRelics: readonly string[], current
     const relic = pickRandomUnheldRelic(heldRelics);
     if (relic) return createRelicItemByEffect(relic, id);
   }
-  const weapon = currentFloor >= 51 ? rollLateTierWeapon(id) : currentFloor >= 21 ? rollMidTierWeapon(id) : rollEarlyTierWeapon(id);
+  const weapon = rollWeaponForDepth(currentFloor, id);
   const [min, max] = currentFloor >= 51 ? ELITE_DROP_ATK_BONUS_LATE : currentFloor >= 21 ? ELITE_DROP_ATK_BONUS_MID : ELITE_DROP_ATK_BONUS_EARLY;
   const bonus = getRandomBonus(min, max);
   weapon.atk += bonus;

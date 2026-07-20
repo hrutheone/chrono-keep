@@ -15,7 +15,7 @@ import {
   pickRandomUnheldRelics,
   relicName,
   rollCursedRiftEvent,
-  rollLateTierWeapon,
+  rollWeaponForDepth,
   weaknessOf,
 } from './content';
 import { totalAtk, totalDef } from './inventory';
@@ -168,7 +168,9 @@ export function resolveLichProjection(state: GameState, accept: boolean): void {
   if (accept) {
     state.run.maxHp = Math.max(1, state.run.maxHp - LICH_PROJECTION_MAX_HP_COST);
     state.run.currentHp = Math.min(state.run.currentHp, state.run.maxHp);
-    const weapon = rollLateTierWeapon(`lich-chest-${state.run.currentFloor}-${event.riftX}-${event.riftY}`);
+    const floor = state.run.currentFloor;
+    const id = `lich-chest-${floor}-${event.riftX}-${event.riftY}`;
+    const weapon = rollWeaponForDepth(floor, id);
     state.dungeon.items.push({ item: weapon, x: event.riftX, y: event.riftY, chestLoot: true });
     logLine(state, `The bargain is struck — ${LICH_PROJECTION_MAX_HP_COST} Max HP for a gilded chest.`);
     playPurchaseSfx();
