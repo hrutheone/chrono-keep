@@ -54,6 +54,7 @@ const HINT_STRIP: Record<GameState['ui']['currentScreen'], string> = {
 
 // Cached DOM element references
 interface HudDomElements {
+  floorIndicator: HTMLElement;
   turnCounter: HTMLElement;
   hpFill: HTMLElement;
   stamFill: HTMLElement;
@@ -77,6 +78,7 @@ interface HudDomElements {
 let dom: HudDomElements | null = null;
 
 // Last rendered values for dirty checking
+let lastFloor: number | null = null;
 let lastTurns: number | null = null;
 let lastHpPct: number | null = null;
 let lastStamPct: number | null = null;
@@ -97,6 +99,7 @@ let lastLowHp: boolean | null = null;
 function getDom(): HudDomElements {
   if (!dom) {
     dom = {
+      floorIndicator: document.getElementById('floor-indicator')!,
       turnCounter: document.getElementById('turn-counter')!,
       hpFill: document.getElementById('hp-fill')!,
       stamFill: document.getElementById('stam-fill')!,
@@ -129,6 +132,7 @@ export function initHud(): void {
 
   top.innerHTML = `
     <div class="hud-row">
+      <span id="floor-indicator" class="floor-indicator">HUB</span>
       <span id="turn-counter" class="turn-counter">100</span>
       <div class="bar-stack">
         <div class="bar hp-bar"><div id="hp-fill" class="bar-fill"></div></div>
@@ -156,6 +160,7 @@ export function initHud(): void {
     <div id="hint-strip" class="hint-strip"></div>`;
 
   dom = null; // force re-query on next getDom call
+  lastFloor = null;
   lastTurns = null;
   lastHpPct = null;
   lastStamPct = null;
@@ -192,6 +197,13 @@ export function initHud(): void {
 export function updateHud(state: GameState): void {
   const { run } = state;
   const elements = getDom();
+
+  // 0. Floor Indicator
+  const floorText = run.currentFloor === 0 ? 'HUB' : `F${String(run.currentFloor).padStart(2, '0')}`;
+  if (lastFloor !== run.currentFloor) {
+    elements.floorIndicator.textContent = floorText;
+    lastFloor = run.currentFloor;
+  }
 
   // 1. Turn counter
   if (lastTurns !== run.turnsRemaining) {
