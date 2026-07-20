@@ -109,7 +109,7 @@ export const SKILL_SPRITE_BY_ID: Record<SkillId, SpriteRef> = {
   bash: { col: 25, row: 11 }, // hammer (Mythril Hammer's cell)
   grapple: { col: 39, row: 5 }, // trident — hooks and pulls
   blizzard_wave: { col: 28, row: 12 }, // snowflake bloom
-  meteor: { col: 33, row: 11 }, // flame (gunpowder_flask's 2nd flame cell)
+  meteor: { col: 31, row: 11 }, // flame (gunpowder_flask's 2nd flame cell)
   chakra: { col: 25, row: 12 }, // plus — restore HP
   recall: SPRITES.TIME_SHARD,
   fortify: { col: 39, row: 2 }, // ornate circular shield (mirror_shield's cell)
@@ -123,8 +123,8 @@ export const SKILL_SPRITE_BY_ID: Record<SkillId, SpriteRef> = {
   time_stop: { col: 41, row: 12 }, // grey hourglass outline (Shattered Hourglass's cell)
   paradox: { col: 47, row: 0 }, // circular dial — a swapped fate
   defuse: { col: 30, row: 11 }, // X — negate
-  slow: { col: 30, row: 12 }, // sparse snowflake
-  aura: { col: 33, row: 11 }, // concentric circles
+  slow: { col: 35, row: 11 }, // sparse snowflake
+  aura: { col: 43, row: 12 }, // concentric circles
   ultima: { col: 34, row: 12 }, // skull
 };
 
