@@ -106,13 +106,13 @@ export const SKILL_SPRITE_BY_ID: Record<SkillId, SpriteRef> = {
   flame_arc: SPRITES.FIRE_HAZARD,
   static_shift: { col: 27, row: 13 }, // teleport
   ice_aegis: { col: 33, row: 10 },
-  bash: { col: 35, row: 2 }, // hammer (Mythril Hammer's cell)
-  grapple: { col: 40, row: 7 }, // trident — hooks and pulls
-  blizzard_wave: { col: 27, row: 12 }, // snowflake bloom
-  meteor: { col: 15, row: 10 }, // flame (gunpowder_flask's 2nd flame cell)
+  bash: { col: 25, row: 11 }, // hammer (Mythril Hammer's cell)
+  grapple: { col: 39, row: 5 }, // trident — hooks and pulls
+  blizzard_wave: { col: 28, row: 12 }, // snowflake bloom
+  meteor: { col: 33, row: 11 }, // flame (gunpowder_flask's 2nd flame cell)
   chakra: { col: 25, row: 12 }, // plus — restore HP
   recall: SPRITES.TIME_SHARD,
-  fortify: { col: 37, row: 2 }, // ornate circular shield (mirror_shield's cell)
+  fortify: { col: 39, row: 2 }, // ornate circular shield (mirror_shield's cell)
   reflect_barrier: { col: 37, row: 4 }, //
   vanish: { col: 29, row: 11 }, // eye slash
   omnislash: { col: 26, row: 11 }, // double slash — multi-hit
@@ -124,7 +124,7 @@ export const SKILL_SPRITE_BY_ID: Record<SkillId, SpriteRef> = {
   paradox: { col: 47, row: 0 }, // circular dial — a swapped fate
   defuse: { col: 30, row: 11 }, // X — negate
   slow: { col: 30, row: 12 }, // sparse snowflake
-  aura: { col: 35, row: 11 }, // concentric circles
+  aura: { col: 33, row: 11 }, // concentric circles
   ultima: { col: 34, row: 12 }, // skull
 };
 
