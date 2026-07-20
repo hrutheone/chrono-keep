@@ -140,7 +140,7 @@ export const RELIC_SPRITE_BY_EFFECT: Record<string, SpriteRef> = {
   gunpowder_flask: { col: 15, row: 10 }, // orange flame (2nd variant)
   executioners_coin: { col: 41, row: 3 }, // gold coin
   static_generator: { col: 15, row: 11 }, // grey stacked gears
-  giants_anvil: { col: 48, row: 4 }, // solid brown block/banner
+  giants_anvil: { col: 0, row: 8 }, // solid brown block/banner
   duelists_glove: { col: 41, row: 1 }, // brown open-hand glove
   vampires_cape: { col: 39, row: 10 }, // red heart (solid)
   troll_blood: { col: 40, row: 10 }, // red heart (outline variant)
@@ -160,7 +160,7 @@ export const WEAPON_SPRITE_BY_NAME: Record<string, SpriteRef> = {
   'Rusty Sword': { col: 36, row: 7 },
   'Bone Dagger': { col: 34, row: 6 },
   'Mythril Hammer': { col: 37, row: 7 },
-  'Mage Masher': { col: 32, row: 4 },
+  'Mage Masher': { col: 35, row: 6 },
   'Flametongue': { col: 36, row: 6 },
   'Ice Lance': { col: 35, row: 3 },
   'Partisan': { col: 36, row: 3 },
