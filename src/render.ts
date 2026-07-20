@@ -18,6 +18,7 @@ import { eliteAffixColor, eternityTreeStage } from './content';
 import { isArenaFloor } from './arenas';
 import { FINAL_BOSS_FLOOR } from './bossArena';
 import { HUB_FLOOR } from './hub';
+import { SILAS_ID } from './npc';
 import { spritesheet, SPRITE_PX } from './assets';
 import {
   ACCESSORY_SPRITE_BY_NAME,
@@ -561,6 +562,13 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
       ctx.stroke();
       ctx.restore();
     }
+  }
+
+  if (state.run.currentFloor === HUB_FLOOR && state.dungeon.npc) {
+    const npcVisual = getEntityVisual(SILAS_ID, state.dungeon.npc.x, state.dungeon.npc.y);
+    const npcPx = Math.round((npcVisual.tileX - camX) * TILE_SIZE);
+    const npcPy = Math.round((npcVisual.tileY - camY) * TILE_SIZE);
+    drawRef(ctx, SPRITES.SILAS, npcPx, npcPy);
   }
 
   for (const ghost of getDeathGhosts()) {

@@ -13,7 +13,8 @@ import { PLAYER_ID, notifyDeath } from './animation';
 import { notifyFloatingText } from './floatingText';
 import { consumeAccessoryWithPassive, hasAccessoryPassive, totalDef } from './inventory';
 import { isShatteringTutorial } from './shattering';
-import type { GameState } from './types';
+import { stepSilas } from './npc';
+import type { GameState, LastRunInfo } from './types';
 
 export type PlayerActionKind = 'move' | 'attack' | 'wait' | 'skill' | 'item';
 
@@ -43,6 +44,7 @@ function isFrostHazardAt(state: GameState, x: number, y: number): boolean {
 
 function applyFrostHazard(state: GameState): void {
   if (isFrostHazardAt(state, state.run.playerX, state.run.playerY)) {
+    state.run.lastDamageSource = { kind: 'HAZARD', element: 'FROST' };
     state.run.currentHp = Math.max(0, state.run.currentHp - FROST_HAZARD_DAMAGE);
     markFloorDamageTaken(state);
     logLine(state, `The frost gnaws at you for ${FROST_HAZARD_DAMAGE}.`);
@@ -138,6 +140,7 @@ function detonateTelegraph(state: GameState, t: GameState['dungeon']['telegraphT
   if (t.payload === 'fire_aoe') {
     if (hitsPlayer) {
       const dmg = computeDamage(t.sourceAttack, totalDef(state), 'FIRE', playerElement(state));
+      state.run.lastDamageSource = { kind: 'HAZARD', element: 'FIRE' };
       state.run.currentHp = Math.max(0, state.run.currentHp - dmg);
       markFloorDamageTaken(state);
       logLine(state, `The fire detonates — you take ${dmg} Fire damage!`);
@@ -155,6 +158,7 @@ function detonateTelegraph(state: GameState, t: GameState['dungeon']['telegraphT
   // 'chill_pulse'
   if (hitsPlayer) {
     const dmg = computeDamage(t.sourceAttack, totalDef(state), 'FROST', playerElement(state));
+    state.run.lastDamageSource = { kind: 'HAZARD', element: 'FROST' };
     state.run.currentHp = Math.max(0, state.run.currentHp - dmg);
     markFloorDamageTaken(state);
     logLine(state, `The frost pulse hits you for ${dmg}.`);
@@ -177,6 +181,7 @@ function tickTelegraphTiles(state: GameState): void {
 function tickPlayerStatus(state: GameState): void {
   if (state.run.status === 'NONE') return;
   if (state.run.status === 'BURN') {
+    state.run.lastDamageSource = { kind: 'HAZARD', element: 'FIRE' };
     state.run.currentHp = Math.max(0, state.run.currentHp - 2);
     markFloorDamageTaken(state);
     logLine(state, 'You take 2 Burn damage.');
@@ -234,6 +239,20 @@ function runTickPhase(state: GameState, actionKind: PlayerActionKind): void {
   state.run.turnsRemaining = Math.max(0, state.run.turnsRemaining - penalty);
 }
 
+/** Snapshots the current run for Silas's reactive dialogue, before `continueAfterDeath` wipes it. */
+function recordLastRun(state: GameState, deathReason: LastRunInfo['deathReason']): void {
+  const dx = Math.abs(state.run.playerX - state.dungeon.stairsX);
+  const dy = Math.abs(state.run.playerY - state.dungeon.stairsY);
+  state.persistent.lastRun = {
+    deathReason,
+    enemyKind: state.run.lastDamageSource?.kind ?? null,
+    element: state.run.lastDamageSource?.element ?? null,
+    floor: state.run.currentFloor,
+    nearStairs: Math.max(dx, dy) <= 3,
+    statusAtDeath: state.run.status,
+  };
+}
+
 /** Loss pending flag. */
 let lossPending = false;
 const CRT_WARP_MS = 600;
@@ -287,6 +306,7 @@ function playShatterEternityVisual(): void {
 /** The Shattering's scripted loss — fires once, regardless of who "should" have won this exchange. */
 function triggerShatterEternity(state: GameState): void {
   lossPending = true;
+  recordLastRun(state, 'HP');
   state.run.currentHp = 0;
   notifyDeath(PLAYER_ID, 'PLAYER', state.run.playerX, state.run.playerY, state.run.facing);
   logLine(state, `Shatter Eternity! The Chrono-Lich unravels the timeline — ${SHATTER_DAMAGE} damage.`);
@@ -318,9 +338,11 @@ function runCheckPhase(state: GameState): void {
   if (tryPhoenixFeather(state)) return;
   lossPending = true;
   if (state.run.currentHp <= 0) {
+    recordLastRun(state, 'HP');
     notifyDeath(PLAYER_ID, 'PLAYER', state.run.playerX, state.run.playerY, state.run.facing);
     logLine(state, 'You have fallen.');
   } else {
+    recordLastRun(state, 'TIMEOUT');
     logLine(state, 'Time has run out.');
   }
   playDeathSfx();
@@ -387,6 +409,7 @@ export async function resolvePlayerTurn(state: GameState, actionKind: PlayerActi
     await delay(HIT_STOP_MS);
   }
   runEnemyPhase(state);
+  if (state.run.currentFloor === HUB_FLOOR) stepSilas(state);
   runTickPhase(state, actionKind);
   // Cheat Mode: lock HP and Stamina to max.
   if (state.persistent.cheatModeEnabled) {

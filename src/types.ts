@@ -27,6 +27,10 @@ export interface GameState {
     weaponSlot2Unlocked: boolean;
     accessorySlot2Unlocked: boolean;
     accessorySlot3Unlocked: boolean;
+
+    // Silas's Priority-1 milestone lines, never repeated once spoken.
+    dialogueSeenIds: string[];
+    lastRun: LastRunInfo | null;
   };
 
   run: {
@@ -81,6 +85,9 @@ export interface GameState {
     staticGenCharged: boolean;
     trollBloodCounter: number;
     smugglerPresent: boolean;
+
+    // Last hit the player took; read once at death to pick a Silas reaction line.
+    lastDamageSource: { kind: string; element: Element } | null;
   };
 
   dungeon: {
@@ -107,12 +114,35 @@ export interface GameState {
       // Set on Mini-Boss/Final Boss telegraphed AOEs, for Tactical Brace's Stamina refund.
       isBossAoe?: boolean;
     }[];
+    // Silas, the Old Watchwarden — only ever placed on the Hub floor.
+    npc: { x: number; y: number } | null;
   };
 
   ui: {
-    currentScreen: 'TITLE' | 'GAME' | 'MENU' | 'UPGRADE_SHOP' | 'SHORTCUT_GATE' | 'CURSED_RIFT' | 'SMUGGLER' | 'CONFIRM' | 'DEATH' | 'VICTORY';
+    currentScreen:
+      | 'TITLE'
+      | 'GAME'
+      | 'MENU'
+      | 'UPGRADE_SHOP'
+      | 'SHORTCUT_GATE'
+      | 'CURSED_RIFT'
+      | 'SMUGGLER'
+      | 'CONFIRM'
+      | 'DEATH'
+      | 'VICTORY'
+      | 'DIALOGUE';
     log: string[];
   };
+}
+
+/** What killed the player (or ran out the clock) last time, for Silas's reactive dialogue. */
+export interface LastRunInfo {
+  deathReason: 'HP' | 'TIMEOUT';
+  enemyKind: string | null;
+  element: Element | null;
+  floor: number;
+  nearStairs: boolean;
+  statusAtDeath: StatusEffect;
 }
 
 export interface Enemy {

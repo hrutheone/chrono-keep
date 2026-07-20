@@ -42,6 +42,7 @@ import { logLine } from './turns';
 import { awardEchoes } from './echoes';
 import { resetRunForNewLoop, resetToNewGame, rerollSeedKeepProgress } from './state';
 import { enterShatteringTutorial, isShatteringTutorial } from './shattering';
+import { closeDialogue, getActiveDialogueText } from './dialogue';
 import {
   getMasterVolume,
   getMusicVolume,
@@ -819,6 +820,19 @@ function resolveRiftPact(state: GameState, accept: boolean): void {
   saveGame(state);
 }
 
+/** Renders Silas's dialogue box — a small bottom-anchored popup, not a full-screen modal. Instant text, no typing animation. */
+function renderDialogue(): string {
+  const text = getActiveDialogueText() ?? '...';
+  return `
+    <div class="dialogue-box">
+      <span class="item-detail-icon dialogue-icon" style="${spriteCssStyle(SPRITES.SILAS_FACE, DETAIL_ICON_SIZE)}"></span>
+      <div class="dialogue-body">
+        <div class="item-detail-name">Silas, the Old Watchwarden</div>
+        <div class="item-detail-lore dialogue-text">"${text}"</div>
+      </div>
+    </div>`;
+}
+
 /** Renders the Temporal Smuggler modal. */
 function renderSmuggler(state: GameState): string {
   const rows = SMUGGLER_OFFERS.map((offer) => {
@@ -1057,6 +1071,7 @@ const ALL_SCREENS = new Set<GameState['ui']['currentScreen']>([
   'CONFIRM',
   'DEATH',
   'VICTORY',
+  'DIALOGUE',
 ]);
 
 const SCROLL_CONTAINER_SELECTOR = '.skill-branch-scroll, .upgrade-shop-scroll';
@@ -1066,6 +1081,7 @@ function render(state: GameState): void {
   const screen = state.ui.currentScreen;
   const isOpen = screen !== 'GAME';
   el.classList.toggle('active', isOpen);
+  el.classList.toggle('dialogue-open', screen === 'DIALOGUE');
   // Reset selection on fresh menu open.
   if (screen === 'MENU' && lastScreen !== 'MENU') {
     selectedInvIndex = null;
@@ -1086,6 +1102,7 @@ function render(state: GameState): void {
   else if (screen === 'SHORTCUT_GATE') el.innerHTML = renderShortcutGate(state);
   else if (screen === 'CURSED_RIFT') el.innerHTML = renderCursedRift();
   else if (screen === 'SMUGGLER') el.innerHTML = renderSmuggler(state);
+  else if (screen === 'DIALOGUE') el.innerHTML = renderDialogue();
   else if (screen === 'CONFIRM') el.innerHTML = renderConfirm();
   else if (screen === 'DEATH') el.innerHTML = renderDeath(state);
   else if (screen === 'VICTORY') el.innerHTML = renderVictory(state);
@@ -1104,7 +1121,12 @@ export function initMenus(state: GameState): void {
     if (!ALL_SCREENS.has(screen)) return;
     const key = ev.key.toLowerCase();
 
-    if (key === '?' || key === 'f1') {
+    if (key === ' ' && screen === 'DIALOGUE') {
+      ev.preventDefault();
+      closeDialogue();
+      state.ui.currentScreen = 'GAME';
+      render(state);
+    } else if (key === '?' || key === 'f1') {
       ev.preventDefault();
       openMenuTab(state, 'settings');
       render(state);
@@ -1127,17 +1149,27 @@ export function initMenus(state: GameState): void {
         screen === 'SHORTCUT_GATE' ||
         screen === 'CURSED_RIFT' ||
         screen === 'SMUGGLER' ||
-        screen === 'CONFIRM')
+        screen === 'CONFIRM' ||
+        screen === 'DIALOGUE')
     ) {
       ev.preventDefault();
       if (screen === 'CONFIRM') answerPendingConfirm(state, false);
       else if (screen === 'CURSED_RIFT') resolveRiftPact(state, false);
-      else state.ui.currentScreen = 'GAME';
+      else {
+        if (screen === 'DIALOGUE') closeDialogue();
+        state.ui.currentScreen = 'GAME';
+      }
       render(state);
     }
   });
 
   screenEl().addEventListener('click', (ev) => {
+    if (state.ui.currentScreen === 'DIALOGUE') {
+      closeDialogue();
+      state.ui.currentScreen = 'GAME';
+      render(state);
+      return;
+    }
     const target = (ev.target as HTMLElement).closest<HTMLElement>('[data-action]');
     if (!target) return;
     const { action, index, skill, slot, track, tab, floor, relic, enemy, upgrade, offer } = target.dataset;

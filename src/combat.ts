@@ -679,6 +679,7 @@ export function playerAttackEnemy(state: GameState, enemy: Enemy): void {
 
 /** Handles enemy attack against player. */
 export function enemyAttackPlayer(state: GameState, enemy: Enemy): void {
+  state.run.lastDamageSource = { kind: enemy.kind, element: enemy.element };
   notifyAttack(enemy.id, Math.sign(state.run.playerX - enemy.x), Math.sign(state.run.playerY - enemy.y));
 
   if (state.run.iceAegisCharges > 0) {

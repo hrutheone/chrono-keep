@@ -55,6 +55,7 @@ const HINT_STRIP: Record<GameState['ui']['currentScreen'], string> = {
   CONFIRM: 'Click Proceed/Cancel',
   DEATH: 'Esc: Continue',
   VICTORY: 'Esc: Continue',
+  DIALOGUE: 'Click anywhere · Space/Esc: Continue',
 };
 
 /** Builds the HUD DOM once into the #hud-top / #hud-bottom overlay containers. */

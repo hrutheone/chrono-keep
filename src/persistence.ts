@@ -35,6 +35,10 @@ function migratePersistent(parsed: Record<string, unknown>): GameState['persiste
     weaponSlot2Unlocked: legacy.weaponSlot2Unlocked ?? false,
     accessorySlot2Unlocked: legacy.accessorySlot2Unlocked ?? false,
     accessorySlot3Unlocked: legacy.accessorySlot3Unlocked ?? false,
+    dialogueSeenIds: Array.isArray(legacy.dialogueSeenIds)
+      ? legacy.dialogueSeenIds.filter((s): s is string => typeof s === 'string')
+      : [],
+    lastRun: legacy.lastRun ?? null,
   };
 }
 

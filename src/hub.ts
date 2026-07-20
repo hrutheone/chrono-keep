@@ -7,6 +7,7 @@ import { saveGame, saveRunSnapshot } from './persistence';
 import { SMUGGLER_MIN_LOOP_COUNT, SMUGGLER_SPAWN_CHANCE } from './content';
 import { resetVisualLerps } from './animation';
 import { resetCameraLerp } from './camera';
+import { resetDialogueSession } from './dialogue';
 import type { GameState } from './types';
 
 const N = DUNGEON_SIZE;
@@ -19,6 +20,8 @@ interface HubLayout {
   tiles: number[][];
   spawnX: number;
   spawnY: number;
+  npcX: number;
+  npcY: number;
 }
 
 /** Centered hub room layout. */
@@ -48,7 +51,11 @@ function buildHub(smugglerPresent: boolean): HubLayout {
   tiles[originY][originX] = TILE.TREE;
   if (smugglerPresent) tiles[originY + 3][originX + 4] = TILE.SMUGGLER;
 
-  return { tiles, spawnX, spawnY };
+  // Silas wanders the open floor near the back corner, clear of every fixture and the spawn tile.
+  const npcX = originX + HUB_W - 2;
+  const npcY = originY + HUB_H - 2;
+
+  return { tiles, spawnX, spawnY, npcX, npcY };
 }
 
 /** Installs the Hub into game state. */
@@ -76,6 +83,8 @@ export function enterHub(state: GameState): void {
   state.dungeon.riftY = null;
   state.dungeon.expiringTiles = [];
   state.dungeon.telegraphTiles = [];
+  state.dungeon.npc = { x: hub.npcX, y: hub.npcY };
+  resetDialogueSession();
 }
 
 /** Valid shortcut destinations. */

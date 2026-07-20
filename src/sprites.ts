@@ -13,12 +13,16 @@ export const SHEET_ROWS = 22;
 
 export const SPRITES = {
   // --- Player ---
-  PLAYER: { col: 28, row: 0 }, // wide-brim-hat adventurer bust
+  PLAYER: { col: 28, row: 0 }, // worrior with sword and shield, facing forward
+
+  // --- Hub NPC ---
+  SILAS: { col: 24, row: 1 }, // hooded elderly man
+  SILAS_FACE: { col: 26, row: 10 }, // portrait face, for the dialogue box
 
   // --- Enemies ---
   BONE_GRUNT: { col: 29, row: 6 }, // slender bust, arms visible — reads skeletal
   EMBER_BAT: { col: 26, row: 8 }, // small yellow critter (closest warm color to "red")
-  VOLT_TURRET: { col: 18, row: 7 }, // same critter in blue — reads electric/squat
+  VOLT_TURRET: { col: 31, row: 5 }, // small critter — reads electric/squat
   FROST_WRAITH: { col: 24, row: 8 }, // hollow/outline humanoid — genuinely ghostly
   TIME_WEAVER: { col: 24, row: 0 }, // robed, hooded, arms down
   CHRONO_LICH: { col: 29, row: 2 }, // clean front-facing skull icon
@@ -31,24 +35,24 @@ export const SPRITES = {
   GLACIAL_KNIGHT: { col: 31, row: 6 }, // bust with a slotted armor-plate torso
 
   // --- Tier 3 (Floor 41+ upgrades) — same silhouette as base kind, tinted via auraColor ---
-  CLOCKWORK_SCARAB: { col: 30, row: 6 }, // mechanical-arm bust reused for the clockwork look
+  CLOCKWORK_SCARAB: { col: 26, row: 5 }, // small insect
   DREAD_LEGION: { col: 29, row: 6 }, // same as Bone-Grunt
   DOOM_GUARD: { col: 30, row: 6 }, // same as Bone-Knight
   ASH_FIEND: { col: 26, row: 8 }, // same as Ember-Bat
   HELLFIRE_MAGUS: { col: 24, row: 1 }, // same as Cinder-Shaman
-  TESLA_COIL: { col: 18, row: 7 }, // same as Volt-Turret
+  TESLA_COIL: { col: 31, row: 5 }, // same as Volt-Turret
   STORM_STALKER: { col: 28, row: 7 }, // same as Volt-Hound
   VOID_SPIRIT: { col: 24, row: 8 }, // same as Frost-Wraith
   GLACIAL_MONOLITH: { col: 24, row: 7 }, // same as Frost-Sentinel
 
   // --- Terrain ---
   FLOOR: { col: 0, row: 0 }, // dark ground
-  WALL: { col: 8, row: 1 }, // straight wall segment, drawn vertical (N-S)
-  WALL_CORNER: { col: 9, row: 1 }, // wall corner, drawn connecting East+South
-  WALL_T: { col: 10, row: 1 }, // 3-way wall junction, drawn connecting North+East+South
-  WALL_CROSS: { col: 11, row: 1 }, // 4-way wall junction (symmetric)
-  WALL_END: { col: 12, row: 1 }, // wall dead-end, drawn connecting South only
-  DOOR: { col: 0, row: 0 }, // no door
+  WALL: { col: 8, row: 0 }, // straight wall segment, drawn vertical (N-S)
+  WALL_CORNER: { col: 9, row: 0 }, // wall corner, drawn connecting East+South
+  WALL_T: { col: 10, row: 0 }, // 3-way wall junction, drawn connecting North+East+South
+  WALL_CROSS: { col: 11, row: 0 }, // 4-way wall junction (symmetric)
+  WALL_END: { col: 12, row: 0 }, // wall dead-end, drawn connecting South only
+  DOOR: { col: 11, row: 3 }, // arched doorway
   STAIRS: { col: 2, row: 6 }, // stairs
   SHORTCUT_GATE: { col: 1, row: 9 }, // blue gate
   BOSS_GATE: { col: 0, row: 9 }, // blue padlock
@@ -56,7 +60,7 @@ export const SPRITES = {
   FROST_HAZARD: { col: 14, row: 18 }, // blue water droplet
   SHOP_TERMINAL: { col: 0, row: 20 }, // tree brach
   CURSED_RIFT: { col: 13, row: 17 }, // dark red brick pattern — ominous texture
-  ECHO_WELL: { col: 8, row: 5 }, // solid glowing-blue pool tile
+  ECHO_WELL: { col: 14, row: 5 }, // solid glowing-blue pool tile
   CHRONO_ANVIL: { col: 48, row: 4 }, // same solid brown block used for the Giant's Anvil relic
   SMUGGLER: { col: 26, row: 1 }, // hooded bust, distinct silhouette from every other NPC/enemy
 

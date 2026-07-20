@@ -42,6 +42,8 @@ export function createNewGameState(): GameState {
       weaponSlot2Unlocked: false,
       accessorySlot2Unlocked: false,
       accessorySlot3Unlocked: false,
+      dialogueSeenIds: [],
+      lastRun: null,
     },
 
     run: {
@@ -89,6 +91,7 @@ export function createNewGameState(): GameState {
       staticGenCharged: false,
       trollBloodCounter: 0,
       smugglerPresent: false,
+      lastDamageSource: null,
     },
 
     dungeon: {
@@ -105,6 +108,7 @@ export function createNewGameState(): GameState {
       riftY: null,
       expiringTiles: [],
       telegraphTiles: [],
+      npc: null,
     },
 
     ui: {
@@ -171,4 +175,5 @@ export function resetRunForNewLoop(state: GameState, startFloor = 1): void {
   state.run.staticGenCharged = false;
   state.run.trollBloodCounter = 0;
   state.run.smugglerPresent = false;
+  state.run.lastDamageSource = null;
 }

@@ -872,6 +872,38 @@ body {
   gap: 10px;
 }
 
+/* Silas's dialogue box — a small bottom-anchored popup over the still-visible Hub, not a full-screen modal. */
+#screen-overlay.dialogue-open {
+  background: transparent;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 14px;
+}
+
+.dialogue-box {
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-mid);
+  background: var(--color-bg);
+  cursor: pointer;
+}
+
+.dialogue-icon {
+  flex-shrink: 0;
+}
+
+.dialogue-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.dialogue-text {
+  font-style: italic;
+}
+
 .title-menu h1,
 .victory-menu h1 {
   font-size: 22px;

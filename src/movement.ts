@@ -13,6 +13,8 @@ import { isRunOver, logLine } from './turns';
 import { playBlockedSfx, playEquipSfx, playMoveSfx, playPotionSfx } from './audio';
 import { saveRunSnapshot } from './persistence';
 import { ETERNITY_TREE_FLAVOR, eternityTreeStage, rollLateTierWeapon } from './content';
+import { isSilasAt } from './npc';
+import { openDialogue } from './dialogue';
 import type { GameState } from './types';
 
 type Facing = GameState['run']['facing'];
@@ -92,6 +94,11 @@ function tryChronoAnvil(state: GameState, x: number, y: number): void {
 /** Bumping the Eternity Tree or the Temporal Smuggler blocks movement instead of walking onto them. */
 function tryHubBump(state: GameState, nx: number, ny: number): boolean {
   if (state.run.currentFloor !== HUB_FLOOR) return false;
+  if (isSilasAt(state, nx, ny)) {
+    openDialogue(state);
+    state.ui.currentScreen = 'DIALOGUE';
+    return true;
+  }
   const tile = effectiveTileAt(state, nx, ny);
   if (tile === TILE.TREE) {
     const stage = eternityTreeStage(state.persistent.unlockedAnchors.length);
