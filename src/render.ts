@@ -308,10 +308,72 @@ function drawGhost(ctx: CanvasRenderingContext2D, ghost: GhostVisual, px: number
   ctx.globalAlpha = 1;
 }
 
+// Ambient Title-Screen backdrop: amber dust drifting upward (reverse gravity).
+interface TitleDustMote {
+  x: number;
+  y: number;
+  speed: number; // px/sec, upward
+  size: number;
+  opacity: number;
+  phase: number; // sine offset for horizontal drift
+  color: string;
+}
+
+const TITLE_DUST_COUNT = 40;
+const TITLE_DUST_COLORS = [COLOR_LIGHT, COLOR_MID];
+let titleDust: TitleDustMote[] = [];
+let titleDustLastT = 0;
+
+function seedTitleDust(viewW: number, viewH: number): void {
+  titleDust = [];
+  for (let i = 0; i < TITLE_DUST_COUNT; i++) {
+    titleDust.push({
+      x: Math.random() * viewW,
+      y: Math.random() * viewH,
+      speed: 8 + Math.random() * 14,
+      size: 1 + Math.round(Math.random()),
+      opacity: 0.3 + Math.random() * 0.7,
+      phase: Math.random() * Math.PI * 2,
+      color: TITLE_DUST_COLORS[i % TITLE_DUST_COLORS.length],
+    });
+  }
+}
+
+/** Renders the Title Screen's canvas backdrop only, isolated from world rendering to save perf during gameplay. */
+function renderTitleBackground(ctx: CanvasRenderingContext2D, viewW: number, viewH: number): void {
+  if (titleDust.length === 0) seedTitleDust(viewW, viewH);
+  const now = performance.now();
+  // Clamp dt so a tab coming back from background doesn't fling motes off-screen in one jump.
+  const dt = titleDustLastT ? Math.min(0.05, (now - titleDustLastT) / 1000) : 0;
+  titleDustLastT = now;
+
+  ctx.fillStyle = COLOR_BG;
+  ctx.fillRect(0, 0, viewW, viewH);
+
+  for (const p of titleDust) {
+    p.y -= p.speed * dt;
+    p.x += Math.sin(now / 1000 + p.phase) * 0.15;
+    if (p.y < -2) {
+      p.y = viewH + 2;
+      p.x = Math.random() * viewW;
+    }
+    ctx.globalAlpha = p.opacity;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(Math.round(p.x), Math.round(p.y), p.size, p.size);
+  }
+  ctx.globalAlpha = 1;
+}
+
 /** Renders the full game world for the current frame: tiles, items, enemies, player. */
 export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, viewW: number, viewH: number): void {
   VIEWPORT_TILES_W = viewW / TILE_SIZE;
   VIEWPORT_TILES_H = viewH / TILE_SIZE;
+
+  if (state.ui.currentScreen === 'TITLE') {
+    renderTitleBackground(ctx, viewW, viewH);
+    return;
+  }
+
   updateAnimations(state);
 
   ctx.fillStyle = COLOR_BG;

@@ -878,6 +878,21 @@ body {
   letter-spacing: 0.08em;
 }
 
+.title-menu h1 {
+  animation: title-pulse 3.5s ease-in-out infinite;
+}
+
+@keyframes title-pulse {
+  0%, 100% {
+    opacity: 0.85;
+    text-shadow: 0 0 4px var(--color-light);
+  }
+  50% {
+    opacity: 1;
+    text-shadow: 0 0 14px var(--color-light), 0 0 22px var(--color-mid);
+  }
+}
+
 .death-menu h2,
 .victory-menu h2 {
   font-size: 14px;
