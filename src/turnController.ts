@@ -1,6 +1,6 @@
 // Turn resolution phases.
 
-import { applyEnemyStatus, applyPlayerStatus, computeDamage, consumeHitStopFlag, killEnemy, playerElement } from './combat';
+import { applyEnemyStatus, applyPlayerStatus, computeDamage, consumeHitStopFlag, killEnemy, playerElement, skillDamageEnemy } from './combat';
 import { runEnemyPhase, tickBossRewind } from './enemyAI';
 import { TILE, effectiveTileAt } from './mapgen';
 import { HUB_FLOOR, enterHub } from './hub';
@@ -138,7 +138,13 @@ function detonateTelegraph(state: GameState, t: GameState['dungeon']['telegraphT
   }
 
   if (t.payload === 'fire_aoe') {
-    if (hitsPlayer) {
+    if (t.isPlayer) {
+      for (const enemy of state.dungeon.enemies) {
+        if (enemy.x === t.x && enemy.y === t.y) {
+          skillDamageEnemy(state, enemy, t.sourceAttack, 'FIRE', 'Meteor');
+        }
+      }
+    } else if (hitsPlayer) {
       const dmg = computeDamage(t.sourceAttack, totalDef(state), 'FIRE', playerElement(state));
       state.run.lastDamageSource = { kind: 'HAZARD', element: 'FIRE' };
       state.run.currentHp = Math.max(0, state.run.currentHp - dmg);

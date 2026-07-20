@@ -59,7 +59,7 @@ export const SPRITES = {
   FIRE_HAZARD: { col: 15, row: 10 }, // orange flame
   FROST_HAZARD: { col: 14, row: 18 }, // blue water droplet
   SHOP_TERMINAL: { col: 0, row: 20 }, // tree brach
-  CURSED_RIFT: { col: 13, row: 17 }, // dark red brick pattern — ominous texture
+  CURSED_RIFT: { col: 4, row: 0 }, // dark red brick pattern — ominous texture
   ECHO_WELL: { col: 14, row: 5 }, // solid glowing-blue pool tile
   CHRONO_ANVIL: { col: 9, row: 8 }, // same solid brown block used for the Giant's Anvil relic
   SMUGGLER: { col: 26, row: 1 }, // hooded bust, distinct silhouette from every other NPC/enemy

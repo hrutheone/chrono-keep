@@ -253,6 +253,7 @@ function castMeteor(state: GameState, level: number): void {
         sourceAttack,
         hazard: level >= 3 && ax === 0 && ay === 0,
         hazardTurns: 3,
+        isPlayer: true,
       });
     }
   }

@@ -135,6 +135,7 @@ export interface GameState {
       hazardTurns?: number;
       // Set on Mini-Boss/Final Boss telegraphed AOEs, for Tactical Brace's Stamina refund.
       isBossAoe?: boolean;
+      isPlayer?: boolean;
     }[];
     // Silas, the Old Watchwarden — only ever placed on the Hub floor.
     npc: { x: number; y: number } | null;
