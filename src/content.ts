@@ -437,7 +437,7 @@ const ACCESSORIES = {
     name: 'Shattered Hourglass',
     passive: 'safety_net_15',
     lore: 'A broken promise of more time. Use it to finish what you started.',
-    melt: 22,
+    melt: 40,
   },
   SPIKED_PAULDRONS: {
     name: 'Spiked Pauldrons',
@@ -461,7 +461,7 @@ const ACCESSORIES = {
     name: "Alchemist's Belt",
     passive: 'alchemist_belt',
     lore: 'A perfectly organized bandolier. Your hand finds what it needs instantly.',
-    melt: 25,
+    melt: 45,
   },
 } as const satisfies Record<string, { name: string; passive: string; lore: string; melt: number }>;
 
@@ -479,7 +479,7 @@ const POTIONS = {
     effect: 'heal_flat',
     value: 999,
     lore: "Distilled from a Watchwarden's final, desperate moment. It remembers what it means to be whole.",
-    melt: 20,
+    melt: 30,
   },
   MINOR_POTION: { name: 'Minor Potion', effect: 'heal_flat', value: 20, lore: 'A cleaner brew than the Watch usually manages. Small comforts.', melt: 8 },
   HI_POTION: { name: 'Hi-Potion', effect: 'heal_percent_max', value: 40, lore: 'Bottled by someone who actually knew what they were doing, once.', melt: 15 },
@@ -488,14 +488,14 @@ const POTIONS = {
     effect: 'heal_percent_max_cleanse',
     value: 100,
     lore: 'The last good thing the old alchemists ever made. It burns every ailment out along with the pain.',
-    melt: 30,
+    melt: 50,
   },
   SOMA_DROP: {
     name: 'Soma Drop',
     effect: 'permanent_max_hp',
     value: 5,
     lore: 'Not a heal — a rewrite. It takes its time settling into your bones.',
-    melt: 35,
+    melt: 60,
   },
 } as const satisfies Record<string, { name: string; effect: string; value: number; lore: string; melt: number }>;
 
@@ -799,7 +799,23 @@ for (const c of Object.values(CONSUMABLES)) MELT_VALUE_BY_NAME[c.name] = c.melt;
 for (const p of Object.values(POTIONS)) MELT_VALUE_BY_NAME[p.name] = p.melt;
 
 export function itemMeltValue(item: Item): number {
-  if (item.kind === 'WEAPON') return 5 + (item as Weapon).atk * 2;
+  if (item.kind === 'WEAPON') {
+    const w = item as Weapon;
+    let tierBonus = 0;
+    
+    const wKey = Object.keys(WEAPONS).find(k => WEAPONS[k as WeaponKey].name === w.name) as WeaponKey;
+    if (wKey) {
+      if (LATE_TIER_WEAPON_KEYS.includes(wKey)) tierBonus = 40;
+      else if (MID_TIER_WEAPON_KEYS.includes(wKey)) tierBonus = 15;
+      else if (EARLY_TIER_WEAPON_KEYS.includes(wKey)) tierBonus = 5;
+    }
+
+    const bonus = w.upgradeBonus ?? 0;
+    const bonusMelt = bonus * 20;
+    const baseAtk = w.atk - bonus;
+    
+    return 5 + tierBonus + bonusMelt + (baseAtk * 2);
+  }
   return MELT_VALUE_BY_NAME[item.name] ?? 5;
 }
 
@@ -1237,9 +1253,9 @@ export interface SmugglerOffer {
   description: string;
 }
 export const SMUGGLER_OFFERS: readonly SmugglerOffer[] = [
-  { id: 'relic', label: 'Smuggled Relic', cost: 100, description: 'A random Relic, for this run.' },
-  { id: 'weapon', label: 'Sharpened Edge', cost: 50, description: 'Replaces your equipped weapon with a random Mid Tier one.' },
-  { id: 'potion', label: 'Lifeblood', cost: 75, description: 'A Max Potion, added to your inventory.' },
+  { id: 'relic', label: 'Smuggled Relic', cost: 250, description: 'A random Relic, for this run.' },
+  { id: 'weapon', label: 'Sharpened Edge', cost: 150, description: 'Replaces your equipped weapon with a random Mid Tier one.' },
+  { id: 'potion', label: 'Lifeblood', cost: 200, description: 'A Max Potion, added to your inventory.' },
 ];
 export const SMUGGLER_SPAWN_CHANCE = 0.3;
 export const SMUGGLER_MIN_LOOP_COUNT = 2;
