@@ -493,7 +493,7 @@ export function enterFloor(state: GameState, floorNumber: number): GeneratedFloo
   state.run.turnsRemaining = floorTurnLimit(state);
 
   state.run.floorEvent = 'NONE';
-  if (floorNumber !== 0 && floorNumber !== 99 && floorNumber % 10 !== 0 && Math.random() < 0.10) {
+  if (floorNumber !== 0 && floorNumber !== 99 && floorNumber % 10 !== 0 && Math.random() < 0.07) {
     let pool: FloorEvent[] = [];
     if (floorNumber <= 30) pool = ['PACIFIST', 'SHATTERED'];
     else if (floorNumber <= 70) pool = ['PACIFIST', 'SHATTERED', 'BLEEDING', 'GLUTTON'];
