@@ -207,7 +207,8 @@ function wallVariantAt(state: GameState, x: number, y: number): WallVariant {
     const nx = x + dx;
     const ny = y + dy;
     if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
-    if (effectiveTileAt(state, nx, ny) === TILE.WALL) mask |= bit;
+    const t = effectiveTileAt(state, nx, ny);
+    if (t === TILE.WALL || t === TILE.TORCH) mask |= bit;
   }
   return WALL_VARIANT_BY_MASK[mask];
 }
@@ -514,7 +515,7 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
       const screenX = Math.round((tx - camX) * TILE_SIZE);
       const screenY = Math.round((ty - camY) * TILE_SIZE);
 
-      if (row[tx] === TILE.WALL) {
+      if (row[tx] === TILE.WALL || row[tx] === TILE.TORCH) {
         const { ref, rot } = wallVariantAt(state, tx, ty);
         drawTintedRef(ctx, ref, screenX, screenY, wallTint, rot);
         continue;
@@ -546,7 +547,7 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     if (tileSx < -1 || tileSx >= VIEWPORT_TILES_W + 1 || tileSy < -1 || tileSy >= VIEWPORT_TILES_H + 1) continue;
     const sx = Math.round(tileSx * TILE_SIZE);
     const sy = Math.round(tileSy * TILE_SIZE);
-    if (t.tileType === TILE.WALL) {
+    if (t.tileType === TILE.WALL || t.tileType === TILE.TORCH) {
       const { ref, rot } = wallVariantAt(state, t.x, t.y);
       drawTintedRef(ctx, ref, sx, sy, wallTint, rot);
       continue;
