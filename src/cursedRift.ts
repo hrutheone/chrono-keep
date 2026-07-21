@@ -7,7 +7,6 @@ import {
   ECHO_GEODE_AMBUSH_TURNS,
   ECHO_GEODE_ECHOES_PER_TURN,
   ECHO_GEODE_MAX_TURNS,
-  LICH_PROJECTION_MAX_HP_COST,
   RIFT_SHOP_OFFER_COUNT,
   RIFT_SHOP_PRICES,
   SKILLS,
@@ -15,7 +14,6 @@ import {
   pickRandomUnheldRelics,
   relicName,
   rollCursedRiftEvent,
-  rollWeaponForDepth,
   weaknessOf,
 } from './content';
 import { totalAtk, totalDef } from './inventory';
@@ -24,7 +22,7 @@ import { skillLevel, MAX_SKILL_LEVEL } from './shop';
 import { logLine } from './turns';
 import { awardEchoes } from './echoes';
 import { saveGame } from './persistence';
-import { playBossTelegraphSfx, playEquipSfx, playErrorSound, playPurchaseSfx, playSkillUnlockSfx, playUnlockSfx } from './audio';
+import { playEquipSfx, playErrorSound, playSkillUnlockSfx, playUnlockSfx } from './audio';
 import type { CursedRiftEvent, Enemy, GameState } from './types';
 
 /** Free walkable tiles around (x, y) — orthogonal + diagonal, not the player's own tile or an enemy's. */
@@ -161,27 +159,6 @@ export function resolveFrozenWatchwarden(state: GameState, accept: boolean): voi
   saveGame(state);
 }
 
-/** Event 5, accept: -10 Max HP for a guaranteed Late-Tier weapon chest on the Rift tile. Decline: 2 Bone-Knights ambush. */
-export function resolveLichProjection(state: GameState, accept: boolean): void {
-  const event = state.run.cursedRiftEvent;
-  if (!event) return;
-  if (accept) {
-    state.run.maxHp = Math.max(1, state.run.maxHp - LICH_PROJECTION_MAX_HP_COST);
-    state.run.currentHp = Math.min(state.run.currentHp, state.run.maxHp);
-    const floor = state.run.currentFloor;
-    const id = `lich-chest-${floor}-${event.riftX}-${event.riftY}`;
-    const weapon = rollWeaponForDepth(floor, id);
-    state.dungeon.items.push({ item: weapon, x: event.riftX, y: event.riftY, chestLoot: true });
-    logLine(state, `The bargain is struck — ${LICH_PROJECTION_MAX_HP_COST} Max HP for a gilded chest.`);
-    playPurchaseSfx();
-  } else {
-    spawnAdjacentAmbush(state, 'BONE_KNIGHT', 2, `lich-ambush-${state.run.currentFloor}`);
-    logLine(state, 'The Lich laughs — Bone-Knights answer his call!');
-    playBossTelegraphSfx();
-  }
-  closeCursedRiftEvent(state);
-  saveGame(state);
-}
 
 /** Event 6: one click of "Mine" inside the Rift modal — entirely self-contained, no map presence.
  *  Stops immediately (modal closes) on an ambush or once fully mined; the player can't mine further either way. */

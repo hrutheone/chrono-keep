@@ -1280,7 +1280,6 @@ export const CURSED_RIFT_EVENT_KINDS: readonly CursedRiftEventKind[] = [
   'blood_anvil',
   'frozen_watchwarden',
   'paradox_mirror',
-  'lich_projection',
   'echo_geode',
 ];
 
@@ -1309,10 +1308,6 @@ export const CURSED_RIFT_EVENT_INFO: Record<CursedRiftEventKind, CursedRiftEvent
     title: 'The Paradox Mirror',
     flavor: 'The Rift shatters. Something wearing your face steps out of the pieces.',
   },
-  lich_projection: {
-    title: "The Chrono-Lich's Projection",
-    flavor: 'A flickering echo of Him leans in, amused. He always has an offer.',
-  },
   echo_geode: {
     title: 'The Echo Geode',
     flavor: 'A jagged crystal, humming with trapped memories, ready to be struck.',
@@ -1330,8 +1325,6 @@ export const BLOOD_ANVIL_ATK_BONUS = 2;
 // Event 3: Frozen Watchwarden.
 export const WATCHWARDEN_SKILL_LEVEL_BONUS = 1;
 
-// Event 5: The Chrono-Lich's Projection.
-export const LICH_PROJECTION_MAX_HP_COST = 10;
 
 // Event 6: Echo Geode.
 export const ECHO_GEODE_MAX_TURNS = 5;
