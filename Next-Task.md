@@ -13,6 +13,7 @@ Auto-run git add, commit, and push for each update.
 
 ## Jobs Done Previous Session
 Summary of changes:
+- Fixed a fatal PWA caching issue where an outdated `index.html` would request missing JS/CSS bundles. `sw.js` now uses a "Network-First" strategy and properly clears old caches on activation.
 - Upgraded the particle system in `animation.ts` to include gravity and floor bouncing physics (z-axis logic).
 - Increased death particle burst density (10-20 particles) and slightly lengthened their lifespan.
 - Implemented CSS-based `.shake` screen shake animation in `style.css`.
