@@ -1034,7 +1034,7 @@ function renderSettingsTab(state: GameState): string {
         <span class="stat-line">BGM Volume: ${isMusicMuted() ? 'Muted' : `${musicVolumePct}%`}</span>
         <button data-action="music-volume-up">+</button>
       </div>
-      <h2 class="dev-tools-heading">Developer Tools</h2>
+      <h2 class="dev-tools-heading">Cheat Tools</h2>
       <div class="dev-tools-panel">
         <div class="dev-tools-row">
           <label for="dev-warp-floor">Warp to Floor</label>
