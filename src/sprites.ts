@@ -53,7 +53,7 @@ export const SPRITES = {
   WALL_CROSS: { col: 11, row: 0 }, // 4-way wall junction (symmetric)
   WALL_END: { col: 12, row: 0 }, // wall dead-end, drawn connecting South only
   DOOR: { col: 11, row: 3 }, // arched doorway
-  STAIRS: { col: 2, row: 6 }, // stairs
+  STAIRS: { col: 3, row: 6 }, // stairs down
   SHORTCUT_GATE: { col: 1, row: 9 }, // blue gate
   BOSS_GATE: { col: 0, row: 9 }, // blue padlock
   FIRE_HAZARD: { col: 15, row: 10 }, // orange flame
