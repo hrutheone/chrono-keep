@@ -22,7 +22,7 @@ export const SPRITES = {
   // --- Enemies ---
   BONE_GRUNT: { col: 29, row: 6 }, // slender bust, arms visible — reads skeletal
   EMBER_BAT: { col: 26, row: 8 }, // small yellow critter (closest warm color to "red")
-  VOLT_TURRET: { col: 31, row: 5 }, // small critter — reads electric/squat
+  VOLT_TURRET: { col: 2, row: 19 }, // small critter — reads electric/squat
   FROST_WRAITH: { col: 24, row: 8 }, // hollow/outline humanoid — genuinely ghostly
   TIME_WEAVER: { col: 24, row: 0 }, // robed, hooded, arms down
   CHRONO_LICH: { col: 29, row: 2 }, // clean front-facing skull icon
@@ -40,7 +40,7 @@ export const SPRITES = {
   DOOM_GUARD: { col: 30, row: 6 }, // same as Bone-Knight
   ASH_FIEND: { col: 26, row: 8 }, // same as Ember-Bat
   HELLFIRE_MAGUS: { col: 24, row: 1 }, // same as Cinder-Shaman
-  TESLA_COIL: { col: 31, row: 5 }, // same as Volt-Turret
+  TESLA_COIL: { col: 3, row: 19 }, // same as Volt-Turret
   STORM_STALKER: { col: 28, row: 7 }, // same as Volt-Hound
   VOID_SPIRIT: { col: 24, row: 8 }, // same as Frost-Wraith
   GLACIAL_MONOLITH: { col: 24, row: 7 }, // same as Frost-Sentinel
