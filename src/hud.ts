@@ -54,6 +54,7 @@ const HINT_STRIP: Record<GameState['ui']['currentScreen'], string> = {
   DEATH: 'Esc: Continue',
   VICTORY: 'Esc: Continue',
   DIALOGUE: 'Click anywhere · Space/Esc: Continue',
+  ACTION_LOG: 'Esc: Close',
 };
 
 // Cached DOM element references

@@ -1164,9 +1164,24 @@ const ALL_SCREENS = new Set<GameState['ui']['currentScreen']>([
   'DEATH',
   'VICTORY',
   'DIALOGUE',
+  'ACTION_LOG',
 ]);
 
 const SCROLL_CONTAINER_SELECTOR = '.skill-branch-scroll, .upgrade-shop-scroll';
+
+/** Renders the full screen Action Log modal */
+function renderActionLog(state: GameState): string {
+  const lines = state.ui.log.map(line => `<div>${line}</div>`).join('');
+  return `
+    <div class="menu">
+      <h2>Action Log</h2>
+      <div class="action-log-history" style="max-height: 60vh; overflow-y: auto; text-align: left; font-size: 15px; margin-bottom: 16px;">
+        ${lines}
+      </div>
+      <button class="continue-btn close-btn" data-action="close-menu">Close</button>
+      <div class="menu-hint">Esc: close</div>
+    </div>`;
+}
 
 function render(state: GameState): void {
   const el = screenEl();
@@ -1196,6 +1211,7 @@ function render(state: GameState): void {
   else if (screen === 'CURSED_RIFT') el.innerHTML = renderCursedRift(state);
   else if (screen === 'SMUGGLER') el.innerHTML = renderSmuggler(state);
   else if (screen === 'DIALOGUE') el.innerHTML = renderDialogue();
+  else if (screen === 'ACTION_LOG') el.innerHTML = renderActionLog(state);
   else if (screen === 'CONFIRM') el.innerHTML = renderConfirm();
   else if (screen === 'DEATH') el.innerHTML = renderDeath(state);
   else if (screen === 'VICTORY') el.innerHTML = renderVictory(state);
@@ -1209,6 +1225,13 @@ function render(state: GameState): void {
 
 /** Wires keyboard shortcuts and clicks on the overlay. */
 export function initMenus(state: GameState): void {
+  document.getElementById('action-log')?.addEventListener('click', () => {
+    if (state.ui.currentScreen === 'GAME') {
+      state.ui.currentScreen = 'ACTION_LOG';
+      render(state);
+    }
+  });
+
   window.addEventListener('keydown', (ev) => {
     const screen = state.ui.currentScreen;
     if (!ALL_SCREENS.has(screen)) return;
@@ -1243,7 +1266,8 @@ export function initMenus(state: GameState): void {
         screen === 'CURSED_RIFT' ||
         screen === 'SMUGGLER' ||
         screen === 'CONFIRM' ||
-        screen === 'DIALOGUE')
+        screen === 'DIALOGUE' ||
+        screen === 'ACTION_LOG')
     ) {
       ev.preventDefault();
       if (screen === 'CONFIRM') answerPendingConfirm(state, false);

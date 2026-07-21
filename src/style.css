@@ -326,6 +326,7 @@ body {
 .action-log {
   margin-bottom: 4px;
   opacity: 0.85;
+  cursor: pointer;
 }
 
 /* A long log line must never wrap — a wrapped line adds a row of height that
@@ -1111,18 +1112,19 @@ body {
     font-size: 15px;
     line-height: 1.7;
     padding: 4px 0 8px;
-    /* hud.ts caps the log at its last 3 lines, but starts empty and fills up
-     * one line at a time as the player acts. #hud-bottom sits in normal flex
-     * flow here (see #app's mobile column layout above), so an un-reserved
-     * .action-log grows taller each time a line is appended, shoving the
-     * touch-controls dpad/skill buttons further down the screen on every
-     * move until the log hits its 3-line cap. A fixed height (not min-height —
-     * lines are nowrap-ellipsized above, but this is also a hard backstop
-     * against any overflow) keeps #hud-bottom a constant height regardless of
-     * how many lines are filled or how long their text is. */
+    /* show only one entries in mobile action log container, fix container height approximately 3 line */
     height: calc(1.7em * 3 + 12px);
     overflow: hidden;
   }
+
+  .action-log div {
+    white-space: normal;
+  }
+
+  .action-log div:not(:last-child) {
+    display: none;
+  }
+
 
   .weapon-info,
   .status-icon,

@@ -13,7 +13,10 @@ Auto-run git add, commit, and push for each update.
 
 ## Jobs Done Previous Session
 Summary of changes:
-- Fixed a bug where Floor Event Dialogues were not rendering because state.ui.currentScreen was not being set to 'DIALOGUE' when opening the dialogue.
+- Implemented tappable Expandable Action Log.
+- Added `ACTION_LOG` screen modal in `menus.ts` to show full log history.
+- Restyled `.action-log` in `index.css` (mobile) to show a single wrapping line with fixed height.
+- Bound click listener to action-log HUD element to open the new modal.
 
 ## Todo This Session
 Nothing queued — awaiting next direction

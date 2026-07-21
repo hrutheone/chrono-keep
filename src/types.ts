@@ -158,7 +158,8 @@ export interface GameState {
       | 'CONFIRM'
       | 'DEATH'
       | 'VICTORY'
-      | 'DIALOGUE';
+      | 'DIALOGUE'
+      | 'ACTION_LOG';
     log: string[];
   };
 }
