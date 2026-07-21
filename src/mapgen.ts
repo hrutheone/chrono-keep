@@ -36,6 +36,7 @@ export const TILE = {
   // Hub-only decorative/interactive tiles — never walkable, the player bumps them.
   TREE: 12,
   SMUGGLER: 13,
+  TORCH: 14,
 } as const;
 
 /** Turn-budget guarantee: spawn -> Stairs within 40 walked tiles. */
@@ -267,6 +268,26 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
         }
       }
       if (touchesCarved) tiles[y][x] = TILE.WALL;
+    }
+  }
+
+  // --- Auto-Generate Wall Torches ---
+  for (let y = 0; y < N; y++) {
+    for (let x = 0; x < N; x++) {
+      if (tiles[y][x] === TILE.WALL) {
+        let hasFloor = false;
+        for (const [dx, dy] of ORTHO) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx >= 0 && nx < N && ny >= 0 && ny < N && tiles[ny][nx] === TILE.FLOOR) {
+            hasFloor = true;
+            break;
+          }
+        }
+        if (hasFloor && rng() < 0.05) {
+          tiles[y][x] = TILE.TORCH;
+        }
+      }
     }
   }
 

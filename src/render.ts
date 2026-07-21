@@ -163,6 +163,7 @@ const TILE_REFS: Partial<Record<number, SpriteRef>> = {
   [TILE.SHOP_TERMINAL]: SPRITES.SHOP_TERMINAL,
   [TILE.ECHO_WELL]: SPRITES.ECHO_WELL,
   [TILE.CHRONO_ANVIL]: SPRITES.CHRONO_ANVIL,
+  [TILE.TORCH]: SPRITES.FIRE_HAZARD,
   [TILE.SMUGGLER]: SPRITES.SMUGGLER,
 };
 
@@ -702,12 +703,15 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
   ctx.globalAlpha = 1;
 
   // --- Dynamic Lighting Pass ---
+  const time = performance.now();
+  const fireFlicker = (Math.sin(time / 150) * 2) + (Math.random() * 2);
+  const pulse = Math.sin(time / 300) * 0.2;
   if (lightingCanvas.width !== viewW || lightingCanvas.height !== viewH) {
     lightingCanvas.width = viewW;
     lightingCanvas.height = viewH;
   }
   lightingCtx.globalCompositeOperation = 'source-over';
-  lightingCtx.fillStyle = 'rgba(20, 8, 4, 0.85)';
+  lightingCtx.fillStyle = 'rgb(2, 2, 15)';
   lightingCtx.fillRect(0, 0, viewW, viewH);
 
   lightingCtx.globalCompositeOperation = 'destination-out';
@@ -741,10 +745,16 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     const row = state.dungeon.tiles[ty];
     for (let tx = lightStartX; tx < lightEndX; tx++) {
       const tile = row[tx];
-      if (tile === TILE.FIRE_HAZARD || tile === TILE.FROST_HAZARD || tile === TILE.ECHO_WELL || tile === TILE.CHRONO_ANVIL || tile === TILE.SHOP_TERMINAL || tile === TILE.SHORTCUT_GATE) {
+      if (tile === TILE.FIRE_HAZARD || tile === TILE.FROST_HAZARD || tile === TILE.ECHO_WELL || tile === TILE.CHRONO_ANVIL || tile === TILE.SHOP_TERMINAL || tile === TILE.SHORTCUT_GATE || tile === TILE.TORCH) {
         const sx = (tx - camX) * TILE_SIZE + TILE_SIZE / 2;
         const sy = (ty - camY) * TILE_SIZE + TILE_SIZE / 2;
-        punchHole(sx, sy, TILE_SIZE * 2.5, 0.9);
+        let radius = TILE_SIZE * 2.5;
+        let intensity = 0.9;
+        
+        if (tile === TILE.FIRE_HAZARD || tile === TILE.TORCH) radius += fireFlicker;
+        if (tile === TILE.SHOP_TERMINAL || tile === TILE.SHORTCUT_GATE || tile === TILE.CHRONO_ANVIL) intensity += pulse;
+
+        punchHole(sx, sy, radius, intensity);
       }
     }
   }
@@ -764,8 +774,45 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
   }
 
   ctx.globalCompositeOperation = 'source-over';
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = 0.8;
   ctx.drawImage(lightingCanvas, 0, 0);
+
+  // --- Colored Light Pass ---
+  ctx.globalCompositeOperation = 'lighter';
+  const drawColoredLight = (x: number, y: number, radius: number, colorStart: string) => {
+    const grad = ctx.createRadialGradient(x, y, 0, x, y, radius);
+    grad.addColorStop(0, colorStart);
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+  };
+
+  for (let ty = lightStartY; ty < lightEndY; ty++) {
+    const row = state.dungeon.tiles[ty];
+    for (let tx = lightStartX; tx < lightEndX; tx++) {
+      const tile = row[tx];
+      if (tile === TILE.FIRE_HAZARD || tile === TILE.FROST_HAZARD || tile === TILE.ECHO_WELL || tile === TILE.CHRONO_ANVIL || tile === TILE.SHOP_TERMINAL || tile === TILE.SHORTCUT_GATE || tile === TILE.TORCH) {
+        const sx = (tx - camX) * TILE_SIZE + TILE_SIZE / 2;
+        const sy = (ty - camY) * TILE_SIZE + TILE_SIZE / 2;
+        
+        if (tile === TILE.FIRE_HAZARD || tile === TILE.TORCH) {
+          drawColoredLight(sx, sy, TILE_SIZE * 2.5 + fireFlicker, 'rgba(255, 120, 0, 0.15)');
+        } else if (tile === TILE.FROST_HAZARD || tile === TILE.ECHO_WELL) {
+          drawColoredLight(sx, sy, TILE_SIZE * 2.5, 'rgba(0, 150, 255, 0.15)');
+        } else if (tile === TILE.SHOP_TERMINAL || tile === TILE.SHORTCUT_GATE) {
+          drawColoredLight(sx, sy, TILE_SIZE * 2.5, 'rgba(150, 0, 255, 0.15)');
+        }
+      }
+    }
+  }
+  
+  if (state.dungeon.riftX !== null && state.dungeon.riftY !== null) {
+    const sx = (state.dungeon.riftX - camX) * TILE_SIZE + TILE_SIZE / 2;
+    const sy = (state.dungeon.riftY - camY) * TILE_SIZE + TILE_SIZE / 2;
+    drawColoredLight(sx, sy, TILE_SIZE * 3.5, 'rgba(150, 0, 255, 0.15)');
+  }
+  
+  ctx.globalCompositeOperation = 'source-over';
 
   // Drawn last, always on top.
   for (const f of getFloatingTexts()) {

@@ -43,6 +43,12 @@ function buildHub(smugglerPresent: boolean): HubLayout {
     tiles[y][originX + HUB_W] = TILE.WALL;
   }
 
+  // --- Decorate with Wall Torches ---
+  // วางคบเพลิง 2 จุดแบบสมมาตรบนกำแพงด้านหลัง ตรงกับตำแหน่ง Shop และ Gate พอดี
+  tiles[originY - 1][originX + 2] = TILE.TORCH;
+  tiles[originY - 1][originX + HUB_W - 3] = TILE.TORCH;
+  // ----------------------------------
+
   const spawnX = originX + (HUB_W >> 1);
   const spawnY = originY + HUB_H - 2;
   tiles[originY + 2][originX + 2] = TILE.SHOP_TERMINAL;

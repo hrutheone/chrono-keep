@@ -61,6 +61,13 @@ function buildRoom(): ArenaLayout {
     tiles[y][ARENA_X + ARENA_W] = TILE.WALL;
   }
 
+  // --- Decorate Base Arena with Corner Torches ---
+  // ติดคบเพลิงที่มุมกำแพงทั้ง 4 ด้าน เพื่อสร้างมิติแสงรอบนอกของลานประลอง
+  tiles[ARENA_Y - 1][ARENA_X] = TILE.TORCH;
+  tiles[ARENA_Y - 1][ARENA_X + ARENA_W - 1] = TILE.TORCH;
+  tiles[ARENA_Y + ARENA_H][ARENA_X] = TILE.TORCH;
+  tiles[ARENA_Y + ARENA_H][ARENA_X + ARENA_W - 1] = TILE.TORCH;
+
   const spawnX = ARENA_X + (ARENA_W >> 1);
   const spawnY = ARENA_Y + ARENA_H - 3;
   const gateX = ARENA_X + (ARENA_W >> 1);
@@ -89,7 +96,13 @@ function addStormCallerFeature(layout: ArenaLayout): void {
     [ARENA_X + 4, ARENA_Y + ARENA_H - 5],
     [ARENA_X + ARENA_W - 5, ARENA_Y + ARENA_H - 5],
   ];
-  for (const [x, y] of pillars) layout.tiles[y][x] = TILE.WALL;
+  
+  for (const [x, y] of pillars) {
+    layout.tiles[y][x] = TILE.WALL;
+    // ติดคบเพลิงที่พื้นด้านล่างของเสาแต่ละต้น (ชดเชยความเป็นจุดบล็อก) 
+    // เพื่อให้แสงวูบวาบส่องทะลุเสาออกมาเป็นจุดๆ ในจังหวะหลบสายฟ้า
+    layout.tiles[y + 1][x] = TILE.TORCH; 
+  }
 }
 
 // Glacial-Knight's arena has no static features.
