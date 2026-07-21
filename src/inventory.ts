@@ -7,6 +7,8 @@ import { spendTurn, logLine } from './turns';
 import { awardEchoes } from './echoes';
 import { playAnchorSfx, playEquipSfx, playMeltSound, playPickupSfx, playPotionSfx, playTimeShardSfx, playUnequipSfx, playUnlockSfx } from './audio';
 import { notifyFloatingText } from './floatingText';
+import { isWalkableAt } from './mapgen';
+import { createEnemy } from './content';
 
 // Matches the 5x5 grid in menus.ts/style.css's .inventory-grid.
 export const INVENTORY_CAP = 25;
@@ -261,7 +263,31 @@ export function pickupItemsAt(state: GameState, x: number, y: number): void {
       continue;
     }
 
-    if (!grantItem(state, x, y, finalItem, worldItem.chestLoot ?? false)) return;
+    if (!grantItem(state, x, y, finalItem, worldItem.chestLoot === true || worldItem.chestLoot === 'gold')) return;
+
+    if (worldItem.chestLoot === 'gold' && Math.random() < 0.5) {
+      logLine(state, 'The gold chest triggers a trap!');
+      playTimeShardSfx(); // Temp sfx
+      const numEnemies = Math.random() < 0.5 ? 2 : 3;
+      let spawned = 0;
+      for (let r = 1; r <= 3 && spawned < numEnemies; r++) {
+        for (let dx = -r; dx <= r; dx++) {
+          for (let dy = -r; dy <= r; dy++) {
+            if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+            const ex = x + dx;
+            const ey = y + dy;
+            if (isWalkableAt(state, ex, ey) && !state.dungeon.enemies.some(e => e.x === ex && e.y === ey)) {
+              const trapEnemy = createEnemy('BONE_KNIGHT', `glutton-trap-${x}-${y}-${spawned}`, ex, ey);
+              trapEnemy.awake = true;
+              state.dungeon.enemies.push(trapEnemy);
+              spawned++;
+              if (spawned >= numEnemies) break;
+            }
+          }
+          if (spawned >= numEnemies) break;
+        }
+      }
+    }
 
     // Golden Scarab bonus item.
     if (worldItem.chestLoot && state.run.relics.includes('golden_scarab')) {

@@ -1,6 +1,9 @@
 export type Element = 'PHYSICAL' | 'FIRE' | 'VOLT' | 'FROST' | 'CHRONO';
 export type StatusEffect = 'NONE' | 'BURN' | 'STUN' | 'CHILLED';
 
+export type FloorEvent = 'NONE' | 'PACIFIST' | 'SHATTERED' | 'BLEEDING' | 'GLUTTON' | 'PREDATOR' | 'SHADOW';
+
+
 export type CursedRiftEventKind =
   | 'rift_shop'
   | 'blood_anvil'
@@ -61,6 +64,8 @@ export interface GameState {
     turnsRemaining: number;
     currentFloor: number;
     startFloor: number;
+    floorEvent: FloorEvent;
+    pacifistKills: number;
     playerX: number;
     playerY: number;
     facing: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
@@ -253,5 +258,5 @@ export interface WorldItem {
   item: Item;
   x: number;
   y: number;
-  chestLoot?: boolean;
+  chestLoot?: boolean | 'gold';
 }

@@ -671,7 +671,7 @@ function actEnemy(state: GameState, enemy: Enemy): void {
     case 'VOLT_HOUND':
     case 'DREAD_LEGION':
     case 'STORM_STALKER':
-      chaseStep(state, enemy, speed, true);
+      chaseStep(state, enemy, speed, !enemy.isShadowWarden);
       break;
     case 'CLOCKWORK_SCARAB':
       scarabAct(state, enemy);

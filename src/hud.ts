@@ -83,7 +83,7 @@ let dom: HudDomElements | null = null;
 
 // Last rendered values for dirty checking
 let lastFloor: number | null = null;
-let lastTurns: number | null = null;
+let lastTurns: string | null = null;
 let lastHpPct: number | null = null;
 let lastStamPct: number | null = null;
 let lastBraced: boolean | null = null;
@@ -212,14 +212,15 @@ export function updateHud(state: GameState): void {
   }
 
   // 1. Turn counter
-  if (lastTurns !== run.turnsRemaining) {
-    elements.turnCounter.textContent = `${run.turnsRemaining}`;
+  const turnKey = run.floorEvent === 'SHATTERED' ? '???' : `${run.turnsRemaining}`;
+  if (lastTurns !== turnKey) {
+    elements.turnCounter.textContent = turnKey;
     if (lastTurns !== null) {
       elements.turnCounter.classList.remove('tick');
       void elements.turnCounter.offsetWidth; // restart CSS animation
       elements.turnCounter.classList.add('tick');
     }
-    lastTurns = run.turnsRemaining;
+    lastTurns = turnKey;
   }
 
   // 2. HP & Stamina Bars

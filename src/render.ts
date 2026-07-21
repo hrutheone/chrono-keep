@@ -620,7 +620,9 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     const tileSy = wi.y - camY;
     if (tileSx < -1 || tileSx >= VIEWPORT_TILES_W + 1 || tileSy < -1 || tileSy >= VIEWPORT_TILES_H + 1) continue;
     // Draw items/chests.
-    const ref = wi.chestLoot
+    const ref = wi.chestLoot === 'gold'
+      ? SPRITES.GOLD_CHEST
+      : wi.chestLoot === true
       ? SPRITES.CHEST
       : wi.item.kind === 'RELIC' && wi.item.effect
         ? (RELIC_SPRITE_BY_EFFECT[wi.item.effect] ?? SPRITES.RELIC)
@@ -723,7 +725,8 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
   };
 
   // Player light
-  punchHole(playerPx + TILE_SIZE / 2, playerPy + TILE_SIZE / 2, TILE_SIZE * 5);
+  const playerRadius = state.run.floorEvent === 'SHATTERED' ? TILE_SIZE * 2.5 : TILE_SIZE * 5;
+  punchHole(playerPx + TILE_SIZE / 2, playerPy + TILE_SIZE / 2, playerRadius);
 
   // Elites / Bosses
   for (const e of state.dungeon.enemies) {
@@ -757,6 +760,15 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
 
         punchHole(sx, sy, radius, intensity);
       }
+    }
+  }
+
+  // Gold chests
+  for (const wi of state.dungeon.items) {
+    if (wi.chestLoot === 'gold') {
+      const sx = (wi.x - camX) * TILE_SIZE + TILE_SIZE / 2;
+      const sy = (wi.y - camY) * TILE_SIZE + TILE_SIZE / 2;
+      punchHole(sx, sy, TILE_SIZE * 2.5, 0.9 + pulse);
     }
   }
 
@@ -813,7 +825,26 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     drawColoredLight(sx, sy, TILE_SIZE * 3.5, 'rgba(150, 0, 255, 0.15)');
   }
   
+  // Gold chests
+  for (const wi of state.dungeon.items) {
+    if (wi.chestLoot === 'gold') {
+      const sx = (wi.x - camX) * TILE_SIZE + TILE_SIZE / 2;
+      const sy = (wi.y - camY) * TILE_SIZE + TILE_SIZE / 2;
+      drawColoredLight(sx, sy, TILE_SIZE * 2.5, 'rgba(255, 215, 0, 0.2)');
+    }
+  }
+  
   ctx.globalCompositeOperation = 'source-over';
+
+  if (state.run.floorEvent && state.run.floorEvent !== 'NONE') {
+    if (state.run.floorEvent === 'BLEEDING') ctx.fillStyle = 'rgba(255, 0, 0, 0.15)';
+    else if (state.run.floorEvent === 'PACIFIST') ctx.fillStyle = 'rgba(0, 255, 0, 0.1)';
+    else if (state.run.floorEvent === 'SHATTERED') ctx.fillStyle = 'rgba(128, 0, 128, 0.15)';
+    else if (state.run.floorEvent === 'GLUTTON') ctx.fillStyle = 'rgba(255, 215, 0, 0.1)';
+    else if (state.run.floorEvent === 'PREDATOR') ctx.fillStyle = 'rgba(255, 140, 0, 0.15)';
+    else if (state.run.floorEvent === 'SHADOW') ctx.fillStyle = 'rgba(100, 100, 100, 0.3)';
+    ctx.fillRect(0, 0, viewW, viewH);
+  }
 
   // Drawn last, always on top.
   for (const f of getFloatingTexts()) {

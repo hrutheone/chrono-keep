@@ -15,6 +15,8 @@ import {
   rollEliteDrop,
   rollEnemyDrop,
   weaknessOf,
+  applyEliteWeaponBonus,
+  rollWeaponForDepth,
 } from './content';
 import type { WeaponKey } from './content';
 import { elementSynergyBonus, hasAccessoryPassive, totalAtk, totalDef } from './inventory';
@@ -311,11 +313,46 @@ export function killEnemy(state: GameState, enemy: Enemy, source: 'bump' | 'skil
   spawnDeathParticles(enemy.x, enemy.y);
   playEnemyDeathSfx(enemy.element);
 
-  // Cursed Rift's Paradox Mirror: a guaranteed drop instead of the normal kind-based loot tables.
+  if (state.run.floorEvent === 'PACIFIST') {
+    state.run.pacifistKills += 1;
+    state.run.turnsRemaining = Math.max(0, state.run.turnsRemaining - 10);
+    logLine(state, `The Pacifist's Burden weighs on you — -10 Turns.`);
+  } else if (state.run.floorEvent === 'BLEEDING') {
+    const heal = Math.round(state.run.maxHp * 0.15);
+    state.run.currentHp = Math.min(state.run.maxHp, state.run.currentHp + heal);
+    logLine(state, `Blood for blood — restored ${heal} HP.`);
+    notifyFloatingText(enemy.x, enemy.y, `+${heal} HP`, 'immune');
+  }
+
+  // Cursed Rift's Paradox Mirror & SHADOW Event: guaranteed drops
   if (enemy.isShadowWarden) {
-    state.dungeon.items.push({ item: createPotion('SOMA_DROP', `${enemy.id}-soma`), x: enemy.x, y: enemy.y });
-    state.dungeon.items.push({ item: createTimeShard(`${enemy.id}-shard`), x: enemy.x, y: enemy.y });
-    logLine(state, 'Your shadow unravels — a piece of stolen time falls free.');
+    if (state.run.floorEvent === 'SHADOW') {
+      if (state.run.equippedWeapon && Math.random() < 0.5) {
+        const clone = { ...state.run.equippedWeapon, id: `${enemy.id}-clone`, upgradeBonus: (state.run.equippedWeapon.upgradeBonus ?? 0) + 2 };
+        state.dungeon.items.push({ item: clone, x: enemy.x, y: enemy.y });
+        logLine(state, 'The Shadow drops a perfected version of your weapon!');
+      } else {
+        const wep = rollWeaponForDepth(99, `${enemy.id}-wep`);
+        state.dungeon.items.push({ item: wep, x: enemy.x, y: enemy.y });
+      }
+    } else {
+      state.dungeon.items.push({ item: createPotion('SOMA_DROP', `${enemy.id}-soma`), x: enemy.x, y: enemy.y });
+      state.dungeon.items.push({ item: createTimeShard(`${enemy.id}-shard`), x: enemy.x, y: enemy.y });
+      logLine(state, 'Your shadow unravels — a piece of stolen time falls free.');
+    }
+    return;
+  }
+
+  // Predator Event Boss
+  if (state.run.floorEvent === 'PREDATOR' && enemy.id === 'predator-boss') {
+    state.dungeon.items.push({ item: createAnchorItem(`${enemy.id}-anchor`), x: enemy.x, y: enemy.y });
+    for (let i = 0; i < 3; i++) {
+      const drop = rollEliteDrop(`${enemy.id}-drop-${i}`, state.run.relics, state.run.currentFloor);
+      if (drop) state.dungeon.items.push({ item: drop, x: enemy.x, y: enemy.y });
+    }
+    awardEchoes(state, 50, 'Predator kill');
+    openBossGate(state); // if applicable
+    logLine(state, `The Wandering Predator falls — the way down opens.`);
     return;
   }
 
@@ -324,22 +361,33 @@ export function killEnemy(state: GameState, enemy: Enemy, source: 'bump' | 'skil
 
   // Handle elite or normal drops.
   if (enemy.affix === 'wealthy') {
-    awardEchoes(state, 50, 'Wealthy Elite kill');
+    awardEchoes(state, 50 * (state.run.floorEvent === 'SHATTERED' ? 3 : 1), 'Wealthy Elite kill');
     const relic = pickRandomUnheldRelic(state.run.relics);
     if (relic) {
       state.dungeon.items.push({ item: createRelicItemByEffect(relic, `${enemy.id}-relic`), x: enemy.x, y: enemy.y });
     } else {
-      awardEchoes(state, 25, 'Wealthy Elite kill (all Relics held)');
+      awardEchoes(state, 25 * (state.run.floorEvent === 'SHATTERED' ? 3 : 1), 'Wealthy Elite kill (all Relics held)');
     }
   } else {
     const lowHp = state.run.currentHp / state.run.maxHp < DYNAMIC_LOOT_HP_THRESHOLD;
-    const drop = enemy.affix
+    
+    // Double relic drop chance for SHATTERED happens indirectly by rolling an extra time if we didn't get one, or we can just pass a flag.
+    // Wait, rollEnemyDrop handles relic chance. Since we can't easily modify its internal chance here, we can roll a second time if the first wasn't a relic.
+    let drop = enemy.affix
       ? rollEliteDrop(`${enemy.id}-drop`, state.run.relics, state.run.currentFloor)
       : rollEnemyDrop(Math.random, enemy.kind, `${enemy.id}-drop`, lowHp);
+      
+    if (state.run.floorEvent === 'SHATTERED' && (!drop || drop.kind !== 'RELIC')) {
+      const extraDrop = enemy.affix
+        ? rollEliteDrop(`${enemy.id}-drop-2`, state.run.relics, state.run.currentFloor)
+        : rollEnemyDrop(Math.random, enemy.kind, `${enemy.id}-drop-2`, lowHp);
+      if (extraDrop?.kind === 'RELIC') drop = extraDrop;
+    }
+
     if (drop) state.dungeon.items.push({ item: drop, x: enemy.x, y: enemy.y });
   }
 
-  if (NORMAL_ENEMY_KINDS.has(enemy.kind) && Math.random() < timeShardChance(state)) {
+  if (state.run.floorEvent !== 'PACIFIST' && NORMAL_ENEMY_KINDS.has(enemy.kind) && Math.random() < timeShardChance(state)) {
     state.dungeon.items.push({ item: createTimeShard(`${enemy.id}-shard`), x: enemy.x, y: enemy.y });
   }
 
@@ -374,8 +422,9 @@ export function killEnemy(state: GameState, enemy: Enemy, source: 'bump' | 'skil
 
   if (comboEnemyId === enemy.id) comboEnemyId = null;
 
-  if (NORMAL_ENEMY_KINDS.has(enemy.kind)) awardEchoes(state, enemyKillBounty(state.run.currentFloor), 'kill');
-  else if (ELITE_ENEMY_KINDS.has(enemy.kind)) awardEchoes(state, 5, 'Elite kill');
+  const echoMult = state.run.floorEvent === 'SHATTERED' ? 3 : 1;
+  if (NORMAL_ENEMY_KINDS.has(enemy.kind)) awardEchoes(state, enemyKillBounty(state.run.currentFloor) * echoMult, 'kill');
+  else if (ELITE_ENEMY_KINDS.has(enemy.kind)) awardEchoes(state, 5 * echoMult, 'Elite kill');
 
   if (source === 'skill') {
     state.run.currentStamina = Math.min(state.run.maxStamina, state.run.currentStamina + 1);
@@ -395,7 +444,9 @@ export function killEnemy(state: GameState, enemy: Enemy, source: 'bump' | 'skil
 
   if (MINI_BOSS_KINDS.has(enemy.kind)) {
     const weaponKey = MINI_BOSS_WEAPON[enemy.kind]!;
-    state.dungeon.items.push({ item: createWeapon(weaponKey, `${enemy.id}-weapon`), x: enemy.x, y: enemy.y });
+    const weapon = createWeapon(weaponKey, `${enemy.id}-weapon`);
+    applyEliteWeaponBonus(weapon, state.run.currentFloor);
+    state.dungeon.items.push({ item: weapon, x: enemy.x, y: enemy.y });
     state.dungeon.items.push({ item: createAnchorItem(`${enemy.id}-anchor`), x: enemy.x, y: enemy.y });
     state.dungeon.items.push({ item: createTimeShard(`${enemy.id}-shard-1`), x: enemy.x, y: enemy.y });
     state.dungeon.items.push({ item: createTimeShard(`${enemy.id}-shard-2`), x: enemy.x, y: enemy.y });

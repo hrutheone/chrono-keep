@@ -3,7 +3,12 @@
 import type { GameState } from './types';
 
 export function spendTurn(state: GameState): void {
-  state.run.turnsRemaining = Math.max(0, state.run.turnsRemaining - 1);
+  if (state.run.floorEvent === 'BLEEDING') {
+    state.run.currentHp = Math.max(0, state.run.currentHp - 1);
+    state.run.floorDamageTaken = true;
+  } else {
+    state.run.turnsRemaining = Math.max(0, state.run.turnsRemaining - 1);
+  }
 }
 
 export function logLine(state: GameState, line: string): void {

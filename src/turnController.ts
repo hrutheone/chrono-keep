@@ -242,7 +242,12 @@ function runTickPhase(state: GameState, actionKind: PlayerActionKind): void {
   }
 
   const penalty = actionKind === 'move' && chilledBeforeTick ? 2 : 1;
-  state.run.turnsRemaining = Math.max(0, state.run.turnsRemaining - penalty);
+  if (state.run.floorEvent === 'BLEEDING') {
+    state.run.currentHp = Math.max(0, state.run.currentHp - penalty);
+    markFloorDamageTaken(state);
+  } else {
+    state.run.turnsRemaining = Math.max(0, state.run.turnsRemaining - penalty);
+  }
 }
 
 /** Snapshots the current run for Silas's reactive dialogue, before `continueAfterDeath` wipes it. */

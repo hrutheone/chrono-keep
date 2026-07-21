@@ -17,7 +17,15 @@ import {
   scaleEnemyForEchoMagnet,
   scaleEnemyForNgPlus,
   type EnemyKind,
+  createPotion,
+  pickRandomUnheldRelic,
+  createRelicItemByEffect,
+  rollWeaponForDepth,
 } from './content';
+import { totalAtk, totalDef } from './inventory';
+import { playerElement } from './combat';
+import { openFloorEventDialogue } from './dialogue';
+import type { FloorEvent } from './types';
 
 export const TILE = {
   VOID: 0,
@@ -483,6 +491,20 @@ export function enterFloor(state: GameState, floorNumber: number): GeneratedFloo
   const floor = generateFloor(state.persistent.rngSeed, floorNumber);
   state.run.currentFloor = floorNumber;
   state.run.turnsRemaining = floorTurnLimit(state);
+
+  state.run.floorEvent = 'NONE';
+  if (floorNumber !== 0 && floorNumber !== 99 && floorNumber % 10 !== 0 && Math.random() < 0.1) {
+    let pool: FloorEvent[] = [];
+    if (floorNumber <= 30) pool = ['PACIFIST', 'SHATTERED'];
+    else if (floorNumber <= 70) pool = ['PACIFIST', 'SHATTERED', 'BLEEDING', 'GLUTTON'];
+    else pool = ['SHATTERED', 'BLEEDING', 'GLUTTON', 'PREDATOR', 'SHADOW'];
+    state.run.floorEvent = pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  if (state.run.floorEvent !== 'NONE') {
+    openFloorEventDialogue(state);
+  }
+
   state.run.playerX = floor.spawnX;
   state.run.playerY = floor.spawnY;
   state.dungeon.width = N;
@@ -503,6 +525,83 @@ export function enterFloor(state: GameState, floorNumber: number): GeneratedFloo
   state.dungeon.riftY = floor.riftY;
   state.dungeon.expiringTiles = [];
   state.dungeon.telegraphTiles = [];
+
+  // Apply Floor Event spawns
+  if (state.run.floorEvent === 'BLEEDING') {
+    const adj = [{x: 0, y: 1}, {x: 0, y: -1}, {x: 1, y: 0}, {x: -1, y: 0}];
+    const valid = adj.map(d => ({x: floor.stairsX + d.x, y: floor.stairsY + d.y})).find(p => isWalkableAt(state, p.x, p.y));
+    if (valid) {
+      state.dungeon.items.push({ item: createPotion(Math.random() < 0.5 ? 'SOMA_DROP' : 'MEGALIXIR', `f${floorNumber}-bleeding`), x: valid.x, y: valid.y, chestLoot: false });
+    }
+  } else if (state.run.floorEvent === 'GLUTTON') {
+    const numChests = 5 + Math.floor(Math.random() * 2);
+    let spawned = 0;
+    const candidates = [];
+    for (let y = 1; y < state.dungeon.height - 1; y++) {
+      for (let x = 1; x < state.dungeon.width - 1; x++) {
+        if (isWalkableAt(state, x, y) && !state.dungeon.items.some(i => i.x === x && i.y === y) && (x !== floor.spawnX || y !== floor.spawnY)) {
+          candidates.push({x, y});
+        }
+      }
+    }
+    // Fisher-Yates shuffle
+    for (let i = candidates.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    }
+    for (const p of candidates) {
+      const isRelic = Math.random() < 0.3;
+      let item;
+      if (isRelic) {
+        const r = pickRandomUnheldRelic(state.run.relics);
+        if (r) item = createRelicItemByEffect(r, `glutton-${spawned}`);
+        else item = rollWeaponForDepth(99, `glutton-w-${spawned}`);
+      } else {
+        item = rollWeaponForDepth(99, `glutton-w-${spawned}`); // late tier
+        // random 0-6 bonus
+        item.upgradeBonus = Math.floor(Math.random() * 7);
+      }
+      state.dungeon.items.push({ item, x: p.x, y: p.y, chestLoot: 'gold' });
+      spawned++;
+      if (spawned >= numChests) break;
+    }
+  } else if (state.run.floorEvent === 'PREDATOR') {
+    state.dungeon.enemies = [];
+    const kind = Math.random() < 0.5 ? 'INFERNO_GOLEM' : 'STORM_CALLER';
+    let p = {x: floor.spawnX, y: floor.spawnY};
+    while (Math.abs(p.x - floor.spawnX) + Math.abs(p.y - floor.spawnY) < 10) {
+      p.x = Math.floor(Math.random() * state.dungeon.width);
+      p.y = Math.floor(Math.random() * state.dungeon.height);
+      if (!isWalkableAt(state, p.x, p.y)) p.x = floor.spawnX; // retry
+    }
+    const boss = createEnemy(kind, `predator-boss`, p.x, p.y);
+    boss.hp = Math.round(boss.hp * 1.5);
+    boss.maxHp = Math.round(boss.maxHp * 1.5);
+    boss.attack = Math.round(boss.attack * 1.5);
+    boss.defense = Math.round(boss.defense * 1.5);
+    boss.awake = true;
+    state.dungeon.enemies.push(boss);
+  } else if (state.run.floorEvent === 'SHADOW') {
+    let furthest = {x: floor.spawnX, y: floor.spawnY, d: -1};
+    for (let y = 1; y < state.dungeon.height - 1; y++) {
+      for (let x = 1; x < state.dungeon.width - 1; x++) {
+        if (isWalkableAt(state, x, y)) {
+          const d = Math.abs(x - floor.spawnX) + Math.abs(y - floor.spawnY);
+          if (d > furthest.d) furthest = {x, y, d};
+        }
+      }
+    }
+    const shadow = createEnemy('BONE_KNIGHT', `shadow-warden`, furthest.x, furthest.y);
+    shadow.isShadowWarden = true;
+    shadow.maxHp = state.run.maxHp;
+    shadow.hp = state.run.maxHp;
+    shadow.attack = totalAtk(state);
+    shadow.defense = totalDef(state);
+    shadow.element = playerElement(state);
+    shadow.awake = true;
+    state.dungeon.enemies.push(shadow);
+  }
+
   return floor;
 }
 

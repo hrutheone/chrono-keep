@@ -2,7 +2,7 @@
 
 import { findRangedTarget, playerAttackEnemy, weaponBlockedAtRange } from './combat';
 import { pickupItemsAt, reforgeWeapon } from './inventory';
-import { onFloorCleared, onFloorEntered } from './echoes';
+import { onFloorCleared, onFloorEntered, awardEchoes } from './echoes';
 import { effectiveTileAt, enterFloor, isWalkableAt, TILE } from './mapgen';
 import { HUB_FLOOR } from './hub';
 import { isArenaFloor, enterArenaFloor } from './arenas';
@@ -12,7 +12,7 @@ import { isTurnBusy, resolvePlayerTurn } from './turnController';
 import { isRunOver, logLine } from './turns';
 import { playBlockedSfx, playEquipSfx, playMoveSfx, playPotionSfx } from './audio';
 import { saveRunSnapshot } from './persistence';
-import { rollWeaponForDepth } from './content';
+import { rollWeaponForDepth, pickRandomUnheldRelic, createRelicItemByEffect } from './content';
 import { isSilasAt } from './npc';
 import { openDialogue, openTreeDialogue } from './dialogue';
 import { triggerCursedRiftEvent } from './cursedRift';
@@ -26,6 +26,16 @@ const ARENA_THRESHOLD_WARNING =
 /** Perform descend to next floor. */
 export function performDescend(state: GameState, next: number): void {
   onFloorCleared(state);
+
+  if (state.run.floorEvent === 'PACIFIST' && state.run.pacifistKills === 0) {
+    awardEchoes(state, 150, "Pacifist's Reward");
+    const relic = pickRandomUnheldRelic(state.run.relics);
+    if (relic) {
+      state.dungeon.items.push({ item: createRelicItemByEffect(relic, 'pacifist-relic'), x: state.run.playerX, y: state.run.playerY, chestLoot: false });
+      pickupItemsAt(state, state.run.playerX, state.run.playerY);
+    }
+  }
+
   if (next === FINAL_BOSS_FLOOR) enterBossFloor(state);
   else if (isArenaFloor(next)) enterArenaFloor(state, next);
   else enterFloor(state, next);

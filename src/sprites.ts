@@ -67,6 +67,7 @@ export const SPRITES = {
 
   // --- World-item pickups ---
   CHEST: { col: 8, row: 6 }, // brown chest with a latch
+  GOLD_CHEST: { col: 10, row: 6 }, // gold chest
   WEAPON: { col: 32, row: 2 }, // diagonal sword
   ACCESSORY: { col: 45, row: 6 }, // gold ring
   POTION: { col: 41, row: 11 }, // blue potion bottle

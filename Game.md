@@ -158,7 +158,7 @@ Rare tile events (12% chance/floor) triggering 1 of 6 events: Rift Shop, Blood-I
 *   **Combat:** Bumping into enemies attacks. Damage = `max(1, ATK - DEF) * Elemental_Multiplier`. Skills cost stamina, regenerated per turn. Kills with skills refund stamina.
 *   **Echo Economy:** Earn Echoes from kills and Flawless Floors (no damage taken on floor). Spend Echoes in the Hub on permanent Stats, Skill unlocks, and Gear Slot unlocks. Unwanted items can be Melted for Echoes.
 *   **Biomes & Hub:** 10-floor biomes with Mini-Bosses at the end. Mini-Bosses drop Temporal Anchors (checkpoints) to warp to from the Hub. Hub features upgrade shop, shortcut gate, and NPCs.
-*   **Dungeon Generation:** Deterministic layouts per loop (seeded), dynamic chest loot (rolled fresh each loop). Cursed Rifts and Room Events (Echo Well, Chrono-Anvil) are randomized. 
+*   **Dungeon Generation:** Deterministic layouts per loop (seeded), dynamic chest loot (rolled fresh each loop). Cursed Rifts and Room Events (Echo Well, Chrono-Anvil) are randomized. Dynamic Floor Events (10% chance) add high-risk/high-reward challenges (e.g., Pacifist's Burden, The Bleeding Timeline, The Shadow's Pursuit) to occasional floors with unique rules and visual tints.
 
 ---
 
