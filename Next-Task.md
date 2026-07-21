@@ -13,11 +13,7 @@ Auto-run git add, commit, and push for each update.
 
 ## Jobs Done Previous Session
 Summary of changes:
-- Implemented 6 Dynamic Floor Events: PACIFIST, SHATTERED, BLEEDING, GLUTTON, PREDATOR, and SHADOW.
-- Added event tiering in mapgen.ts with 10% spawn chance.
-- Added event lore dialogs and full-screen color tinting.
-- Implemented specific event rules and rewards (kill penalties/rewards, custom enemy drops, trap chests, wandering bosses, and shadow clones).
-- Updated types.ts to track FloorEvent state and event specific trackers (pacifistKills).
+- Fixed a bug where Floor Event Dialogues were not rendering because state.ui.currentScreen was not being set to 'DIALOGUE' when opening the dialogue.
 
 ## Todo This Session
 Nothing queued — awaiting next direction
