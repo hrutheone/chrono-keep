@@ -452,6 +452,26 @@ function renderTitleScreen(ctx: CanvasRenderingContext2D, viewW: number, viewH: 
 const lightingCanvas = document.createElement('canvas');
 const lightingCtx = lightingCanvas.getContext('2d')!;
 
+const CACHED_LIGHTS: Record<number, HTMLCanvasElement> = {};
+function getLightMask(radius: number): HTMLCanvasElement {
+  if (CACHED_LIGHTS[radius]) return CACHED_LIGHTS[radius];
+
+  const canvas = document.createElement('canvas');
+  canvas.width = radius * 2;
+  canvas.height = radius * 2;
+  const ctx = canvas.getContext('2d')!;
+  
+  const grad = ctx.createRadialGradient(radius, radius, 0, radius, radius, radius);
+  grad.addColorStop(0, 'rgba(0, 0, 0, 1)');
+  grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, radius * 2, radius * 2);
+  
+  CACHED_LIGHTS[radius] = canvas;
+  return canvas;
+}
+
 export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, viewW: number, viewH: number): void {
   VIEWPORT_TILES_W = viewW / TILE_SIZE;
   VIEWPORT_TILES_H = viewH / TILE_SIZE;
@@ -687,22 +707,18 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     lightingCanvas.height = viewH;
   }
   lightingCtx.globalCompositeOperation = 'source-over';
-  lightingCtx.fillStyle = 'rgba(20, 8, 4, 0.06)';
+  lightingCtx.fillStyle = 'rgba(20, 8, 4, 0.85)';
   lightingCtx.fillRect(0, 0, viewW, viewH);
 
   lightingCtx.globalCompositeOperation = 'destination-out';
   const punchHole = (x: number, y: number, radius: number, alpha = 1) => {
-    const grad = lightingCtx.createRadialGradient(x, y, 0, x, y, radius);
-    grad.addColorStop(0, `rgba(255, 255, 255, ${alpha})`);
-    grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
-    lightingCtx.fillStyle = grad;
-    lightingCtx.beginPath();
-    lightingCtx.arc(x, y, radius, 0, Math.PI * 2);
-    lightingCtx.fill();
+    lightingCtx.globalAlpha = alpha;
+    const mask = getLightMask(radius);
+    lightingCtx.drawImage(mask, x - radius, y - radius);
   };
 
   // Player light
-  punchHole(playerPx + TILE_SIZE / 2, playerPy + TILE_SIZE / 2, TILE_SIZE * 6);
+  punchHole(playerPx + TILE_SIZE / 2, playerPy + TILE_SIZE / 2, TILE_SIZE * 5);
 
   // Elites / Bosses
   for (const e of state.dungeon.enemies) {
@@ -715,16 +731,20 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
   }
 
   // Hazard and interactive tiles light
-  for (let ty = 0; ty < height; ty++) {
+  const padding = 3;
+  const lightStartX = Math.max(0, Math.floor(camX) - padding);
+  const lightEndX = Math.min(width, Math.ceil(camX + viewW / TILE_SIZE) + padding);
+  const lightStartY = Math.max(0, Math.floor(camY) - padding);
+  const lightEndY = Math.min(height, Math.ceil(camY + viewH / TILE_SIZE) + padding);
+
+  for (let ty = lightStartY; ty < lightEndY; ty++) {
     const row = state.dungeon.tiles[ty];
-    for (let tx = 0; tx < width; tx++) {
+    for (let tx = lightStartX; tx < lightEndX; tx++) {
       const tile = row[tx];
       if (tile === TILE.FIRE_HAZARD || tile === TILE.FROST_HAZARD || tile === TILE.ECHO_WELL || tile === TILE.CHRONO_ANVIL || tile === TILE.SHOP_TERMINAL || tile === TILE.SHORTCUT_GATE) {
         const sx = (tx - camX) * TILE_SIZE + TILE_SIZE / 2;
         const sy = (ty - camY) * TILE_SIZE + TILE_SIZE / 2;
-        if (sx > -TILE_SIZE * 2 && sx < viewW + TILE_SIZE * 2 && sy > -TILE_SIZE * 2 && sy < viewH + TILE_SIZE * 2) {
-          punchHole(sx, sy, TILE_SIZE * 2.5, 0.9);
-        }
+        punchHole(sx, sy, TILE_SIZE * 2.5, 0.9);
       }
     }
   }
@@ -744,9 +764,8 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
   }
 
   ctx.globalCompositeOperation = 'source-over';
-  ctx.globalAlpha = 0.85;
-  ctx.drawImage(lightingCanvas, 0, 0);
   ctx.globalAlpha = 1;
+  ctx.drawImage(lightingCanvas, 0, 0);
 
   // Drawn last, always on top.
   for (const f of getFloatingTexts()) {
