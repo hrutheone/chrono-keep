@@ -2,7 +2,7 @@
 const FLOAT_MS = 700;
 const RISE_TILES = 0.8;
 
-export type FloatKind = 'damage' | 'crit' | 'immune' | 'turns';
+export type FloatKind = 'damage' | 'crit' | 'immune' | 'turns' | 'corrupted';
 
 interface FloatingText {
   text: string;

@@ -50,6 +50,7 @@ const FLOAT_COLOR: Record<FloatKind, string> = {
   crit: COLOR_FLASH,
   immune: COLOR_MID,
   turns: COLOR_PLAYER_LIGHT,
+  corrupted: COLOR_CHRONO,
 };
 
 /** Draws spritesheet cell. rotQuarters rotates clockwise in 90-degree steps, about the tile center. */

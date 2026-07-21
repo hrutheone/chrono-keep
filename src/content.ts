@@ -270,6 +270,7 @@ export function enemyCountRangeForFloor(floorNumber: number): { min: number; max
 }
 
 const WEAPONS = {
+  SHATTERED_SCRAP: { name: 'Shattered Scrap', atk: 4, element: 'PHYSICAL', passive: 'none', lore: 'A ruined husk of what was once a weapon. Better than nothing... barely.' },
   // --- Early game (F1-F20) ---
   RUSTY_SWORD: { name: 'Rusty Sword', atk: 3, element: 'PHYSICAL', passive: 'none', lore: 'Your service weapon from a timeline long forgotten. It remembers the taste of blood, but its edge has dulled across a thousand failed resets.' },
   BONE_DAGGER: { name: 'Bone Dagger', atk: 2, element: 'PHYSICAL', passive: 'free_swap', lore: 'Carved from the femur of a fallen Watchwarden. It demands so little weight to wield, you can draw it between the ticks of a clock.' },
@@ -1184,6 +1185,14 @@ export function rollMidTierWeapon(id: string): Weapon {
 export function rollLateTierWeapon(id: string): Weapon {
   const key = LATE_TIER_WEAPON_KEYS[Math.floor(Math.random() * LATE_TIER_WEAPON_KEYS.length)];
   return createWeapon(key, id);
+}
+
+/** Rolls a new weapon from the exact same tier as the provided weapon. */
+export function rollSameTierWeapon(weapon: Weapon, id: string): Weapon {
+  const wKey = Object.keys(WEAPONS).find(k => WEAPONS[k as WeaponKey].name === weapon.name) as WeaponKey | undefined;
+  if (wKey && LATE_TIER_WEAPON_KEYS.includes(wKey)) return rollLateTierWeapon(id);
+  if (wKey && MID_TIER_WEAPON_KEYS.includes(wKey)) return rollMidTierWeapon(id);
+  return rollEarlyTierWeapon(id);
 }
 
 /** Rolls a weapon for a given floor depth using stage-overlapping pools (F1-20: Early; F21-50: Early+Mid; F51+: Mid+Late). */

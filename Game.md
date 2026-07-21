@@ -11,6 +11,7 @@
 **The Fall of Oakhaven:** The Chrono-Keep was not always a prison; it was once the Grand Conservatory of Oakhaven. Decades ago, as a mysterious plague threatened to wipe out the kingdom, the brilliant Court Wizard made a desperate choice. To save his people, he attempted to freeze Oakhaven at the exact moment before its ruin using the kingdom's most sacred artifact: the Hourglass of Eternity. But mortal hands were never meant to halt the river of time. The ritual violently backfired, mutating him into the mad Chrono-Lich and shattering the Keep downward into the earth.
 
 **The Temporal Anomaly (The 100-Turn Limit):** The Keep did not physically collapse; it fractured into 99 stacked strata of broken time. Time inside the Keep is entirely frozen. When a living, breathing entity steps onto a floor, the timeline attempts to resume — but the shattered reality can only sustain exactly 100 seconds (turns) of linear time before the paradox reaches critical mass. When the clock hits zero, the floor violently collapses, expelling the intruder back to the surface to preserve itself.
+**The Temporal Anomaly (The 100-Turn Limit):** The Keep did not physically collapse; it fractured into 99 strata of broken time. Time inside the Keep is entirely frozen. When a living, breathing entity steps onto a floor, the timeline attempts to resume — but the shattered reality can only sustain exactly 100 seconds (turns) of linear time before the paradox reaches critical mass. When the clock hits zero, the floor violently collapses, expelling the intruder back to the surface to preserve itself.
 
 **The Protagonist (The Last Watchwarden):** You are the Last Watchwarden. When the Hourglass shattered, your proximity to the epicenter locked you in a cruel, unending loop. You are cursed with lucidity: you remember every death, every failure, and every reset. The monsters wandering the halls — the Bone-Grunts and Frost-Wraiths — are your former comrades and the citizens of Oakhaven, trapped in a mindless state of decay because they forgot their purpose across a thousand loops. Your duty is no longer to guard the Keep, but to grant it the mercy of a final death. You must descend the 99 floors, wrest the Temporal Anchors from the Lich's corrupted wardens, and stitch reality back together just enough to reach the bottom and end the Lich's reign.
 
@@ -18,6 +19,12 @@
 *   **Echoes**: Crystallized memories of your past deaths. By absorbing them, you refuse to let your past failures be in vain, using your own trauma to permanently strengthen your body and mind.
 *   **Time Shards**: Splintered seconds dropped by enemies. By taking a life, you steal their remaining moments, buying yourself a few extra heartbeats against the collapsing floor.
 *   **Temporal Anchors**: Surviving heavy pivot-stones of the original Hourglass. Driving them into the rift at the Hub physically pins a section of the Keep to reality, creating a permanent safe haven.
+*   **The Chrono-Anvil:** Spawns exclusively in the Elite combat arenas. Instead of an automatic upgrade, it provides a 4-outcome gamble when interacting with it (offering your equipped weapon).
+  - **Jackpot (20%):** FLAWLESS FORGE! Destroys weapon, grants a Late Tier / endgame weapon.
+  - **Upgrade (20%):** RESONANCE INCREASED! Grants permanent +1 ATK to current weapon.
+  - **Sidegrade (40%):** REFORGED. Destroys weapon, grants a new weapon of the same tier.
+  - **Catastrophe (20%):** SHATTERED... Destroys weapon, yields a useless "Shattered Scrap" (4 ATK).
+  - The Anvil becomes an empty floor tile after one use.
 
 ### "The Shattering" (Loop 0)
 Loop 0 drops players into Floor 99 against the Chrono-Lich with an endgame loadout. This is a scripted loss: when the boss hits <=25% HP or player HP hits 0, the timeline collapses. The player awakens in the Hub with the Rusty Sword, resetting all progression and starting Loop 1.
