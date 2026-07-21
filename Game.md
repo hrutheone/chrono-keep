@@ -173,3 +173,4 @@ Rare tile events (12% chance/floor) triggering 1 of 6 events: Rift Shop, Blood-I
 *   **Web Audio API:** Procedurally generated SFX (chiptune-style).
 *   **BGM:** Pre-rendered OGG files, manipulated dynamically (pitch/filter) based on game state (e.g. low turns speeds up the clock and music).
 *   **Juice:** Screen shake on crits/kills, pixel particle bursts, floating damage text, CRT "Time-Warp" death transition, accelerating heartbeat sound at low health.
+*   **Lighting:** Dynamic lighting system using offscreen canvas that adds ambient shadows while maintaining map visibility (capped opacity). Player, elites, hazards, and rifts punch holes in the darkness.

@@ -687,7 +687,7 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     lightingCanvas.height = viewH;
   }
   lightingCtx.globalCompositeOperation = 'source-over';
-  lightingCtx.fillStyle = 'rgba(10, 10, 15, 0.5)';
+  lightingCtx.fillStyle = 'rgba(20, 8, 4, 0.06)';
   lightingCtx.fillRect(0, 0, viewW, viewH);
 
   lightingCtx.globalCompositeOperation = 'destination-out';
@@ -702,7 +702,7 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
   };
 
   // Player light
-  punchHole(playerPx + TILE_SIZE / 2, playerPy + TILE_SIZE / 2, TILE_SIZE * 3.5);
+  punchHole(playerPx + TILE_SIZE / 2, playerPy + TILE_SIZE / 2, TILE_SIZE * 6);
 
   // Elites / Bosses
   for (const e of state.dungeon.enemies) {
@@ -710,7 +710,7 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
       const visual = getEntityVisual(e.id, e.x, e.y);
       const ex = Math.round((visual.tileX - camX) * TILE_SIZE) + TILE_SIZE / 2;
       const ey = Math.round((visual.tileY - camY) * TILE_SIZE) + TILE_SIZE / 2;
-      punchHole(ex, ey, TILE_SIZE * 2.5, 0.8);
+      punchHole(ex, ey, TILE_SIZE * 4, 0.8);
     }
   }
 
@@ -744,7 +744,9 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
   }
 
   ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 0.85;
   ctx.drawImage(lightingCanvas, 0, 0);
+  ctx.globalAlpha = 1;
 
   // Drawn last, always on top.
   for (const f of getFloatingTexts()) {
