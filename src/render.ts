@@ -449,6 +449,9 @@ function renderTitleScreen(ctx: CanvasRenderingContext2D, viewW: number, viewH: 
 }
 
 /** Renders the full game world for the current frame: tiles, items, enemies, player. */
+const lightingCanvas = document.createElement('canvas');
+const lightingCtx = lightingCanvas.getContext('2d')!;
+
 export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, viewW: number, viewH: number): void {
   VIEWPORT_TILES_W = viewW / TILE_SIZE;
   VIEWPORT_TILES_H = viewH / TILE_SIZE;
@@ -677,6 +680,71 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     ctx.fillRect(Math.round(sx), Math.round(sy), 1, 1);
   }
   ctx.globalAlpha = 1;
+
+  // --- Dynamic Lighting Pass ---
+  if (lightingCanvas.width !== viewW || lightingCanvas.height !== viewH) {
+    lightingCanvas.width = viewW;
+    lightingCanvas.height = viewH;
+  }
+  lightingCtx.globalCompositeOperation = 'source-over';
+  lightingCtx.fillStyle = 'rgba(10, 10, 15, 0.5)';
+  lightingCtx.fillRect(0, 0, viewW, viewH);
+
+  lightingCtx.globalCompositeOperation = 'destination-out';
+  const punchHole = (x: number, y: number, radius: number, alpha = 1) => {
+    const grad = lightingCtx.createRadialGradient(x, y, 0, x, y, radius);
+    grad.addColorStop(0, `rgba(255, 255, 255, ${alpha})`);
+    grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    lightingCtx.fillStyle = grad;
+    lightingCtx.beginPath();
+    lightingCtx.arc(x, y, radius, 0, Math.PI * 2);
+    lightingCtx.fill();
+  };
+
+  // Player light
+  punchHole(playerPx + TILE_SIZE / 2, playerPy + TILE_SIZE / 2, TILE_SIZE * 3.5);
+
+  // Elites / Bosses
+  for (const e of state.dungeon.enemies) {
+    if (e.affix || BIG_ENEMY_KINDS.has(e.kind)) {
+      const visual = getEntityVisual(e.id, e.x, e.y);
+      const ex = Math.round((visual.tileX - camX) * TILE_SIZE) + TILE_SIZE / 2;
+      const ey = Math.round((visual.tileY - camY) * TILE_SIZE) + TILE_SIZE / 2;
+      punchHole(ex, ey, TILE_SIZE * 2.5, 0.8);
+    }
+  }
+
+  // Hazard and interactive tiles light
+  for (let ty = 0; ty < height; ty++) {
+    const row = state.dungeon.tiles[ty];
+    for (let tx = 0; tx < width; tx++) {
+      const tile = row[tx];
+      if (tile === TILE.FIRE_HAZARD || tile === TILE.FROST_HAZARD || tile === TILE.ECHO_WELL || tile === TILE.CHRONO_ANVIL || tile === TILE.SHOP_TERMINAL || tile === TILE.SHORTCUT_GATE) {
+        const sx = (tx - camX) * TILE_SIZE + TILE_SIZE / 2;
+        const sy = (ty - camY) * TILE_SIZE + TILE_SIZE / 2;
+        if (sx > -TILE_SIZE * 2 && sx < viewW + TILE_SIZE * 2 && sy > -TILE_SIZE * 2 && sy < viewH + TILE_SIZE * 2) {
+          punchHole(sx, sy, TILE_SIZE * 2.5, 0.9);
+        }
+      }
+    }
+  }
+
+  // Beams
+  for (const b of getBeams()) {
+    const sx = (b.toX - camX) * TILE_SIZE + TILE_SIZE / 2;
+    const sy = (b.toY - camY) * TILE_SIZE + TILE_SIZE / 2;
+    punchHole(sx, sy, TILE_SIZE * 2.5);
+  }
+  
+  // Rifts
+  if (state.dungeon.riftX !== null && state.dungeon.riftY !== null) {
+    const sx = (state.dungeon.riftX - camX) * TILE_SIZE + TILE_SIZE / 2;
+    const sy = (state.dungeon.riftY - camY) * TILE_SIZE + TILE_SIZE / 2;
+    punchHole(sx, sy, TILE_SIZE * 3.5, 0.9);
+  }
+
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.drawImage(lightingCanvas, 0, 0);
 
   // Drawn last, always on top.
   for (const f of getFloatingTexts()) {

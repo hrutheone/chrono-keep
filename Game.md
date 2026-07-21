@@ -26,9 +26,10 @@ Loop 0 drops players into Floor 99 against the Chrono-Lich with an endgame loado
 
 ## 2. Technical Stack
 *   **Language:** TypeScript / JavaScript (ES6+).
-*   **Rendering:** HTML5 Canvas for game world, HTML/CSS for UI overlays.
+*   **Rendering:** HTML5 Canvas for game world (with offscreen dynamic lighting pass), HTML/CSS for UI overlays.
 *   **Storage:** `localStorage` for permanent upgrades, live run snapshot, and audio settings.
 *   **Audio:** Web Audio API (procedural SFX, pre-rendered BGM loops).
+*   **Platform:** Progressive Web App (PWA) enabled for offline play and standalone installation.
 
 ---
 
