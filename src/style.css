@@ -1086,6 +1086,16 @@ body {
     font-weight: bold;
   }
 
+  .hud-row {
+    flex-wrap: wrap;
+  }
+
+  .bar-stack {
+    flex-basis: 100%;
+    order: 10;
+    margin-top: 4px;
+  }
+
   .bar {
     height: 12px;
   }
