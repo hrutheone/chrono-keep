@@ -756,7 +756,7 @@ function renderUpgradeShop(state: GameState): string {
 
   return `
     <div class="menu upgrade-shop">
-      <h2>Upgrade Shop</h2>
+      <h2>Upgrade</h2>
       <div class="stat-line">Echoes: ${state.persistent.echoes}</div>
       <div class="upgrade-shop-scroll">
         <h3>Stats</h3>

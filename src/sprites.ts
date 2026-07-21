@@ -57,9 +57,9 @@ export const SPRITES = {
   SHORTCUT_GATE: { col: 1, row: 9 }, // blue gate
   BOSS_GATE: { col: 0, row: 9 }, // blue padlock
   FIRE_HAZARD: { col: 15, row: 10 }, // orange flame
-  TORCH: { col: 4, row: 15 }, // wall torch light source
+  TORCH: { col: 3, row: 15 }, // wall torch light source
   FROST_HAZARD: { col: 14, row: 18 }, // blue water droplet
-  SHOP_TERMINAL: { col: 0, row: 20 }, // tree brach
+  SHOP_TERMINAL: { col: 5, row: 8 }, // bed
   CURSED_RIFT: { col: 4, row: 0 }, // dark red brick pattern — ominous texture
   ECHO_WELL: { col: 14, row: 5 }, // solid glowing-blue pool tile
   CHRONO_ANVIL: { col: 9, row: 8 }, // same solid brown block used for the Giant's Anvil relic
