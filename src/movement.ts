@@ -1,7 +1,7 @@
 // Player movement logic.
 
 import { findRangedTarget, playerAttackEnemy, weaponBlockedAtRange } from './combat';
-import { pickupItemsAt, reforgeWeapon } from './inventory';
+import { pickupItemsAt } from './inventory';
 import { onFloorCleared, onFloorEntered, awardEchoes } from './echoes';
 import { effectiveTileAt, enterFloor, isWalkableAt, TILE } from './mapgen';
 import { HUB_FLOOR } from './hub';
@@ -10,11 +10,10 @@ import { enterBossFloor, FINAL_BOSS_FLOOR } from './bossArena';
 import { showConfirm } from './menus';
 import { isTurnBusy, resolvePlayerTurn } from './turnController';
 import { isRunOver, logLine } from './turns';
-import { playBlockedSfx, playEquipSfx, playMoveSfx, playPotionSfx } from './audio';
+import { playBlockedSfx, playMoveSfx, playPotionSfx } from './audio';
 import { saveRunSnapshot } from './persistence';
-import { pickRandomUnheldRelic, createRelicItemByEffect, rollSameTierWeapon, rollLateTierWeapon, createWeapon } from './content';
-import { notifyFloatingText } from './floatingText';
-import { triggerScreenShake } from './animation';
+import { pickRandomUnheldRelic, createRelicItemByEffect } from './content';
+import { triggerChronoAnvil } from './chronoAnvil';
 import { isSilasAt } from './npc';
 import { openDialogue, openTreeDialogue } from './dialogue';
 import { triggerCursedRiftEvent } from './cursedRift';
@@ -75,59 +74,6 @@ function tryEchoWell(state: GameState, x: number, y: number): void {
   playPotionSfx();
 }
 
-/** Offers the equipped weapon to the Chrono Anvil for a 4-outcome gamble. */
-function tryChronoAnvil(state: GameState, x: number, y: number): void {
-  if (effectiveTileAt(state, x, y) !== TILE.CHRONO_ANVIL) return;
-  if (!state.run.equippedWeapon) {
-    showConfirm(state, 'You have nothing to forge.', () => {
-      state.ui.currentScreen = 'GAME';
-    });
-    return;
-  }
-  
-  showConfirm(state, 'Offer your weapon to the Anvil? The chronal forge is unpredictable.', () => {
-    state.ui.currentScreen = 'GAME';
-    const floor = state.run.currentFloor;
-    const id = `f${floor}-anvil-${x}-${y}`;
-    const roll = Math.random();
-    
-    if (roll < 0.2) {
-      // Jackpot
-      const forged = rollLateTierWeapon(id);
-      reforgeWeapon(state, forged);
-      notifyFloatingText(x, y, 'FLAWLESS FORGE!', 'crit');
-      logLine(state, 'JACKPOT! The Anvil forges a masterpiece!');
-      triggerScreenShake();
-      playEquipSfx();
-    } else if (roll < 0.4) {
-      // Upgrade
-      if (state.run.equippedWeapon) {
-        state.run.equippedWeapon.upgradeBonus = (state.run.equippedWeapon.upgradeBonus ?? 0) + 1;
-        state.run.equippedWeapon.atk += 1;
-      }
-      notifyFloatingText(x, y, 'RESONANCE INCREASED', 'immune');
-      logLine(state, 'UPGRADE! Your weapon feels sharper.');
-      playEquipSfx();
-    } else if (roll < 0.8) {
-      // Sidegrade
-      const forged = rollSameTierWeapon(state.run.equippedWeapon!, id);
-      reforgeWeapon(state, forged);
-      notifyFloatingText(x, y, 'REFORGED', 'damage');
-      logLine(state, 'SIDEGRADE. The Anvil returns an equivalent weapon.');
-      playEquipSfx();
-    } else {
-      // Catastrophe
-      const forged = createWeapon('SHATTERED_SCRAP', id);
-      reforgeWeapon(state, forged);
-      notifyFloatingText(x, y, 'SHATTERED...', 'corrupted');
-      logLine(state, 'CATASTROPHE! Your weapon shatters into scrap.');
-      triggerScreenShake();
-      playBlockedSfx();
-    }
-    
-    state.dungeon.tiles[y][x] = TILE.FLOOR;
-  });
-}
 
 /** Bumping the Eternity Tree, Silas, the Smuggler, the Shop Terminal, or the Shortcut Gate blocks movement instead of walking onto them — the player stays put and the interaction opens in place. */
 function tryHubBump(state: GameState, nx: number, ny: number): boolean {
@@ -245,7 +191,10 @@ export function tryMove(state: GameState, dx: number, dy: number, facing: Facing
 
   pickupItemsAt(state, nx, ny);
   tryEchoWell(state, nx, ny);
-  tryChronoAnvil(state, nx, ny);
+  if (effectiveTileAt(state, nx, ny) === TILE.CHRONO_ANVIL) {
+    triggerChronoAnvil(state, nx, ny);
+    return Promise.resolve();
+  }
   if (tryDescendIfOnStairs(state)) return Promise.resolve();
   if (tryRiftInteraction(state)) return Promise.resolve();
 
