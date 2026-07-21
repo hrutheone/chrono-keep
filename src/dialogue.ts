@@ -413,6 +413,45 @@ export function openTreeDialogue(state: GameState): void {
   };
 }
 
+export const FLOOR_EVENT_INFO: Record<string, { title: string; lore: string }> = {
+  BLEEDING: {
+    title: 'The Bleeding Timeline',
+    lore: "Here, the clock has stopped, and the Keep demands your blood instead of your time for every step you take."
+  },
+  PACIFIST: {
+    title: "The Pacifist's Burden",
+    lore: "These wandering husks were once your brothers-in-arms, and shedding their blood will only accelerate your own temporal doom."
+  },
+  SHATTERED: {
+    title: 'Shattered Psyche',
+    lore: "The chronal interference here fractures your mind, plunging you into darkness and completely erasing your perception of time."
+  },
+  GLUTTON: {
+    title: "The Glutton's Armory",
+    lore: "A cursed vault of forgotten treasures tempts the greedy, but every opened chest threatens to awaken the restless dead."
+  },
+  PREDATOR: {
+    title: 'The Wandering Predator',
+    lore: "A colossal remnant of the old guard relentlessly patrols these desolate halls, turning your journey into a deadly game of cat and mouse."
+  },
+  SHADOW: {
+    title: "The Shadow's Pursuit",
+    lore: "The rift has birthed a twisted reflection of your own soul that relentlessly hunts you through the walls, seeking to usurp your place in the loop."
+  }
+};
+
+export function openFloorEventDialogue(state: GameState): void {
+  const event = state.run.floorEvent;
+  if (event === 'NONE') return;
+  const info = FLOOR_EVENT_INFO[event];
+  if (!info) return;
+  activeDialogue = {
+    text: info.lore,
+    speakerName: info.title,
+    speakerIcon: SPRITES.CURSED_RIFT,
+  };
+}
+
 export function getActiveDialogue(): ActiveDialogue | null {
   return activeDialogue;
 }

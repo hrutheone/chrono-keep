@@ -54,6 +54,8 @@ export function createNewGameState(): GameState {
       turnsRemaining: BASE_TURNS,
       currentFloor: 1,
       startFloor: 1,
+      floorEvent: 'NONE',
+      pacifistKills: 0,
       playerX: 0, // placed at the spawn room by the generator
       playerY: 0,
       facing: 'DOWN',
@@ -141,6 +143,8 @@ export function resetRunForNewLoop(state: GameState, startFloor = 1): void {
   state.run.currentStamina = state.run.maxStamina;
   state.run.turnsRemaining = floorTurnLimit(state);
   state.run.startFloor = startFloor;
+  state.run.floorEvent = 'NONE';
+  state.run.pacifistKills = 0;
   state.run.inventory = [];
   state.run.equippedWeapon = startingWeapon();
   state.run.equippedWeapon2 = null;

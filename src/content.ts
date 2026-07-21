@@ -1208,6 +1208,13 @@ function getRandomBonus(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+export function applyEliteWeaponBonus(weapon: Weapon, currentFloor: number): void {
+  const [min, max] = currentFloor >= 51 ? ELITE_DROP_ATK_BONUS_LATE : currentFloor >= 21 ? ELITE_DROP_ATK_BONUS_MID : ELITE_DROP_ATK_BONUS_EARLY;
+  const bonus = getRandomBonus(min, max);
+  weapon.atk += bonus;
+  weapon.upgradeBonus = (weapon.upgradeBonus ?? 0) + bonus;
+}
+
 /** Rolls regular Elite drop — weapon tier (and its ATK bonus range) scales with how deep the kill happened. */
 export function rollEliteDrop(id: string, heldRelics: readonly string[], currentFloor: number): Item {
   if (Math.random() < 0.5) {
@@ -1215,10 +1222,7 @@ export function rollEliteDrop(id: string, heldRelics: readonly string[], current
     if (relic) return createRelicItemByEffect(relic, id);
   }
   const weapon = rollWeaponForDepth(currentFloor, id);
-  const [min, max] = currentFloor >= 51 ? ELITE_DROP_ATK_BONUS_LATE : currentFloor >= 21 ? ELITE_DROP_ATK_BONUS_MID : ELITE_DROP_ATK_BONUS_EARLY;
-  const bonus = getRandomBonus(min, max);
-  weapon.atk += bonus;
-  weapon.upgradeBonus = bonus;
+  applyEliteWeaponBonus(weapon, currentFloor);
   return weapon;
 }
 
