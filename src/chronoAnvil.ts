@@ -35,7 +35,7 @@ export function triggerChronoAnvil(state: GameState, x: number, y: number): void
     } else if (roll < 0.4) {
       // Upgrade
       if (state.run.equippedWeapon) {
-        state.run.equippedWeapon.upgradeBonus = (state.run.equippedWeapon.upgradeBonus ?? 0) + 1;
+        state.run.equippedWeapon.upgradeBonus = (state.run.equippedWeapon.upgradeBonus ?? 0) + 2;
         state.run.equippedWeapon.atk += 2;
       }
       notifyFloatingText(x, y, 'RESONANCE INCREASED', 'immune');
