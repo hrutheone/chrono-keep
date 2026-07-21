@@ -15,7 +15,7 @@ import { saveRunSnapshot } from './persistence';
 import { pickRandomUnheldRelic, createRelicItemByEffect } from './content';
 import { triggerChronoAnvil } from './chronoAnvil';
 import { isSilasAt } from './npc';
-import { openDialogue, openTreeDialogue } from './dialogue';
+import { openDialogue, openTreeDialogue, FLOOR_EVENT_INFO } from './dialogue';
 import { triggerCursedRiftEvent } from './cursedRift';
 import type { GameState } from './types';
 
@@ -37,12 +37,19 @@ export function performDescend(state: GameState, next: number): void {
     }
   }
 
+  state.ui.currentScreen = 'GAME';
+  
   if (next === FINAL_BOSS_FLOOR) enterBossFloor(state);
   else if (isArenaFloor(next)) enterArenaFloor(state, next);
   else enterFloor(state, next);
+  
   onFloorEntered(state);
   logLine(state, next === FINAL_BOSS_FLOOR ? 'You descend into the Chrono-Lich\'s arena.' : `You descend to Floor ${next}.`);
-  state.ui.currentScreen = 'GAME';
+  
+  if (state.run.floorEvent !== 'NONE') {
+    logLine(state, `Anomaly: ${FLOOR_EVENT_INFO[state.run.floorEvent].title}`);
+  }
+  
   // Save snapshot after descending.
   saveRunSnapshot(state);
 }
