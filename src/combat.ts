@@ -318,7 +318,8 @@ export function killEnemy(state: GameState, enemy: Enemy, source: 'bump' | 'skil
     state.run.turnsRemaining = Math.max(0, state.run.turnsRemaining - 10);
     logLine(state, `The Pacifist's Burden weighs on you — -10 Turns.`);
   } else if (state.run.floorEvent === 'BLEEDING') {
-    const heal = Math.round(state.run.maxHp * 0.15);
+    const healPercent = 0.2 + Math.random() * 0.1;
+    const heal = Math.round(state.run.maxHp * healPercent);
     state.run.currentHp = Math.min(state.run.maxHp, state.run.currentHp + heal);
     logLine(state, `Blood for blood — restored ${heal} HP.`);
     notifyFloatingText(enemy.x, enemy.y, `+${heal} HP`, 'immune');

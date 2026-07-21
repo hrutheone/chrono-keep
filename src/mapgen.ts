@@ -558,8 +558,8 @@ export function enterFloor(state: GameState, floorNumber: number): GeneratedFloo
         else item = rollWeaponForDepth(99, `glutton-w-${spawned}`);
       } else {
         item = rollWeaponForDepth(99, `glutton-w-${spawned}`); // late tier
-        // random 0-6 bonus
-        item.upgradeBonus = Math.floor(Math.random() * 7);
+        // random +1 to +4 bonus
+        item.upgradeBonus = 1 + Math.floor(Math.random() * 4);
       }
       state.dungeon.items.push({ item, x: p.x, y: p.y, chestLoot: 'gold' });
       spawned++;
