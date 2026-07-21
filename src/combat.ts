@@ -26,7 +26,7 @@ import { logLine } from './turns';
 import { awardEchoes, markFloorDamageTaken } from './echoes';
 import { triggerVictory } from './victory';
 import { playAttackSfx, playEnemyDeathSfx, playEnemyHitPlayerSfx, playStatusApplySfx } from './audio';
-import { PLAYER_ID, notifyAttack, notifyDeath, spawnDeathParticles } from './animation';
+import { PLAYER_ID, notifyAttack, notifyDeath, spawnDeathParticles, triggerScreenShake } from './animation';
 import { notifyFloatingText } from './floatingText';
 import type { Element, Enemy, GameState, StatusEffect } from './types';
 
@@ -482,7 +482,10 @@ function applyDamageInstance(
   enemy.hp -= dmg;
   logLine(state, `${label} hits ${ENEMY_NAME[enemy.kind]} for ${dmg}.`);
   playAttackSfx(element, mult);
-  if (mult > 1) markHitStop();
+  if (mult > 1) {
+    markHitStop();
+    triggerScreenShake();
+  }
   notifyFloatingText(enemy.x, enemy.y, mult > 1 ? `${dmg} CRIT!` : `${dmg}`, mult > 1 ? 'crit' : 'damage');
   if (enemy.hp <= 0) {
     killEnemy(state, enemy, source);
@@ -560,7 +563,10 @@ export function playerAttackEnemy(state: GameState, enemy: Enemy): void {
   enemy.hp -= dmg;
   logLine(state, `You hit the ${ENEMY_NAME[enemy.kind]} for ${dmg}.`);
   playAttackSfx(element, mult);
-  if (mult > 1) markHitStop();
+  if (mult > 1) {
+    markHitStop();
+    triggerScreenShake();
+  }
   notifyFloatingText(enemy.x, enemy.y, mult > 1 ? `${dmg} CRIT!` : `${dmg}`, mult > 1 ? 'crit' : 'damage');
 
   // Weakness Exploit: refund Stamina for a Weakness hit on a Mini-Boss/Final Boss, gated by a per-boss cooldown.
@@ -795,6 +801,9 @@ export function enemyAttackPlayer(state: GameState, enemy: Enemy): void {
   logLine(state, `${ENEMY_NAME[enemy.kind]} hits you for ${dmg}.`);
   playEnemyHitPlayerSfx();
   notifyFloatingText(state.run.playerX, state.run.playerY, `${dmg}`, 'damage');
+  if (dmg >= 10 || enemy.kind === 'CHRONO_LICH') {
+    triggerScreenShake();
+  }
 
   // Vampiric heal.
   if (enemy.affix === 'vampiric') {

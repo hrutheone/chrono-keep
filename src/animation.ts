@@ -114,11 +114,14 @@ export function notifyDeath(id: string, kind: GhostKind, x: number, y: number, f
 interface Particle {
   x: number;
   y: number;
+  z: number;
   vx: number; // tiles/sec
   vy: number;
+  vz: number;
   start: number;
   life: number; // ms
   color: string;
+  lastUpdate: number;
 }
 
 const particles: Particle[] = [];
@@ -127,18 +130,21 @@ const PARTICLE_MAX = 200; // max particles limit
 /** Scatters particles outward from (x, y) in `color`. */
 export function spawnDeathParticles(x: number, y: number, color: string = COLOR_ENEMY_LIGHT): void {
   const now = performance.now();
-  const count = 10 + Math.floor(Math.random() * 6);
+  const count = 10 + Math.floor(Math.random() * 10); // 10-20 particles
   for (let i = 0; i < count && particles.length < PARTICLE_MAX; i++) {
     const angle = Math.random() * Math.PI * 2;
-    const speed = 1.5 + Math.random() * 2.5;
+    const speed = 2 + Math.random() * 3;
     particles.push({
       x: x + 0.5,
       y: y + 0.5,
+      z: 0,
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,
+      vz: -(2 + Math.random() * 3), // burst upwards
       start: now,
-      life: 300 + Math.random() * 250,
+      life: 500 + Math.random() * 400, // 500-900ms
       color,
+      lastUpdate: now,
     });
   }
 }
@@ -163,10 +169,40 @@ export function getParticles(): ParticleVisual[] {
       particles.splice(i, 1);
       continue;
     }
-    const tSec = t / 1000;
-    out.push({ x: p.x + p.vx * tSec, y: p.y + p.vy * tSec, alpha: 1 - t / p.life, color: p.color });
+    
+    const dt = (now - p.lastUpdate) / 1000;
+    p.lastUpdate = now;
+
+    p.vz += 20 * dt; // gravity
+    p.vx *= Math.pow(0.01, dt); // friction decay
+    p.vy *= Math.pow(0.01, dt);
+
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.z += p.vz * dt;
+
+    // Bounce on the floor
+    if (p.z > 0) {
+      p.z = 0;
+      p.vz *= -0.4; // bounce dampening
+    }
+
+    out.push({ x: p.x, y: p.y + p.z, alpha: 1 - (t / p.life), color: p.color });
   }
   return out;
+}
+
+export function triggerScreenShake(): void {
+  const app = document.getElementById('app');
+  if (app) {
+    app.classList.remove('shake');
+    // Force reflow to restart animation if it was already shaking
+    void app.offsetWidth;
+    app.classList.add('shake');
+    setTimeout(() => {
+      app.classList.remove('shake');
+    }, 200);
+  }
 }
 
 // Instant line flash for ranged hits.

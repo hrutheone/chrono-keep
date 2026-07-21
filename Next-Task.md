@@ -13,8 +13,10 @@ Auto-run git add, commit, and push for each update.
 
 ## Jobs Done Previous Session
 Summary of changes:
-- Implemented tappable Expandable Action Log.
-- Added `ACTION_LOG` screen modal in `menus.ts` to show full log history.
+- Upgraded the particle system in `animation.ts` to include gravity and floor bouncing physics (z-axis logic).
+- Increased death particle burst density (10-20 particles) and slightly lengthened their lifespan.
+- Implemented CSS-based `.shake` screen shake animation in `style.css`.
+- Triggered `triggerScreenShake()` in `combat.ts` during critical hits (elemental combos) and heavy boss damage (>10 or from Chrono-Lich).
 - Restyled `.action-log` in `index.css` (mobile) to show a single wrapping line with fixed height.
 - Bound click listener to action-log HUD element to open the new modal.
 
