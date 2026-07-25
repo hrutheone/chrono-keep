@@ -177,13 +177,12 @@ Include Potions (HP restores) and Tactical Consumables (grenades, scrolls, runes
 Infinite-stacking passives lost on loop reset. Found in chests or via Elites. Examples: Phoenix Feather (revive), Giant's Anvil (+ATK, no Dash), Vampire's Cape (lifesteal), Static Generator (auto-Stun).
 
 ### G. Cursed Rifts
-Rare tile events (12% chance/floor) triggering 1 of 6 events, rolled uniformly:
+Rare tile events (12% chance/floor) triggering 1 of 5 events, rolled uniformly:
 1. **Rift Shop:** Buy a Relic with Echoes at an escalating price (50/150/300).
 2. **Blood-Infused Anvil:** Sacrifice 50% of current HP for +2 permanent ATK on the equipped weapon.
 3. **Frozen Watchwarden:** Sacrifice 1 Potion for +1 Level on a random active skill.
 4. **Paradox Mirror:** A Shadow Warden spawns, mirroring the player's own HP/ATK/DEF exactly.
-5. **Chrono-Lich's Projection:** Accept: -10 Max HP for a guaranteed Late-Tier weapon chest. Decline: 2 Bone-Knights ambush.
-6. **Echo Geode:** Mine for +15 Echoes per turn (up to 5 turns), risking an ambush on turns 3 and 5.
+5. **Echo Geode:** Mine for +15 Echoes per turn (up to 5 turns), risking an ambush on turns 3 and 5.
 
 ---
 

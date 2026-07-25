@@ -33,7 +33,6 @@ import {
   mineEchoGeode,
   resolveBloodAnvil,
   resolveFrozenWatchwarden,
-  resolveLichProjection,
 } from './cursedRift';
 import { spriteCssStyle } from './assets';
 import {
@@ -872,17 +871,6 @@ function renderCursedRift(state: GameState): string {
       </div>`;
   }
 
-  if (event.kind === 'chrono_lich_projection') {
-    return `
-      <div class="menu cursed-rift-menu">
-        ${header}
-        <div class="stat-line">Accept: -10 Max HP for a gilded chest (a guaranteed Late-Tier weapon). Decline: 2 Bone-Knights ambush you.</div>
-        <button class="rift-accept-btn" data-action="rift-accept">ACCEPT BARGAIN</button>
-        <button class="rift-decline-btn" data-action="rift-decline">DECLINE</button>
-        <div class="menu-hint">Esc: decline</div>
-      </div>`;
-  }
-
   // 'echo_geode'
   const minedSoFar = event.geodeTurnsMined * ECHO_GEODE_ECHOES_PER_TURN;
   return `
@@ -900,7 +888,6 @@ function acceptCursedRift(state: GameState): void {
   const kind = state.run.cursedRiftEvent?.kind;
   if (kind === 'blood_anvil') resolveBloodAnvil(state, true);
   else if (kind === 'frozen_watchwarden') resolveFrozenWatchwarden(state, true);
-  else if (kind === 'chrono_lich_projection') resolveLichProjection(state, true);
 }
 
 /** Resolves the current Cursed Rift event's Decline/Escape, dispatched by its kind. */
@@ -908,7 +895,6 @@ function declineCursedRift(state: GameState): void {
   const kind = state.run.cursedRiftEvent?.kind;
   if (kind === 'blood_anvil') resolveBloodAnvil(state, false);
   else if (kind === 'frozen_watchwarden') resolveFrozenWatchwarden(state, false);
-  else if (kind === 'chrono_lich_projection') resolveLichProjection(state, false);
   else closeCursedRiftEvent(state);
 }
 
