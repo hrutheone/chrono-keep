@@ -4,6 +4,7 @@ import { enterFloor, TILE } from './mapgen';
 import { DUNGEON_SIZE, floorTurnLimit, resetRunForNewLoop } from './state';
 import { onFloorEntered } from './echoes';
 import { saveGame, saveRunSnapshot } from './persistence';
+import { reportHardSave } from './devvitBridge';
 import { SMUGGLER_MIN_LOOP_COUNT, SMUGGLER_SPAWN_CHANCE } from './content';
 import { resetVisualLerps } from './animation';
 import { resetCameraLerp } from './camera';
@@ -108,6 +109,7 @@ export function warpToFloor(state: GameState, floor: number): void {
   enterFloor(state, floor);
   onFloorEntered(state);
   saveGame(state);
+  reportHardSave(state);
   // Save immediately to resume here.
   saveRunSnapshot(state);
 }

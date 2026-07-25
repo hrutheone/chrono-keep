@@ -45,6 +45,11 @@ const attacks = new Map<string, AttackPulse>();
 const ghosts = new Map<string, Ghost>();
 const visualPositions = new Map<string, VisualPos>();
 
+// Real elapsed time for the current frame, in seconds; clamped so a backgrounded
+// tab resuming after seconds/minutes doesn't snap-lerp everything in one frame.
+let lastFrameTime: number | null = null;
+let frameDt = 1 / 60;
+
 /** Clears all entity visual-lerp state; call on floor/hub transitions to avoid a cross-map swoosh. */
 export function resetVisualLerps(): void {
   visualPositions.clear();
@@ -78,6 +83,8 @@ function updateOne(id: string, hp: number, now: number): void {
 /** Call once per render frame, before drawing, with the live player + enemies. */
 export function updateAnimations(state: GameState): void {
   const now = performance.now();
+  frameDt = lastFrameTime === null ? 1 / 60 : Math.min((now - lastFrameTime) / 1000, 0.1);
+  lastFrameTime = now;
   updateOne(PLAYER_ID, state.run.currentHp, now);
 
   const liveIds = new Set([PLAYER_ID]);
@@ -266,11 +273,13 @@ export function getEntityVisual(id: string, logicalX: number, logicalY: number):
   const track = getTrack(id);
   const pos = getVisualPos(id, logicalX, logicalY);
 
-  // Spring lerp: chase the logical (grid-snapped) position, closing 30% of the gap each frame.
+  // Spring lerp: chase the logical (grid-snapped) position, closing SPRING_RATE's
+  // fraction of the gap per 1/60s of real time, not per render call.
+  const springFactor = 1 - Math.pow(1 - SPRING_RATE, frameDt * 60);
   if (Math.abs(logicalX - pos.x) < 0.01) pos.x = logicalX;
-  else pos.x += (logicalX - pos.x) * SPRING_RATE;
+  else pos.x += (logicalX - pos.x) * springFactor;
   if (Math.abs(logicalY - pos.y) < 0.01) pos.y = logicalY;
-  else pos.y += (logicalY - pos.y) * SPRING_RATE;
+  else pos.y += (logicalY - pos.y) * springFactor;
 
   let tileX = pos.x;
   let tileY = pos.y;

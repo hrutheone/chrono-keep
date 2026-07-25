@@ -102,6 +102,7 @@ export function loadRunSnapshot(): GameState['run'] | null {
     if (typeof parsed.currentFloor !== 'number' || parsed.currentFloor < 0 || parsed.currentFloor > 99) return null;
     if (typeof parsed.playerX !== 'number' || typeof parsed.playerY !== 'number') return null;
     if (!Array.isArray(parsed.inventory) || !Array.isArray(parsed.activeSkills)) return null;
+    if (typeof parsed.turnCount !== 'number') parsed.turnCount = 0;
     return parsed as GameState['run'];
   } catch {
     return null;

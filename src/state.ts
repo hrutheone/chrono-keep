@@ -52,6 +52,7 @@ export function createNewGameState(): GameState {
       currentStamina: BASE_MAX_STAMINA,
       maxStamina: BASE_MAX_STAMINA,
       turnsRemaining: BASE_TURNS,
+      turnCount: 0,
       currentFloor: 1,
       startFloor: 1,
       floorEvent: 'NONE',
@@ -142,6 +143,7 @@ export function resetRunForNewLoop(state: GameState, startFloor = 1): void {
   state.run.maxStamina = BASE_MAX_STAMINA + state.persistent.maxStamUpgrade * 2;
   state.run.currentStamina = state.run.maxStamina;
   state.run.turnsRemaining = floorTurnLimit(state);
+  state.run.turnCount = 0;
   state.run.startFloor = startFloor;
   state.run.floorEvent = 'NONE';
   state.run.pacifistKills = 0;

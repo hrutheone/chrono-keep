@@ -241,6 +241,7 @@ function runTickPhase(state: GameState, actionKind: PlayerActionKind): void {
     return;
   }
 
+  state.run.turnCount += 1;
   const penalty = actionKind === 'move' && chilledBeforeTick ? 2 : 1;
   if (state.run.floorEvent === 'BLEEDING') {
     state.run.currentHp = Math.max(0, state.run.currentHp - penalty);

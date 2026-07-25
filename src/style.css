@@ -1028,6 +1028,7 @@ body {
     position: static;
     order: 1;
     flex-shrink: 0;
+    padding-top: env(safe-area-inset-top, 0px);
   }
 
   #game {
@@ -1044,6 +1045,9 @@ body {
      * of height:auto's plain aspect-from-width math stretching it to fill
      * whatever box max-height leaves once it's the tighter of the two. */
     object-fit: contain;
+    /* A swipe on the game view itself (not a touch-controls button) must not
+     * hand off to the webview's own pull-to-refresh/back-navigation gesture. */
+    touch-action: none;
   }
 
   #hud-bottom {

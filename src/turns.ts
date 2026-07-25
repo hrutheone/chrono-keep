@@ -3,6 +3,7 @@
 import type { GameState } from './types';
 
 export function spendTurn(state: GameState): void {
+  state.run.turnCount += 1;
   if (state.run.floorEvent === 'BLEEDING') {
     state.run.currentHp = Math.max(0, state.run.currentHp - 1);
     state.run.floorDamageTaken = true;

@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Chrono-Keep — Devvit Mock Harness</title>
+<style>
+  body { margin: 0; font-family: monospace; background: #111; color: #eee; display: flex; height: 100vh; }
+  #game-pane { flex: 2; display: flex; flex-direction: column; border-right: 2px solid #444; }
+  #game-pane iframe { flex: 1; border: 0; background: #000; }
+  #control-pane { flex: 1; padding: 12px; overflow-y: auto; }
+  h2 { font-size: 13px; text-transform: uppercase; color: #8f8; margin: 16px 0 6px; }
+  label { display: block; font-size: 12px; margin: 8px 0 2px; }
+  input { width: 100%; box-sizing: border-box; background: #222; color: #eee; border: 1px solid #444; padding: 4px; }
+  button { margin-top: 8px; padding: 6px 10px; cursor: pointer; }
+  #log { font-size: 11px; white-space: pre-wrap; background: #000; padding: 8px; height: 300px; overflow-y: auto; border: 1px solid #333; }
+  .url-bar { padding: 4px 8px; background: #222; font-size: 11px; }
+</style>
+</head>
+<body>
+  <div id="game-pane">
+    <div class="url-bar">http://localhost:5173/ (start with `npm run dev` first)</div>
+    <iframe id="game-frame" src="http://localhost:5173/"></iframe>
+  </div>
+  <div id="control-pane">
+    <h2>Mock Devvit Host</h2>
+    <label for="user-id">Mock userId</label>
+    <input id="user-id" value="t2_mockuser" />
+    <label for="username">Mock username</label>
+    <input id="username" value="MockWarden" />
+    <label for="turn-count">Mock Redis hard-save turnCount</label>
+    <input id="turn-count" type="number" value="0" />
+    <button id="reload-btn">Reload game iframe</button>
+    <button id="clear-btn">Clear mock Redis</button>
+    <h2>Message Log</h2>
+    <div id="log"></div>
+  </div>
+
+<script>
+// Fakes the Devvit host side of devvitBridge.ts's postMessage contract: CK_REQUEST_INIT ->
+// CK_INIT_STATE, and CK_SAVE_HARD received from the client. Backed by localStorage so a
+// reload can simulate "server already has a hard save."
+const REDIS_KEY = 'devvit-mock-redis-v1';
+const frame = document.getElementById('game-frame');
+const logEl = document.getElementById('log');
+const turnCountInput = document.getElementById('turn-count');
+
+function log(direction, data) {
+  const line = `[${new Date().toLocaleTimeString()}] ${direction} ${JSON.stringify(data)}\n`;
+  logEl.textContent += line;
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function loadMockRedis() {
+  try {
+    const raw = localStorage.getItem(REDIS_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveMockRedis(persistent, turnCount) {
+  localStorage.setItem(REDIS_KEY, JSON.stringify({ persistent, turnCount }));
+  turnCountInput.value = String(turnCount);
+}
+
+window.addEventListener('message', (ev) => {
+  const data = ev.data;
+  if (!data || typeof data.type !== 'string') return;
+
+  if (data.type === 'CK_REQUEST_INIT') {
+    log('<- client', data);
+    const redis = loadMockRedis();
+    const response = {
+      type: 'CK_INIT_STATE',
+      persistent: redis ? redis.persistent : null,
+      turnCount: redis ? redis.turnCount : Number(turnCountInput.value) || 0,
+      user: { userId: document.getElementById('user-id').value, username: document.getElementById('username').value },
+    };
+    log('-> client', response);
+    ev.source.postMessage(response, '*');
+  } else if (data.type === 'CK_SAVE_HARD') {
+    log('<- client', data);
+    saveMockRedis(data.persistent, data.turnCount);
+  }
+});
+
+document.getElementById('reload-btn').addEventListener('click', () => {
+  logEl.textContent = '';
+  frame.src = frame.src;
+});
+
+document.getElementById('clear-btn').addEventListener('click', () => {
+  localStorage.removeItem(REDIS_KEY);
+  turnCountInput.value = '0';
+  log('mock', { cleared: true });
+});
+</script>
+</body>
+</html>

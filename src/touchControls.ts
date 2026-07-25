@@ -67,4 +67,8 @@ export function installTouchControls(): void {
 
   // Prevent browser default touch actions.
   root.addEventListener('touchmove', (ev) => ev.preventDefault(), { passive: false });
+
+  // A swipe starting on the game view itself (not a touch-controls button) must not
+  // hand off to the webview's own pull-to-refresh/edge back-navigation gesture.
+  document.querySelector('#app')?.addEventListener('touchmove', (ev) => ev.preventDefault(), { passive: false });
 }

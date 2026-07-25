@@ -61,6 +61,8 @@ export interface GameState {
     currentStamina: number;
     maxStamina: number;
     turnsRemaining: number;
+    // Monotonically increasing across the whole run; used to reconcile local vs. server saves.
+    turnCount: number;
     currentFloor: number;
     startFloor: number;
     floorEvent: FloorEvent;

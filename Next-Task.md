@@ -13,13 +13,13 @@ Auto-run git add, commit, and push for each update.
 
 ## Jobs Done Previous Session
 Summary of changes:
-- Fixed a fatal PWA caching issue where an outdated `index.html` would request missing JS/CSS bundles. `sw.js` now uses a "Network-First" strategy and properly clears old caches on activation.
-- Upgraded the particle system in `animation.ts` to include gravity and floor bouncing physics (z-axis logic).
-- Increased death particle burst density (10-20 particles) and slightly lengthened their lifespan.
-- Implemented CSS-based `.shake` screen shake animation in `style.css`.
-- Triggered `triggerScreenShake()` in `combat.ts` during critical hits (elemental combos) and heavy boss damage (>10 or from Chrono-Lich).
-- Restyled `.action-log` in `index.css` (mobile) to show a single wrapping line with fixed height.
-- Bound click listener to action-log HUD element to open the new modal.
+- Implemented reddit-port.md Phase 0 (pre-port polish) and Phase 1 (local Devvit mock harness), verified live via Chrome DevTools MCP against the running dev server:
+  - Added `turnCount` to `GameState['run']`, incrementing in both existing turn-spending paths (`turnController.ts`'s `runTickPhase`, and `turns.ts`'s `spendTurn` for inventory item costs) — the plan's original assumption that `spendTurn()` alone was "the" choke point was wrong; verified live and fixed.
+  - Fixed `animation.ts`'s entity spring-lerp from frame-count-based to delta-time-based (exponential decay), with a clamped per-frame `dt` computed inside `updateAnimations()`.
+  - Fixed mobile canvas scaling in `main.ts` to snap to an integer multiple instead of stretching fluidly via CSS.
+  - Added `touch-action: none` on `#game` and a `touchmove` guard on `#app`; added `safe-area-inset-top` padding to `#hud-top`.
+  - Fixed the audio-unlock gate: touch-only input never fired a real `click` (touchControls.ts's `preventDefault()` suppresses it), so `initAudio()` now also listens for `touchstart`/`pointerdown`. Switched BGM from eager-decode-all-6-tracks to lazy per-track decode with eviction of the previous track's buffer (confirmed via network panel: only the active track is fetched/decoded, re-fetched on return since it's evicted).
+  - Added `src/devvitBridge.ts` (the only module owning `postMessage` traffic) plus `devvit-mock/index.html`, a static mock-host harness. Verified end-to-end: boot reconciliation round-trip (`CK_REQUEST_INIT`/`CK_INIT_STATE`) and hard-save reporting (`CK_SAVE_HARD`, wired at `hub.ts`'s `warpToFloor`) both confirmed working live, including across a mock-Redis-backed reload.
 
 ## Todo This Session
 Nothing queued — awaiting next direction

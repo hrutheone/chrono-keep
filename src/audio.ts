@@ -129,8 +129,6 @@ function ensureContext(): AudioContext {
     // Exposed for verification (Chrome DevTools MCP evaluate_script) and debugging.
     (window as unknown as { __chronoAudio: { ctx: AudioContext; master: GainNode; musicGain: GainNode; musicFilter: BiquadFilterNode } }).__chronoAudio =
       { ctx, master, musicGain, musicFilter };
-
-    void loadAllAudio();
   }
   if (ctx.state === 'suspended') void ctx.resume();
   return ctx;
@@ -142,9 +140,16 @@ export function initAudio(): void {
     ensureContext();
     window.removeEventListener('keydown', unlock);
     window.removeEventListener('click', unlock);
+    window.removeEventListener('touchstart', unlock);
+    window.removeEventListener('pointerdown', unlock);
   };
   window.addEventListener('keydown', unlock, { once: true });
   window.addEventListener('click', unlock, { once: true });
+  // touchControls.ts buttons preventDefault() their touchstart, which suppresses the
+  // browser's synthetic follow-up click/mousedown — so touch-only play never fires
+  // 'click' here. touchstart/pointerdown catch that gesture directly.
+  window.addEventListener('touchstart', unlock, { once: true });
+  window.addEventListener('pointerdown', unlock, { once: true });
 }
 
 /** Test/debug hook: forces the context open without waiting for a gesture. */
@@ -490,38 +495,46 @@ const AUDIO_URLS: Record<string, string> = {
   final_boss: finalBossUrl,
 };
 
+// Only the active (and in-flight-requested) track's decoded buffer is kept resident —
+// decoding all 6 tracks upfront risks pushing a webview over its memory ceiling.
 const audioBuffers = new Map<string, AudioBuffer>();
-let audioLoadStarted = false;
+const bufferLoads = new Map<string, Promise<AudioBuffer>>();
 
-/** Fetches and decodes every BGM track; safe to call once the AudioContext exists. */
-async function loadAllAudio(): Promise<void> {
-  if (audioLoadStarted || !ctx) return;
-  audioLoadStarted = true;
-  const decodeCtx = ctx;
-  await Promise.all(
-    Object.entries(AUDIO_URLS).map(async ([name, url]) => {
-      const res = await fetch(url);
-      const arrayBuffer = await res.arrayBuffer();
-      const buffer = await decodeCtx.decodeAudioData(arrayBuffer);
-      audioBuffers.set(name, buffer);
-    }),
-  );
+/** Lazily fetches+decodes one BGM track; concurrent requests for the same track share one decode. */
+function ensureBuffer(name: string): Promise<AudioBuffer> | null {
+  if (!ctx) return null;
+  const cached = audioBuffers.get(name);
+  if (cached) return Promise.resolve(cached);
+  let pending = bufferLoads.get(name);
+  if (!pending) {
+    const decodeCtx = ctx;
+    pending = fetch(AUDIO_URLS[name])
+      .then((res) => res.arrayBuffer())
+      .then((arrayBuffer) => decodeCtx.decodeAudioData(arrayBuffer))
+      .then((buffer) => {
+        audioBuffers.set(name, buffer);
+        bufferLoads.delete(name);
+        return buffer;
+      });
+    bufferLoads.set(name, pending);
+  }
+  return pending;
 }
 
 let activeSource: AudioBufferSourceNode | null = null;
 let activeTrackName: string | null = null;
+// Guards a late-resolving decode from starting a track a newer request has since replaced.
+let requestedTrackName: string | null = null;
 
-/** Starts looping `bufferName`; no-ops if it's already the active track (still-loading buffers are silently skipped). */
-function playTrack(bufferName: string): void {
+function startTrack(bufferName: string, buffer: AudioBuffer): void {
   if (!ctx || !musicFilter) return;
   if (activeTrackName === bufferName && activeSource) return;
-  const buffer = audioBuffers.get(bufferName);
-  if (!buffer) return;
-
   if (activeSource) {
     activeSource.stop();
     activeSource.disconnect();
   }
+  // Evict the outgoing track's buffer — only the new active track stays decoded in memory.
+  if (activeTrackName && activeTrackName !== bufferName) audioBuffers.delete(activeTrackName);
   const src = ctx.createBufferSource();
   src.buffer = buffer;
   src.loop = true;
@@ -529,6 +542,22 @@ function playTrack(bufferName: string): void {
   src.start();
   activeSource = src;
   activeTrackName = bufferName;
+}
+
+/** Starts looping `bufferName`, decoding it on demand; no-ops if it's already the active track. */
+function playTrack(bufferName: string): void {
+  if (!ctx || !musicFilter) return;
+  if (activeTrackName === bufferName && activeSource) return;
+  requestedTrackName = bufferName;
+  const cached = audioBuffers.get(bufferName);
+  if (cached) {
+    startTrack(bufferName, cached);
+    return;
+  }
+  ensureBuffer(bufferName)?.then((buffer) => {
+    if (requestedTrackName !== bufferName) return;
+    startTrack(bufferName, buffer);
+  });
 }
 
 function stopTrack(): void {
@@ -605,7 +634,9 @@ export function updateMusicForState(state: GameState): void {
     stopTrack();
   } else {
     playTrack(choice.track);
-    if (activeSource && activeSource.playbackRate.value !== choice.rate) {
+    // Guarded by track name: while choice.track is still decoding, activeSource is the
+    // outgoing track and must keep its own rate, not jump to the incoming one's.
+    if (activeTrackName === choice.track && activeSource && activeSource.playbackRate.value !== choice.rate) {
       activeSource.playbackRate.value = choice.rate;
     }
     // Tactical muffling: overlay menus duck the filter regardless of the underlying track's own value.

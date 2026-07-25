@@ -14,6 +14,7 @@ import { initAudio, installAudioControls, setMasterVolume, setMuted, setMusicMut
 import { initHud, updateHud } from './hud';
 import { initMenus, updateMenus } from './menus';
 import { installTouchControls } from './touchControls';
+import { initDevvitBridge } from './devvitBridge';
 import type { GameState } from './types';
 
 // Desktop's internal resolution: a 30x20-tile viewport. Camera pans this view.
@@ -30,6 +31,7 @@ const MOBILE_VIEW_H = MOBILE_VIEW_TILES_H * TILE_SIZE;
 export const state: GameState = createNewGameState();
 const savedPersistent = loadPersistent();
 if (savedPersistent) state.persistent = savedPersistent;
+initDevvitBridge(state);
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game')!;
 const ctx = canvas.getContext('2d')!;
@@ -53,9 +55,15 @@ function resize(): void {
   }
 
   if (mobile) {
-    // Mobile portrait: let style.css size the canvas responsively.
+    // Measure the fluid letterboxed box style.css's flow layout would give at
+    // this viewport, then snap to the nearest integer scale so the 16x16
+    // pixel art stays crisp instead of stretching to a fractional size.
     canvas.style.width = '';
     canvas.style.height = '';
+    const box = canvas.getBoundingClientRect();
+    const scale = Math.max(1, Math.floor(Math.min(box.width / viewW, box.height / viewH)));
+    canvas.style.width = `${viewW * scale}px`;
+    canvas.style.height = `${viewH * scale}px`;
   } else {
     const scale = Math.max(
       1,
