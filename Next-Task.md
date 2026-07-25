@@ -23,25 +23,47 @@ Summary of changes:
   - Updated `Game.md`'s Weapons/Monsters/Cursed Rifts/Echo Economy sections to match the new values.
 
 ## Todo This Session
-Follow-up balance pass on two leftovers flagged (not fixed) at the end of the 10x weapon curve overhaul:
+Follow-up balance pass on two leftovers flagged at the end of the 10x weapon curve overhaul. Reviewed with advisor and amended with floor-scaled/weighted-roll requirements — item 1's implementation approach is now a decision, not an open question.
 
 ### 1. Mini-Boss signature-weapon drops break the tier curve on Mk I floors
-`combat.ts`'s `MINI_BOSS_WEAPON` map (~line 302) drops the *same* signature weapon every time a mini-boss dies, regardless of which Mk stage it was:
-- `INFERNO_GOLEM: 'IFRITS_BLADE'` (ATK 11, Mid Tier) — including at F10 Mk I, where the Early Tier chest pool caps at ATK 6.
-- `STORM_CALLER: 'BLITZ_WHIP'` (ATK 16, Late Tier) — including at F20 Mk I.
-- `GLACIAL_KNIGHT: 'ICE_BRAND'` (ATK 16, Late Tier) — including at F30 Mk I.
+`combat.ts`'s `MINI_BOSS_WEAPON` map (~line 302) drops the *same* signature weapon every time a mini-boss dies, regardless of Mk stage:
+- `INFERNO_GOLEM: 'IFRITS_BLADE'` (native ATK 11, Mid Tier) at F10/F40/F70.
+- `STORM_CALLER: 'BLITZ_WHIP'` (native ATK 16, Late Tier) at F20/F50/F80.
+- `GLACIAL_KNIGHT: 'ICE_BRAND'` (native ATK 16, Late Tier) at F30/F60/F90.
 
-Storm-Caller and Glacial-Knight are actually worse offenders than the one flagged (Late Tier weapon at F20/F30, a bigger jump than Golem's Mid Tier one at F10).
+Every other reward channel in the game scales with floor — chest rolls (`rollWeaponForDepth`), Elite drops (`rollWeaponForDepth` + `applyEliteWeaponBonus`), even the boss's own HP/ATK/DEF (`BOSS_EVOLUTION`) — except this one hardcoded weapon key. The mini-boss kill already gets a jackpot bundle (Anchor + 2 Time Shards + 25 Echoes, `combat.ts` ~446-458) independent of the weapon, so the weapon spike reads as an oversight rather than intentional generosity. **Confirm this reading before implementing** — if the F10 Ifrit's Blade is deliberate, the actual fix is documenting it in Game.md instead, not touching `combat.ts`.
 
-**Plan:** keep each boss's signature weapon identity (name/passive/lore stay the same — that's the flavor payoff), but scale the *ATK value* of the drop to the Mk stage instead of always using the weapon's flat base ATK from `WEAPONS`. In `killEnemy`'s mini-boss branch (`combat.ts` ~line 446-458), where `createWeapon(weaponKey, ...)` is called before `applyEliteWeaponBonus`: after creating the weapon, override `weapon.atk` down for early Mk stages — e.g. Mk I drops at roughly Early Tier ceiling (~ATK 6), Mk II at roughly Mid Tier ceiling (~ATK 15), Mk III keeps the weapon's real (Late Tier) ATK. Use `miniBossRepeatNumber(state.run.currentFloor)` (from `arenas.ts`, already imported in similar files) to pick the stage. Store the reduction as a negative `upgradeBonus` or just set `.atk` directly — check how `itemDisplayName`/`itemMeltValue` read `upgradeBonus` before choosing, so the Inventory UI and melt value don't show something confusing like a signature weapon with a negative bonus suffix.
+**ATK clamp (decided):** clamp `weapon.atk` with `Math.min`, not a negative `upgradeBonus`. A negative `upgradeBonus` breaks two things at once: `itemMeltValue` (`content.ts` ~802-821) computes `baseAtk = w.atk - bonus`, so a negative bonus inflates the apparent base and makes `bonusMelt = bonus * 20` negative; and `itemDisplayName` (~803-810) only special-cases a *truthy* bonus, so it would render as `"Ifrit's Blade +-5"`. Setting `.atk` directly avoids both.
 
-### 2. Small flat ATK bonuses are noise at the new ATK-32 ceiling
-These were tuned against the old ATK 3-14 range and need roughly the same ~2.3x scale-up the weapon table got:
-- `BLOOD_ANVIL_ATK_BONUS = 2` (`content.ts`) — Cursed Rift's Blood-Infused Anvil event. Suggest 4-5.
-- Chrono-Anvil's "Upgrade" outcome, `state.run.equippedWeapon.atk += 2` / `upgradeBonus += 2` (`chronoAnvil.ts` line ~38-39). Suggest 4-5, matching whatever Blood Anvil lands on for consistency (both are "+X permanent ATK" events).
-- `ELITE_DROP_ATK_BONUS_EARLY/MID/LATE` ranges `[1,2]/[1,3]/[2,4]` (`content.ts` ~line 1212-1214). Suggest roughly doubling each range's min/max.
-- `GIANTS_ANVIL_ATK = 5` (`inventory.ts` line 133) — also update its label text at `content.ts`'s `RELIC_EFFECT_TEXT.giants_anvil` (~line 733, currently "ATK: +5 flat") to match. Suggest 10-12.
+Rule: after `createWeapon(weaponKey, ...)` but **before** `applyEliteWeaponBonus` runs (`combat.ts`'s mini-boss branch), clamp down by `miniBossRepeatNumber(state.run.currentFloor)` (from `arenas.ts`):
+```
+Mk I (repeat 0): weapon.atk = Math.min(weapon.atk, 6)   // Early Tier ceiling
+Mk II (repeat 1): weapon.atk = Math.min(weapon.atk, 15) // Mid Tier ceiling
+Mk III (repeat 2): no clamp                              // native ATK stands
+```
+Clamping *before* `applyEliteWeaponBonus` (not after) matters: the bonus should land on top of the tier-appropriate base, same as a normal chest-tier weapon roll, not get swallowed by a clamp applied afterward. This is also a plain no-op for weapons whose native ATK already sits at or under the stage's cap (e.g. Ifrit's Blade at Mk II/III) — no boss-specific special-casing needed.
 
-After changing these, spot-check `itemMeltValue` (`content.ts`) and the Inventory/Status tab displays still read sanely with the new bonus magnitudes (they scale off `upgradeBonus`, so should just work, but verify live).
+**Naming:** add the Mk stage as a Roman-numeral suffix on display (e.g. "Ice Brand II"), so the player can tell which encounter a copy came from. Don't mutate `Weapon.name` itself — `loreForItem`, `itemMeltValue`, and `rollSameTierWeapon` all look up a weapon by matching `WEAPONS[key].name === w.name`, and a renamed item would silently fail every one of those lookups (lore disappears, melt value loses its tier bonus, Chrono-Anvil sidegrades break). Instead add a small optional field (e.g. `Weapon.bossStage?: 1 | 2 | 3`, set alongside the ATK clamp above) and extend `itemDisplayName` (`content.ts` ~803-810) to append it — after the existing `+N` bonus suffix, e.g. `"Ice Brand II +2"` — so the two suffixes compose instead of colliding.
 
-**Verification:** dev-warp + Cheat Mode as used last session; no new mechanics here, just numeric tuning, so a typecheck plus a quick visual check of a Mk I mini-boss kill's dropped weapon ATK and a Blood Anvil/Chrono-Anvil accept is enough — no need to re-drive every boss floor again.
+### 2. Flat/random ATK bonuses need to scale with floor and skew low, not just get bigger
+Tuned against the old ATK 3-14 range; amended to scale with depth and to weight rolls toward the low end instead of a flat or uniform bump:
+
+- **Blood-Infused Anvil** (`BLOOD_ANVIL_ATK_BONUS`, `content.ts`) and **Chrono-Anvil's "Upgrade" outcome** (`upgradeBonus += 2` / `atk += 2`, `chronoAnvil.ts` ~line 38-39): both become floor-scaled, 1-8, and matched to the same formula so the two "+X permanent ATK" events feel consistent. Add one shared helper next to `depthMultiplier`/`biomeOf` in `content.ts` (same file already doing floor-based scaling for Echo bounties):
+  ```
+  export function floorScaledAtkBonus(floorNumber: number): number {
+    return Math.min(8, 1 + Math.floor((floorNumber - 1) / 14));
+  }
+  ```
+  This gives floor 1 -> 1, floor 99 -> 8, in 8 even steps. Call it from both `resolveBloodAnvil` (`cursedRift.ts`) and the Chrono-Anvil "Upgrade" branch (`chronoAnvil.ts`), passing `state.run.currentFloor`.
+
+- **Elite weapon drops** (`ELITE_DROP_ATK_BONUS_EARLY/MID/LATE`, `content.ts` ~line 1212-1214): new ranges Early `[1,3]`, Mid `[1,6]`, Late `[1,8]`. Also reroll `getRandomBonus` (`content.ts`, next to those constants) so higher values in a range are rarer than lower ones — a flat `[1,3]` roll shouldn't hand out +3 as often as +1. Skew with a quadratic bias toward the low end instead of building a full weighted table:
+  ```
+  function getRandomBonus(min: number, max: number): number {
+    return min + Math.floor((max - min + 1) * Math.random() ** 2);
+  }
+  ```
+  Squaring `Math.random()` before scaling concentrates rolls near `min`; e.g. for `[1,8]`, +1/+2 come up far more often than +7/+8. Sanity-check the distribution live (roll it ~20 times via Dev Tools' Elite spawns, or a throwaway console loop) rather than trusting the formula blind.
+
+After changing these, spot-check `itemMeltValue` and the Inventory/Status tab displays still read sanely with the new bonus magnitudes (they scale off `upgradeBonus`, so should just work, but verify live).
+
+**Verification:** dev-warp + Cheat Mode as used last session; typecheck, then a quick visual check of a Mk I mini-boss kill's dropped weapon (ATK clamp + "II"/"III" suffix), a Blood Anvil/Chrono-Anvil accept at a low vs. high floor (confirm the 1-8 scaling), and a handful of Elite kills to eyeball the low-end skew — no need to re-drive every boss floor again.
