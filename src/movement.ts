@@ -171,6 +171,13 @@ export function tryMove(state: GameState, dx: number, dy: number, facing: Facing
   if (tryHubBump(state, nx, ny)) return Promise.resolve();
 
   if (!isWalkableAt(state, nx, ny)) {
+    // Glacial-Knight Mk III's permanent Ice-Barricades only give way to Fire.
+    const barricade = state.dungeon.expiringTiles.find((t) => t.x === nx && t.y === ny && t.tileType === TILE.WALL);
+    if (barricade && state.run.equippedWeapon?.element === 'FIRE') {
+      state.dungeon.expiringTiles = state.dungeon.expiringTiles.filter((t) => t !== barricade);
+      logLine(state, 'The Ice-Barricade melts away in the heat.');
+      return resolvePlayerTurn(state, 'move');
+    }
     // Handle Vanish charge.
     if (state.run.vanishCharges > 0) {
       state.run.vanishCharges -= 1;

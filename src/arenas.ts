@@ -1,6 +1,6 @@
 // Mini-Boss Arenas: fixed, hand-authored layouts for boss floors.
 
-import { createEnemy, discoverEnemy, scaleEnemyForNgPlus } from './content';
+import { BOSS_EVOLUTION, createEnemy, discoverEnemy, scaleEnemyForNgPlus } from './content';
 import { TILE } from './mapgen';
 import { DUNGEON_SIZE, floorTurnLimit } from './state';
 import { resetVisualLerps } from './animation';
@@ -23,15 +23,9 @@ export function archetypeForFloor(floor: number): MiniBossKind {
   return CYCLE[Math.floor((floor - 10) / 10) % 3];
 }
 
-/** Returns the repeat number of the mini-boss based on floor. */
+/** Returns the repeat number (0 = Mk I, 1 = Mk II, 2 = Mk III) of the mini-boss based on floor. */
 export function miniBossRepeatNumber(floor: number): number {
   return Math.floor((floor - 10) / 30);
-}
-
-/** Empowered-variant scaling multiplier. */
-export function miniBossRepeatMultiplier(floor: number): { hp: number; attack: number } {
-  const n = miniBossRepeatNumber(floor);
-  return { hp: Math.pow(2.5, n), attack: Math.pow(1.6, n) };
 }
 
 const ARENA_W = 20;
@@ -88,20 +82,21 @@ function addGolemFeature(layout: ArenaLayout): void {
   }
 }
 
+/** The 4 copper cover-pillar coordinates in Storm-Caller's arena (Mk II Magnetic Pull's targets, Mk III Overload Rain's shelter). */
+export const STORM_CALLER_PILLARS: readonly [number, number][] = [
+  [ARENA_X + 4, ARENA_Y + 5],
+  [ARENA_X + ARENA_W - 5, ARENA_Y + 5],
+  [ARENA_X + 4, ARENA_Y + ARENA_H - 5],
+  [ARENA_X + ARENA_W - 5, ARENA_Y + ARENA_H - 5],
+];
+
 /** Add pillar cover for Storm-Caller's arena. */
 function addStormCallerFeature(layout: ArenaLayout): void {
-  const pillars: [number, number][] = [
-    [ARENA_X + 4, ARENA_Y + 5],
-    [ARENA_X + ARENA_W - 5, ARENA_Y + 5],
-    [ARENA_X + 4, ARENA_Y + ARENA_H - 5],
-    [ARENA_X + ARENA_W - 5, ARENA_Y + ARENA_H - 5],
-  ];
-  
-  for (const [x, y] of pillars) {
+  for (const [x, y] of STORM_CALLER_PILLARS) {
     layout.tiles[y][x] = TILE.WALL;
-    // ติดคบเพลิงที่พื้นด้านล่างของเสาแต่ละต้น (ชดเชยความเป็นจุดบล็อก) 
+    // ติดคบเพลิงที่พื้นด้านล่างของเสาแต่ละต้น (ชดเชยความเป็นจุดบล็อก)
     // เพื่อให้แสงวูบวาบส่องทะลุเสาออกมาเป็นจุดๆ ในจังหวะหลบสายฟ้า
-    layout.tiles[y + 1][x] = TILE.TORCH; 
+    layout.tiles[y + 1][x] = TILE.TORCH;
   }
 }
 
@@ -111,6 +106,11 @@ const ARENA_FEATURES: Partial<Record<MiniBossKind, (layout: ArenaLayout) => void
   STORM_CALLER: addStormCallerFeature,
 };
 
+/** Floor 90 only: Glacial-Knight Mk III's Permafrost Storm makes Chilled movement burn extra Turns. */
+export function isPermafrostStormFloor(floor: number): boolean {
+  return archetypeForFloor(floor) === 'GLACIAL_KNIGHT' && miniBossRepeatNumber(floor) === 2;
+}
+
 /** Installs the Arena at `floor` into game state. */
 export function enterArenaFloor(state: GameState, floor: number): void {
   resetVisualLerps();
@@ -119,11 +119,14 @@ export function enterArenaFloor(state: GameState, floor: number): void {
   const kind = archetypeForFloor(floor);
   ARENA_FEATURES[kind]?.(layout);
 
-  const mult = miniBossRepeatMultiplier(floor);
+  const evolution = BOSS_EVOLUTION[floor];
   const boss = createEnemy(kind, `arena-${floor}-boss`, layout.bossX, layout.bossY);
-  boss.hp = Math.round(boss.hp * mult.hp);
-  boss.maxHp = boss.hp;
-  boss.attack = Math.round(boss.attack * mult.attack);
+  if (evolution) {
+    boss.hp = evolution.hp;
+    boss.maxHp = evolution.hp;
+    boss.attack = evolution.attack;
+    boss.defense = evolution.defense;
+  }
   boss.awake = true; // No sneaking up on a mini-boss.
   scaleEnemyForNgPlus(boss, state.persistent.ngPlusLevel);
   discoverEnemy(state, boss.kind);

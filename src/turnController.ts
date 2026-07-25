@@ -4,6 +4,7 @@ import { applyEnemyStatus, applyPlayerStatus, computeDamage, consumeHitStopFlag,
 import { runEnemyPhase, tickBossRewind } from './enemyAI';
 import { TILE, effectiveTileAt } from './mapgen';
 import { HUB_FLOOR, enterHub } from './hub';
+import { isPermafrostStormFloor } from './arenas';
 import { resetRunForNewLoop } from './state';
 import { logLine } from './turns';
 import { markFloorDamageTaken } from './echoes';
@@ -242,7 +243,13 @@ function runTickPhase(state: GameState, actionKind: PlayerActionKind): void {
   }
 
   state.run.turnCount += 1;
-  const penalty = actionKind === 'move' && chilledBeforeTick ? 2 : 1;
+  let penalty = actionKind === 'move' && chilledBeforeTick ? 2 : 1;
+  // Glacial-Knight Mk III's Permafrost Storm: Chilled movement burns extra Turns to the blizzard snow.
+  const PERMAFROST_STORM_EXTRA_PENALTY = 2;
+  if (actionKind === 'move' && chilledBeforeTick && isPermafrostStormFloor(state.run.currentFloor)) {
+    penalty += PERMAFROST_STORM_EXTRA_PENALTY;
+    logLine(state, `The blizzard snow drags at your frozen limbs — -${PERMAFROST_STORM_EXTRA_PENALTY} Turns!`);
+  }
   if (state.run.floorEvent === 'BLEEDING') {
     state.run.currentHp = Math.max(0, state.run.currentHp - penalty);
     markFloorDamageTaken(state);

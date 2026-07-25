@@ -2,14 +2,28 @@
 
 import { createEnemy, discoverEnemy, ENEMY_NAME, scaleEnemyForNgPlus } from './content';
 import type { EnemyKind } from './content';
-import { applyPlayerStatus, enemyAttackPlayer, killEnemy } from './combat';
+import { applyPlayerStatus, computeDamage, enemyAttackPlayer, killEnemy, playerElement } from './combat';
 import { isWalkableAt, TILE } from './mapgen';
-import { miniBossRepeatNumber } from './arenas';
+import { miniBossRepeatNumber, STORM_CALLER_PILLARS } from './arenas';
+import { totalDef } from './inventory';
+import { markFloorDamageTaken } from './echoes';
 import { logLine } from './turns';
 import { playBossTelegraphSfx } from './audio';
-import { notifyBeam } from './animation';
+import { notifyBeam, triggerScreenShake } from './animation';
+import { notifyFloatingText } from './floatingText';
 import { ELEMENT_COLOR } from './palette';
 import type { Enemy, GameState } from './types';
+
+/** Direct unavoidable-unless-sheltered boss damage (Supernova/Overload Rain), bypassing the normal bump-attack path. */
+function dealDirectBossDamage(state: GameState, enemy: Enemy, rawAtk: number, label: string): void {
+  const dmg = computeDamage(rawAtk, totalDef(state), enemy.element, playerElement(state));
+  state.run.lastDamageSource = { kind: enemy.kind, element: enemy.element };
+  state.run.currentHp = Math.max(0, state.run.currentHp - dmg);
+  markFloorDamageTaken(state);
+  logLine(state, `${label} hits you for ${dmg}!`);
+  notifyFloatingText(state.run.playerX, state.run.playerY, `${dmg}`, 'damage');
+  triggerScreenShake();
+}
 
 const WAKE_RADIUS = 7;
 const ORTHO: ReadonlyArray<readonly [number, number]> = [
@@ -261,9 +275,8 @@ function castFirebomb(state: GameState, enemy: Enemy): void {
   });
 }
 
-/** Cast Magma Slam. */
-function castMagmaSlam(state: GameState, enemy: Enemy): void {
-  const radius = miniBossRepeatNumber(state.run.currentFloor) >= 1 ? 2 : 1;
+/** Cast Magma Slam: a `radius`-tile square AOE centered on the player (1 = 3x3, 2 = 5x5). */
+function castMagmaSlam(state: GameState, enemy: Enemy, radius: number): void {
   castAreaBomb(state, enemy, {
     radius,
     damageMultiplier: 1.5,
@@ -273,8 +286,111 @@ function castMagmaSlam(state: GameState, enemy: Enemy): void {
   });
 }
 
-/** Golem behavior. */
+/** Mk II: a cross/plus-shaped Magma Slam instead of a square. */
+function castMagmaSlamCross(state: GameState, enemy: Enemy): void {
+  const cx = state.run.playerX;
+  const cy = state.run.playerY;
+  const radius = 2;
+  const seen = new Set<string>();
+  for (let d = -radius; d <= radius; d++) {
+    for (const [tx, ty] of [[cx + d, cy], [cx, cy + d]] as const) {
+      const key = `${tx},${ty}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (!inBounds(state, tx, ty) || !isWalkableAt(state, tx, ty)) continue;
+      state.dungeon.telegraphTiles.push({
+        x: tx,
+        y: ty,
+        turnsUntil: AREA_BOMB_TELEGRAPH_TURNS,
+        payload: 'fire_aoe',
+        sourceAttack: Math.round(enemy.attack * 1.5),
+        hazard: tx === cx && ty === cy,
+        hazardTurns: 3,
+        isBossAoe: true,
+      });
+    }
+  }
+  logLine(state, `${ENEMY_NAME[enemy.kind]} rears back for a Cross Magma Slam!`);
+  playBossTelegraphSfx();
+}
+
+// Ember Aura: an instant (1-turn telegraph) pulse hitting the 8 tiles adjacent to the Golem itself.
+const EMBER_AURA_TELEGRAPH_TURNS = 1;
+
+/** Mk II: Ember Aura — a self-centered pulse, distinct from Magma Slam's player-centered AOE. */
+function castEmberAura(state: GameState, enemy: Enemy): void {
+  for (const [dx, dy] of ALL_8) {
+    const tx = enemy.x + dx;
+    const ty = enemy.y + dy;
+    if (!inBounds(state, tx, ty) || !isWalkableAt(state, tx, ty)) continue;
+    state.dungeon.telegraphTiles.push({
+      x: tx,
+      y: ty,
+      turnsUntil: EMBER_AURA_TELEGRAPH_TURNS,
+      payload: 'fire_aoe',
+      sourceAttack: Math.round(enemy.attack * 0.75),
+      isBossAoe: true,
+    });
+  }
+  logLine(state, `${ENEMY_NAME[enemy.kind]}'s Ember Aura flares!`);
+  playBossTelegraphSfx();
+}
+
+// Mk III Supernova: a 3-turn channel that wipes the player unless they shelter beside the spawned Obsidian Pillar.
+const SUPERNOVA_CHARGE_TURNS = 3;
+const SUPERNOVA_DAMAGE_MULT = 4;
+const supernovaCharge = new Map<string, { turnsLeft: number; pillarX: number; pillarY: number }>();
+
+function pruneSupernova(state: GameState): void {
+  const liveIds = new Set(state.dungeon.enemies.map((e) => e.id));
+  for (const id of supernovaCharge.keys()) if (!liveIds.has(id)) supernovaCharge.delete(id);
+}
+
+/** Finds a free tile near the player to raise the Obsidian Pillar on. */
+function findPillarSpot(state: GameState): { x: number; y: number } | null {
+  const offsets: readonly [number, number][] = [[2, 0], [-2, 0], [0, 2], [0, -2], [1, 1], [-1, -1], [1, -1], [-1, 1]];
+  for (const [dx, dy] of offsets) {
+    const tx = state.run.playerX + dx;
+    const ty = state.run.playerY + dy;
+    if (!inBounds(state, tx, ty) || !isWalkableAt(state, tx, ty)) continue;
+    if (state.dungeon.enemies.some((e) => e.x === tx && e.y === ty)) continue;
+    return { x: tx, y: ty };
+  }
+  return null;
+}
+
+function startSupernova(state: GameState, enemy: Enemy): void {
+  const spot = findPillarSpot(state);
+  if (!spot) return;
+  state.dungeon.expiringTiles.push({ x: spot.x, y: spot.y, turnsLeft: SUPERNOVA_CHARGE_TURNS + 1, tileType: TILE.WALL });
+  supernovaCharge.set(enemy.id, { turnsLeft: SUPERNOVA_CHARGE_TURNS, pillarX: spot.x, pillarY: spot.y });
+  logLine(state, `${ENEMY_NAME[enemy.kind]} channels a Supernova! Shelter behind the Obsidian Pillar!`);
+  playBossTelegraphSfx();
+}
+
+/** Ticks a pending Supernova. Returns true if the Golem is charging/just detonated (skip its normal action this turn). */
+function tickSupernova(state: GameState, enemy: Enemy): boolean {
+  const charge = supernovaCharge.get(enemy.id);
+  if (!charge) return false;
+  charge.turnsLeft -= 1;
+  if (charge.turnsLeft > 0) return true;
+
+  supernovaCharge.delete(enemy.id);
+  const sheltered = Math.abs(state.run.playerX - charge.pillarX) <= 1 && Math.abs(state.run.playerY - charge.pillarY) <= 1;
+  state.dungeon.expiringTiles = state.dungeon.expiringTiles.filter((t) => !(t.x === charge.pillarX && t.y === charge.pillarY));
+  if (sheltered) {
+    logLine(state, 'The Obsidian Pillar shields you from the Supernova!');
+    notifyFloatingText(charge.pillarX, charge.pillarY, 'SHELTERED', 'immune');
+  } else {
+    dealDirectBossDamage(state, enemy, enemy.attack * SUPERNOVA_DAMAGE_MULT, 'The Supernova');
+  }
+  return true;
+}
+
+/** Golem behavior — Mk I/II/III moveset selected by `miniBossRepeatNumber`. */
 function golemAct(state: GameState, enemy: Enemy): void {
+  if (tickSupernova(state, enemy)) return;
+
   const count = (activationCounters.get(enemy.id) ?? 0) + 1;
   activationCounters.set(enemy.id, count);
 
@@ -286,10 +402,41 @@ function golemAct(state: GameState, enemy: Enemy): void {
 
   const enraged = enemy.hp <= enemy.maxHp * 0.5;
   const slamCadence = enraged ? 4 : 5;
-  if (count % slamCadence === 0) {
-    castMagmaSlam(state, enemy);
-    return;
+  const repeat = miniBossRepeatNumber(state.run.currentFloor);
+
+  if (repeat === 0) {
+    if (count % slamCadence === 0) {
+      castMagmaSlam(state, enemy, 1);
+      return;
+    }
+  } else if (repeat === 1) {
+    if (count % slamCadence === 0) {
+      castMagmaSlamCross(state, enemy);
+      return;
+    }
+    if (count % 4 === 0) {
+      castEmberAura(state, enemy);
+      return;
+    }
+    if (count % 7 === 0 && state.dungeon.enemies.filter((e) => e.kind === 'ASH_FIEND').length < 2) {
+      summonAlly(state, enemy, 'ASH_FIEND', `${ENEMY_NAME[enemy.kind]} summons an Ash-Fiend!`);
+      return;
+    }
+  } else {
+    if (count % slamCadence === 0) {
+      castMagmaSlam(state, enemy, 2);
+      return;
+    }
+    if (count % 6 === 0) {
+      startSupernova(state, enemy);
+      return;
+    }
+    if (count % 8 === 0 && state.dungeon.enemies.filter((e) => e.kind === 'HELLFIRE_MAGUS').length < 2) {
+      summonAlly(state, enemy, 'HELLFIRE_MAGUS', `${ENEMY_NAME[enemy.kind]} summons a Hellfire-Magus!`);
+      return;
+    }
   }
+
   chaseStep(state, enemy, enemy.speed, true);
 }
 
@@ -306,8 +453,8 @@ function shamanAct(state: GameState, enemy: Enemy, castCadence = 3): void {
   if (count % castCadence === 0) castFirebomb(state, enemy);
 }
 
-/** Chain Bolt cast. */
-function castChainBolt(state: GameState, enemy: Enemy, stunChance: number): void {
+/** Chain Bolt cast: a 4-tile line that forks 90 degrees off a wall, up to `maxForks` times (Mk I: 1, Mk II/III: 2). */
+function castChainBolt(state: GameState, enemy: Enemy, stunChance: number, maxForks = 1): void {
   const ddx = state.run.playerX - enemy.x;
   const ddy = state.run.playerY - enemy.y;
   let dx = 0;
@@ -317,9 +464,8 @@ function castChainBolt(state: GameState, enemy: Enemy, stunChance: number): void
 
   let x = enemy.x;
   let y = enemy.y;
-  let forkX = enemy.x;
-  let forkY = enemy.y;
-  let forked = false;
+  const joints: { x: number; y: number }[] = [{ x, y }];
+  let forksUsed = 0;
   let hitPlayer = false;
   let remaining = 4;
 
@@ -327,10 +473,9 @@ function castChainBolt(state: GameState, enemy: Enemy, stunChance: number): void
     const nx = x + dx;
     const ny = y + dy;
     if (!inBounds(state, nx, ny) || !isWalkableAt(state, nx, ny)) {
-      if (forked) break;
-      forked = true;
-      forkX = x;
-      forkY = y;
+      if (forksUsed >= maxForks) break;
+      forksUsed++;
+      joints.push({ x, y });
       if (dx !== 0) {
         dy = Math.sign(state.run.playerY - y) || 1;
         dx = 0;
@@ -348,12 +493,10 @@ function castChainBolt(state: GameState, enemy: Enemy, stunChance: number): void
       break;
     }
   }
+  joints.push({ x, y });
 
-  if (forked) {
-    notifyBeam(enemy.x, enemy.y, forkX, forkY, ELEMENT_COLOR.VOLT);
-    notifyBeam(forkX, forkY, x, y, ELEMENT_COLOR.VOLT);
-  } else {
-    notifyBeam(enemy.x, enemy.y, x, y, ELEMENT_COLOR.VOLT);
+  for (let i = 0; i < joints.length - 1; i++) {
+    notifyBeam(joints[i].x, joints[i].y, joints[i + 1].x, joints[i + 1].y, ELEMENT_COLOR.VOLT);
   }
 
   if (hitPlayer) {
@@ -367,8 +510,98 @@ function castChainBolt(state: GameState, enemy: Enemy, stunChance: number): void
   }
 }
 
-/** Caller behavior. */
+// Mk II: Magnetic Pull drags the player to the nearest copper pillar and Stuns them.
+const MAGNETIC_PULL_STUN_TURNS = 1;
+
+function castMagneticPull(state: GameState, enemy: Enemy): void {
+  let nearest: readonly [number, number] = STORM_CALLER_PILLARS[0];
+  let best = Infinity;
+  for (const pillar of STORM_CALLER_PILLARS) {
+    const d = Math.abs(pillar[0] - state.run.playerX) + Math.abs(pillar[1] - state.run.playerY);
+    if (d < best) {
+      best = d;
+      nearest = pillar;
+    }
+  }
+  const [px, py] = nearest;
+  for (const [dx, dy] of ORTHO) {
+    const tx = px + dx;
+    const ty = py + dy;
+    if (!inBounds(state, tx, ty) || !isWalkableAt(state, tx, ty)) continue;
+    if (state.dungeon.enemies.some((e) => e.x === tx && e.y === ty)) continue;
+    state.run.playerX = tx;
+    state.run.playerY = ty;
+    break;
+  }
+  applyPlayerStatus(state, 'STUN', MAGNETIC_PULL_STUN_TURNS);
+  logLine(state, `${ENEMY_NAME[enemy.kind]}'s Magnetic Pull drags you to the pillars!`);
+  playBossTelegraphSfx();
+}
+
+// Mk III: Overload Rain — a 3-turn channel, safe only beside a surviving copper pillar. Each cast shatters one more.
+const OVERLOAD_CHARGE_TURNS = 3;
+const OVERLOAD_DAMAGE_MULT = 3.5;
+const overloadCharge = new Map<string, number>();
+const shatteredPillars = new Map<string, Set<string>>();
+
+function pruneStormCallerState(state: GameState): void {
+  const liveIds = new Set(state.dungeon.enemies.map((e) => e.id));
+  for (const id of overloadCharge.keys()) if (!liveIds.has(id)) overloadCharge.delete(id);
+  for (const id of shatteredPillars.keys()) if (!liveIds.has(id)) shatteredPillars.delete(id);
+}
+
+function remainingPillars(enemy: Enemy): readonly (readonly [number, number])[] {
+  const shattered = shatteredPillars.get(enemy.id);
+  if (!shattered) return STORM_CALLER_PILLARS;
+  return STORM_CALLER_PILLARS.filter(([x, y]) => !shattered.has(`${x},${y}`));
+}
+
+function shatterOnePillar(state: GameState, enemy: Enemy): void {
+  const remaining = remainingPillars(enemy);
+  if (remaining.length === 0) return;
+  const [x, y] = remaining[Math.floor(Math.random() * remaining.length)];
+  let shattered = shatteredPillars.get(enemy.id);
+  if (!shattered) {
+    shattered = new Set();
+    shatteredPillars.set(enemy.id, shattered);
+  }
+  shattered.add(`${x},${y}`);
+  state.dungeon.tiles[y][x] = TILE.FLOOR;
+  logLine(state, 'A copper pillar shatters — the cover thins!');
+}
+
+function startOverloadRain(state: GameState, enemy: Enemy): void {
+  overloadCharge.set(enemy.id, OVERLOAD_CHARGE_TURNS);
+  logLine(state, `${ENEMY_NAME[enemy.kind]} channels an Overload Rain! Get behind cover!`);
+  playBossTelegraphSfx();
+}
+
+/** Ticks a pending Overload Rain. Returns true if charging/just detonated (skip the Caller's normal action). */
+function tickOverloadRain(state: GameState, enemy: Enemy): boolean {
+  const turnsLeft = overloadCharge.get(enemy.id);
+  if (turnsLeft === undefined) return false;
+  if (turnsLeft > 1) {
+    overloadCharge.set(enemy.id, turnsLeft - 1);
+    return true;
+  }
+  overloadCharge.delete(enemy.id);
+  const sheltered = remainingPillars(enemy).some(
+    ([px, py]) => Math.abs(px - state.run.playerX) <= 1 && Math.abs(py - state.run.playerY) <= 1,
+  );
+  if (sheltered) {
+    logLine(state, 'You weather the Overload Rain behind cover!');
+  } else {
+    dealDirectBossDamage(state, enemy, enemy.attack * OVERLOAD_DAMAGE_MULT, 'The Overload Rain');
+  }
+  shatterOnePillar(state, enemy);
+  return true;
+}
+
+/** Caller behavior — Mk I/II/III moveset selected by `miniBossRepeatNumber`. */
 function callerAct(state: GameState, enemy: Enemy): void {
+  const repeat = miniBossRepeatNumber(state.run.currentFloor);
+  if (repeat === 2 && tickOverloadRain(state, enemy)) return;
+
   const count = (activationCounters.get(enemy.id) ?? 0) + 1;
   activationCounters.set(enemy.id, count);
 
@@ -379,15 +612,40 @@ function callerAct(state: GameState, enemy: Enemy): void {
   }
 
   const enraged = enemy.hp <= enemy.maxHp * 0.5;
-  if (count % 3 === 0) {
-    castChainBolt(state, enemy, enraged ? 0.25 : 0);
-    return;
-  }
-  if (count % 5 === 0) {
-    const summonKind: EnemyKind = miniBossRepeatNumber(state.run.currentFloor) >= 1 ? 'FROST_SENTINEL' : 'VOLT_HOUND';
-    const alive = state.dungeon.enemies.filter((e) => e.kind === summonKind).length;
-    if (alive < 2) {
-      summonAlly(state, enemy, summonKind, `${ENEMY_NAME[enemy.kind]} summons a ${ENEMY_NAME[summonKind]}!`);
+
+  if (repeat === 0) {
+    if (count % 3 === 0) {
+      castChainBolt(state, enemy, enraged ? 0.25 : 0, 1);
+      return;
+    }
+    if (count % 5 === 0 && state.dungeon.enemies.filter((e) => e.kind === 'VOLT_HOUND').length < 2) {
+      summonAlly(state, enemy, 'VOLT_HOUND', `${ENEMY_NAME[enemy.kind]} summons a Volt-Hound!`);
+      return;
+    }
+  } else if (repeat === 1) {
+    if (count % 3 === 0) {
+      castChainBolt(state, enemy, 0.25, 2);
+      return;
+    }
+    if (count % 4 === 0) {
+      castMagneticPull(state, enemy);
+      return;
+    }
+    if (count % 6 === 0 && state.dungeon.enemies.filter((e) => e.kind === 'STORM_STALKER').length < 2) {
+      summonAlly(state, enemy, 'STORM_STALKER', `${ENEMY_NAME[enemy.kind]} summons a Storm-Stalker!`);
+      return;
+    }
+  } else {
+    if (count % 6 === 0) {
+      startOverloadRain(state, enemy);
+      return;
+    }
+    if (count % 3 === 0) {
+      castChainBolt(state, enemy, 0.25, 2);
+      return;
+    }
+    if (count % 5 === 0 && state.dungeon.enemies.filter((e) => e.kind === 'TESLA_COIL').length < 2) {
+      summonAlly(state, enemy, 'TESLA_COIL', `${ENEMY_NAME[enemy.kind]} summons a Tesla-Coil!`);
       return;
     }
   }
@@ -506,10 +764,74 @@ function doomGuardAct(state: GameState, enemy: Enemy): void {
   chaseStep(state, enemy, enraged ? 2 : speed, true);
 }
 
-/** Knight behavior. */
+// Mk II: Glacial Lunge — a straight-line charge that smashes Ice-Barricades and slides the player back on impact.
+const LUNGE_MAX_RANGE = 6;
+const LUNGE_SLIDE_TILES = 2;
+
+function castGlacialLunge(state: GameState, enemy: Enemy): void {
+  const ddx = state.run.playerX - enemy.x;
+  const ddy = state.run.playerY - enemy.y;
+  if (ddx !== 0 && ddy !== 0) return; // Only lines up on a clean orthogonal lane.
+  const dx = Math.sign(ddx);
+  const dy = Math.sign(ddy);
+  if (dx === 0 && dy === 0) return;
+
+  logLine(state, `${ENEMY_NAME[enemy.kind]} charges into a Glacial Lunge!`);
+  playBossTelegraphSfx();
+
+  let x = enemy.x;
+  let y = enemy.y;
+  let hit = false;
+  for (let i = 0; i < LUNGE_MAX_RANGE; i++) {
+    const nx = x + dx;
+    const ny = y + dy;
+    if (nx === state.run.playerX && ny === state.run.playerY) {
+      hit = true;
+      break;
+    }
+    const barricade = state.dungeon.expiringTiles.find((t) => t.x === nx && t.y === ny && t.tileType === TILE.WALL);
+    if (barricade) {
+      state.dungeon.expiringTiles = state.dungeon.expiringTiles.filter((t) => t !== barricade);
+      logLine(state, 'The Lunge smashes through an Ice-Barricade!');
+    } else if (!inBounds(state, nx, ny) || !isWalkableAt(state, nx, ny)) {
+      break;
+    }
+    x = nx;
+    y = ny;
+  }
+  enemy.x = x;
+  enemy.y = y;
+
+  if (!hit) return;
+  enemyAttackPlayer(state, enemy);
+  for (let i = 0; i < LUNGE_SLIDE_TILES; i++) {
+    const nx = state.run.playerX + dx;
+    const ny = state.run.playerY + dy;
+    if (!inBounds(state, nx, ny) || !isWalkableAt(state, nx, ny)) break;
+    if (state.dungeon.enemies.some((e) => e.x === nx && e.y === ny)) break;
+    state.run.playerX = nx;
+    state.run.playerY = ny;
+  }
+  logLine(state, 'You slide across the ice!');
+}
+
+/** Knight behavior — Mk I/II/III moveset selected by `miniBossRepeatNumber`. */
 function knightAct(state: GameState, enemy: Enemy): void {
+  const repeat = miniBossRepeatNumber(state.run.currentFloor);
   const count = (activationCounters.get(enemy.id) ?? 0) + 1;
   activationCounters.set(enemy.id, count);
+
+  if (repeat >= 1) {
+    if (count % 5 === 0) {
+      castGlacialLunge(state, enemy);
+      return;
+    }
+    const summonKind: EnemyKind = repeat >= 2 ? 'GLACIAL_MONOLITH' : 'VOID_SPIRIT';
+    if (count % 8 === 0 && state.dungeon.enemies.filter((e) => e.kind === summonKind).length < 2) {
+      summonAlly(state, enemy, summonKind, `${ENEMY_NAME[enemy.kind]} summons a ${ENEMY_NAME[summonKind]}!`);
+      return;
+    }
+  }
 
   const specialFired = count % 3 === 0 || count % 6 === 0;
   if (count % 3 === 0) castFrozenSweep(state, enemy);
@@ -724,6 +1046,8 @@ function actEnemy(state: GameState, enemy: Enemy): void {
 export function runEnemyPhase(state: GameState): void {
   pruneActivationCounters(state);
   pruneBossTimers(state);
+  pruneSupernova(state);
+  pruneStormCallerState(state);
 
   for (const enemy of state.dungeon.enemies) {
     wakeIfNear(state, enemy);
