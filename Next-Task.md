@@ -45,6 +45,26 @@ Clamping *before* `applyEliteWeaponBonus` (not after) matters: the bonus should 
 
 **Naming:** add the Mk stage as a Roman-numeral suffix on display (e.g. "Ice Brand II"), so the player can tell which encounter a copy came from. Don't mutate `Weapon.name` itself — `loreForItem`, `itemMeltValue`, and `rollSameTierWeapon` all look up a weapon by matching `WEAPONS[key].name === w.name`, and a renamed item would silently fail every one of those lookups (lore disappears, melt value loses its tier bonus, Chrono-Anvil sidegrades break). Instead add a small optional field (e.g. `Weapon.bossStage?: 1 | 2 | 3`, set alongside the ATK clamp above) and extend `itemDisplayName` (`content.ts` ~803-810) to append it — after the existing `+N` bonus suffix, e.g. `"Ice Brand II +2"` — so the two suffixes compose instead of colliding.
 
+**Elite bonus bucket (decided): key it off Mk stage, not floor.** `applyEliteWeaponBonus` currently picks Early/Mid/Late by absolute floor number (`<21`/`21-50`/`>=51`), which is fine for procedural-floor Elite spawns but wrong for mini-boss drops: the archetype cycle (`INFERNO_GOLEM, STORM_CALLER, GLACIAL_KNIGHT`) always puts Glacial-Knight third, so its floor at any given Mk stage is always higher than the other two's — a permanent, repeating bias in its favor, not a one-off quirk. Since `miniBossRepeatNumber` is already needed for the ATK clamp above, reuse it to pick the bonus bucket too: Mk I (repeat 0) -> Early, Mk II (repeat 1) -> Mid, Mk III (repeat 2) -> Late. Don't change `applyEliteWeaponBonus` itself (other Elite spawns should stay floor-bucketed) — add a sibling function in `content.ts`, e.g. `applyMiniBossWeaponBonus(weapon, miniBossStage)`, that shares the same range constants and the internal `getRandomBonus` roll, and call it from `killEnemy`'s mini-boss branch instead of `applyEliteWeaponBonus`.
+
+**Reference: full 9-encounter drop table with both fixes applied** (clamp -> stage-bucketed bonus, using item 2's new ranges below):
+
+| Boss | Mk | Floor | Weapon | Final ATK range |
+|---|---|---|---|---|
+| Inferno-Golem | I | F10 | Ifrit's Blade | 7-9 |
+| Storm-Caller | I | F20 | Blitz Whip | 7-9 |
+| Glacial-Knight | I | F30 | Ice Brand | 7-9 |
+| Inferno-Golem | II | F40 | Ifrit's Blade | 12-17 |
+| Storm-Caller | II | F50 | Blitz Whip | 16-21 |
+| Glacial-Knight | II | F60 | Ice Brand | 16-21 |
+| Inferno-Golem | III | F70 | Ifrit's Blade | 12-19 |
+| Storm-Caller | III | F80 | Blitz Whip | 17-24 |
+| Glacial-Knight | III | F90 | Ice Brand | 17-24 |
+
+Golem trails slightly at Mk II/III on its own lower native ATK (11 vs. 16) — that's the boss's existing flavor difference (Ifrit's Blade leans on its `cleave_3_front` passive instead of raw ATK), not something to normalize away.
+
+Every mini-boss kill also drops a fixed bundle regardless of floor: 1 Temporal Anchor (`value: 0`, a checkpoint unlock — no stat to scale), 2 Time Shards (`value: 5` Turns each), and a flat 25 Echoes (`combat.ts`'s `killEnemy`). Only the Echoes need a fix — see item 2.
+
 ### 2. Flat/random ATK bonuses need to scale with floor and skew low, not just get bigger
 Tuned against the old ATK 3-14 range; amended to scale with depth and to weight rolls toward the low end instead of a flat or uniform bump:
 
@@ -64,6 +84,8 @@ Tuned against the old ATK 3-14 range; amended to scale with depth and to weight 
   ```
   Squaring `Math.random()` before scaling concentrates rolls near `min`; e.g. for `[1,8]`, +1/+2 come up far more often than +7/+8. Sanity-check the distribution live (roll it ~20 times via Dev Tools' Elite spawns, or a throwaway console loop) rather than trusting the formula blind.
 
+- **Mini-Boss kill's flat 25 Echoes** (`combat.ts`'s `killEnemy`, mini-boss branch — `awardEchoes(state, 25, 'Mini-Boss kill')`): this is the same reward channel `enemyKillBounty`/`flawlessFloorBonus` already scale via `depthMultiplier`, and it's currently the one exception still flat. Shop costs run 50 -> 15000+ across the game, so a flat 25 is meaningful at F10 and rounds to noise by F90. Fix: `awardEchoes(state, Math.round(25 * depthMultiplier(state.run.currentFloor)), 'Mini-Boss kill')` (`depthMultiplier` already exported from `content.ts`) — ~25 at F10 scaling to ~93 at F90. **Leave the Anchor and 2 Time Shards flat** — the Anchor has no stat to scale (`value: 0`, a checkpoint unlock), and Time Shards are measured against the 100-turn floor budget, which is a fixed constant at every depth per Game.md, so a flat bonus stays proportionally the same at F10 or F90 — no scaling problem to fix there.
+
 After changing these, spot-check `itemMeltValue` and the Inventory/Status tab displays still read sanely with the new bonus magnitudes (they scale off `upgradeBonus`, so should just work, but verify live).
 
-**Verification:** dev-warp + Cheat Mode as used last session; typecheck, then a quick visual check of a Mk I mini-boss kill's dropped weapon (ATK clamp + "II"/"III" suffix), a Blood Anvil/Chrono-Anvil accept at a low vs. high floor (confirm the 1-8 scaling), and a handful of Elite kills to eyeball the low-end skew — no need to re-drive every boss floor again.
+**Verification:** dev-warp + Cheat Mode as used last session; typecheck, then a quick visual check of a Mk I mini-boss kill's dropped weapon (ATK clamp + "II"/"III" suffix + scaled Echo reward), a Blood Anvil/Chrono-Anvil accept at a low vs. high floor (confirm the 1-8 scaling), and a handful of Elite kills to eyeball the low-end skew — no need to re-drive every boss floor again.
