@@ -23,45 +23,33 @@ Summary of changes:
   - Updated `Game.md`'s Weapons/Monsters/Cursed Rifts/Echo Economy sections to match the new values.
 
 ## Todo This Session
-Follow-up balance pass on two leftovers flagged at the end of the 10x weapon curve overhaul. Reviewed with advisor and amended with floor-scaled/weighted-roll requirements — item 1's implementation approach is now a decision, not an open question.
+Follow-up balance pass on two leftovers flagged at the end of the 10x weapon curve overhaul. Reviewed with advisor, then item 1's approach was revised again: mini-boss weapons become 9 real tiered catalog items instead of one weapon key with a runtime ATK clamp.
 
-### 1. Mini-Boss signature-weapon drops break the tier curve on Mk I floors
-`combat.ts`'s `MINI_BOSS_WEAPON` map (~line 302) drops the *same* signature weapon every time a mini-boss dies, regardless of Mk stage:
-- `INFERNO_GOLEM: 'IFRITS_BLADE'` (native ATK 11, Mid Tier) at F10/F40/F70.
-- `STORM_CALLER: 'BLITZ_WHIP'` (native ATK 16, Late Tier) at F20/F50/F80.
-- `GLACIAL_KNIGHT: 'ICE_BRAND'` (native ATK 16, Late Tier) at F30/F60/F90.
+### 1. Mini-Boss signature-weapon drops: split into 3 real tiered items per boss
+**Superseded design decision:** instead of one weapon key with a runtime ATK clamp/bonus (the earlier version of this plan), create 9 genuinely separate `WEAPONS` entries — 3 per mini-boss, one per Mk stage — each with its own fixed, tier-appropriate ATK. This is simpler than the clamp approach and sidesteps every workaround that approach needed (no `bossStage` field, no display-suffix hack, no Elite-bucket-by-stage question — all moot once each tier is its own catalog item).
 
-Every other reward channel in the game scales with floor — chest rolls (`rollWeaponForDepth`), Elite drops (`rollWeaponForDepth` + `applyEliteWeaponBonus`), even the boss's own HP/ATK/DEF (`BOSS_EVOLUTION`) — except this one hardcoded weapon key. The mini-boss kill already gets a jackpot bundle (Anchor + 2 Time Shards + 25 Echoes, `combat.ts` ~446-458) independent of the weapon, so the weapon spike reads as an oversight rather than intentional generosity. **Confirm this reading before implementing** — if the F10 Ifrit's Blade is deliberate, the actual fix is documenting it in Game.md instead, not touching `combat.ts`.
+**Add, don't replace.** Keep the existing `IFRITS_BLADE` (ATK 11), `BLITZ_WHIP` (ATK 16), and `ICE_BRAND` (ATK 16) entries exactly as they are — they stay in `MID_TIER_WEAPON_KEYS`/`LATE_TIER_WEAPON_KEYS` and remain reachable through the general pool (Elite drops, Chrono-Anvil, chests via `rollWeaponForDepth`, the Predator/Shadow floor events). The 9 new entries are a separate, exclusive trophy set only obtainable by killing that mini-boss — **do not** add them to `EARLY_TIER_WEAPON_KEYS`/`MID_TIER_WEAPON_KEYS`/`LATE_TIER_WEAPON_KEYS` or any chest pool, or they'd start showing up as generic loot and lose their "boss-only" identity.
 
-**ATK clamp (decided):** clamp `weapon.atk` with `Math.min`, not a negative `upgradeBonus`. A negative `upgradeBonus` breaks two things at once: `itemMeltValue` (`content.ts` ~802-821) computes `baseAtk = w.atk - bonus`, so a negative bonus inflates the apparent base and makes `bonusMelt = bonus * 20` negative; and `itemDisplayName` (~803-810) only special-cases a *truthy* bonus, so it would render as `"Ifrit's Blade +-5"`. Setting `.atk` directly avoids both.
-
-Rule: after `createWeapon(weaponKey, ...)` but **before** `applyEliteWeaponBonus` runs (`combat.ts`'s mini-boss branch), clamp down by `miniBossRepeatNumber(state.run.currentFloor)` (from `arenas.ts`):
-```
-Mk I (repeat 0): weapon.atk = Math.min(weapon.atk, 6)   // Early Tier ceiling
-Mk II (repeat 1): weapon.atk = Math.min(weapon.atk, 15) // Mid Tier ceiling
-Mk III (repeat 2): no clamp                              // native ATK stands
-```
-Clamping *before* `applyEliteWeaponBonus` (not after) matters: the bonus should land on top of the tier-appropriate base, same as a normal chest-tier weapon roll, not get swallowed by a clamp applied afterward. This is also a plain no-op for weapons whose native ATK already sits at or under the stage's cap (e.g. Ifrit's Blade at Mk II/III) — no boss-specific special-casing needed.
-
-**Naming:** add the Mk stage as a Roman-numeral suffix on display (e.g. "Ice Brand II"), so the player can tell which encounter a copy came from. Don't mutate `Weapon.name` itself — `loreForItem`, `itemMeltValue`, and `rollSameTierWeapon` all look up a weapon by matching `WEAPONS[key].name === w.name`, and a renamed item would silently fail every one of those lookups (lore disappears, melt value loses its tier bonus, Chrono-Anvil sidegrades break). Instead add a small optional field (e.g. `Weapon.bossStage?: 1 | 2 | 3`, set alongside the ATK clamp above) and extend `itemDisplayName` (`content.ts` ~803-810) to append it — after the existing `+N` bonus suffix, e.g. `"Ice Brand II +2"` — so the two suffixes compose instead of colliding.
-
-**Elite bonus bucket (decided): key it off Mk stage, not floor.** `applyEliteWeaponBonus` currently picks Early/Mid/Late by absolute floor number (`<21`/`21-50`/`>=51`), which is fine for procedural-floor Elite spawns but wrong for mini-boss drops: the archetype cycle (`INFERNO_GOLEM, STORM_CALLER, GLACIAL_KNIGHT`) always puts Glacial-Knight third, so its floor at any given Mk stage is always higher than the other two's — a permanent, repeating bias in its favor, not a one-off quirk. Since `miniBossRepeatNumber` is already needed for the ATK clamp above, reuse it to pick the bonus bucket too: Mk I (repeat 0) -> Early, Mk II (repeat 1) -> Mid, Mk III (repeat 2) -> Late. Don't change `applyEliteWeaponBonus` itself (other Elite spawns should stay floor-bucketed) — add a sibling function in `content.ts`, e.g. `applyMiniBossWeaponBonus(weapon, miniBossStage)`, that shares the same range constants and the internal `getRandomBonus` roll, and call it from `killEnemy`'s mini-boss branch instead of `applyEliteWeaponBonus`.
-
-**Reference: full 9-encounter drop table with both fixes applied** (clamp -> stage-bucketed bonus, using item 2's new ranges below):
-
-| Boss | Mk | Floor | Weapon | Final ATK range |
+**New `WEAPONS` entries** (`content.ts`), same element/passive/lore per family as the existing weapon, ATK set to one tier ceiling above the standard band so a boss trophy always beats an equivalent chest find:
+| Key | Name | ATK | Element | Passive |
 |---|---|---|---|---|
-| Inferno-Golem | I | F10 | Ifrit's Blade | 7-9 |
-| Storm-Caller | I | F20 | Blitz Whip | 7-9 |
-| Glacial-Knight | I | F30 | Ice Brand | 7-9 |
-| Inferno-Golem | II | F40 | Ifrit's Blade | 12-17 |
-| Storm-Caller | II | F50 | Blitz Whip | 16-21 |
-| Glacial-Knight | II | F60 | Ice Brand | 16-21 |
-| Inferno-Golem | III | F70 | Ifrit's Blade | 12-19 |
-| Storm-Caller | III | F80 | Blitz Whip | 17-24 |
-| Glacial-Knight | III | F90 | Ice Brand | 17-24 |
+| `IFRITS_BLADE_I` | Ifrit's Blade I | 7 | Fire | `cleave_3_front` |
+| `IFRITS_BLADE_II` | Ifrit's Blade II | 16 | Fire | `cleave_3_front` |
+| `IFRITS_BLADE_III` | Ifrit's Blade III | 28 | Fire | `cleave_3_front` |
+| `BLITZ_WHIP_I` | Blitz Whip I | 7 | Volt | `chain_lightning_1` |
+| `BLITZ_WHIP_II` | Blitz Whip II | 16 | Volt | `chain_lightning_1` |
+| `BLITZ_WHIP_III` | Blitz Whip III | 28 | Volt | `chain_lightning_1` |
+| `ICE_BRAND_I` | Ice Brand I | 7 | Frost | `chill_spread_on_kill` |
+| `ICE_BRAND_II` | Ice Brand II | 16 | Frost | `chill_spread_on_kill` |
+| `ICE_BRAND_III` | Ice Brand III | 28 | Frost | `chill_spread_on_kill` |
 
-Golem trails slightly at Mk II/III on its own lower native ATK (11 vs. 16) — that's the boss's existing flavor difference (Ifrit's Blade leans on its `cleave_3_front` passive instead of raw ATK), not something to normalize away.
+(7 = Early Tier ceiling of 6, +1; 16 = Mid Tier ceiling of 15, +1, which also happens to land exactly on the Late Tier floor; 28 = a strong Late Tier value, above Masamune's 26 but below Apocalypse's 30 and the Ultimate Elemental chase weapons' 32 — trophies stay special without dethroning the actual best-in-slot weapons.) These are proposed numbers, not locked — sanity-check them against a real Mk I/II/III fight before committing.
+
+**Wiring (`combat.ts`):** change `MINI_BOSS_WEAPON` from `Partial<Record<Enemy['kind'], WeaponKey>>` to one keyed by kind with a 3-tuple of keys (Mk I/II/III in order), then in `killEnemy`'s mini-boss branch index it with `miniBossRepeatNumber(state.run.currentFloor)` (import from `arenas.ts`) instead of a flat lookup. Drop the `applyEliteWeaponBonus(weapon, state.run.currentFloor)` call for this branch entirely — these are fixed trophies now, not a base + random roll.
+
+**No changes needed** to `itemDisplayName`, `loreForItem`, or `itemMeltValue`'s name-matching lookups — since each tier is a real `WEAPONS` entry with its own name, the existing `for (const w of Object.values(WEAPONS))` loops that build `LORE_BY_NAME` etc. pick them up automatically. Add lore text for each new entry (can reuse the family's existing flavor line, lightly reworded per tier, or keep identical — writer's call).
+
+**Verify before landing:** `combat.ts` importing `miniBossRepeatNumber` from `arenas.ts` adds an edge into an *existing* circular reference (`combat.ts` -> `mapgen.ts` -> `combat.ts` already exists today) rather than creating a new one, so it should be safe, but confirm with a typecheck and a live mini-boss kill rather than assuming — import cycles can produce `undefined`-at-module-eval bugs that `tsc` won't catch.
 
 Every mini-boss kill also drops a fixed bundle regardless of floor: 1 Temporal Anchor (`value: 0`, a checkpoint unlock — no stat to scale), 2 Time Shards (`value: 5` Turns each), and a flat 25 Echoes (`combat.ts`'s `killEnemy`). Only the Echoes need a fix — see item 2.
 
@@ -88,4 +76,4 @@ Tuned against the old ATK 3-14 range; amended to scale with depth and to weight 
 
 After changing these, spot-check `itemMeltValue` and the Inventory/Status tab displays still read sanely with the new bonus magnitudes (they scale off `upgradeBonus`, so should just work, but verify live).
 
-**Verification:** dev-warp + Cheat Mode as used last session; typecheck, then a quick visual check of a Mk I mini-boss kill's dropped weapon (ATK clamp + "II"/"III" suffix + scaled Echo reward), a Blood Anvil/Chrono-Anvil accept at a low vs. high floor (confirm the 1-8 scaling), and a handful of Elite kills to eyeball the low-end skew — no need to re-drive every boss floor again.
+**Verification:** dev-warp + Cheat Mode as used last session; typecheck, then a quick visual check of one kill per Mk stage on at least one mini-boss (confirm the right tiered item name/ATK drops and the scaled Echo reward), a Blood Anvil/Chrono-Anvil accept at a low vs. high floor (confirm the 1-8 scaling), and a handful of Elite kills to eyeball the low-end skew — no need to re-drive all 9 boss/stage combinations or every arena floor again.
