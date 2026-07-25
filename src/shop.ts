@@ -18,7 +18,7 @@ export const STAT_TRACKS: { track: StatTrack; label: string }[] = [
 
 // Standard Curve (Max HP, Max Stamina, Turn Bonus): Levels 1-10, then +500/level with no cap.
 const STANDARD_CURVE = [50, 100, 200, 300, 500, 750, 1000, 1500, 2000, 2500];
-const STANDARD_CURVE_STEP_AFTER = 500;
+const STANDARD_CURVE_STEP_AFTER = 2500;
 
 function standardTrackCost(level: number): number {
   if (level < STANDARD_CURVE.length) return STANDARD_CURVE[level];
@@ -27,7 +27,7 @@ function standardTrackCost(level: number): number {
 
 // Base ATK: mathematically the strongest stat. Uncapped past Level 10, same as the Standard Curve.
 const BASE_ATK_CURVE = [100, 300, 600, 1200, 2400, 4000, 6000, 9000, 12000, 15000];
-const BASE_ATK_STEP_AFTER = 3000;
+const BASE_ATK_STEP_AFTER = 15000;
 
 function baseAtkCost(level: number): number {
   if (level < BASE_ATK_CURVE.length) return BASE_ATK_CURVE[level];
