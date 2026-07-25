@@ -6,6 +6,7 @@
 *   **Core Loop:** Descend a 99-floor dungeon. The player has exactly 100 turns per floor to explore, loot, fight, and reach the stairs down.
 *   **Time Loop Mechanic:** When turns hit 0 or player dies, they return to the Hub (Floor 0). Inventory/weapons are lost. Echoes (currency) and Temporal Anchors (checkpoints) are retained. From the Hub, players start at F1 or warp to anchored Biomes. Floor layouts are identical across loops within a save.
 *   **Biome Structure:** 99 floors divided into 10-floor Biomes. Every 10th floor is a Mini-Boss Arena that drops a Temporal Anchor.
+*   **Mini-Boss Evolution:** Each of the 3 mini-bosses is fought 3 times across the descent (Mk I/II/III), gaining new attacks and summons each time instead of just scaling numbers. See Section 6C.
 
 ### Narrative Framing: The "Why"
 **The Fall of Oakhaven:** The Chrono-Keep was not always a prison; it was once the Grand Conservatory of Oakhaven. Decades ago, as a mysterious plague threatened to wipe out the kingdom, the brilliant Court Wizard made a desperate choice. To save his people, he attempted to freeze Oakhaven at the exact moment before its ruin using the kingdom's most sacred artifact: the Hourglass of Eternity. But mortal hands were never meant to halt the river of time. The ritual violently backfired, mutating him into the mad Chrono-Lich and shattering the Keep downward into the earth.
@@ -73,29 +74,34 @@ Loop 0 drops players into Floor 99 against the Chrono-Lich with an endgame loado
 ## 6. Detailed Game Content Lists
 
 ### A. Weapons
-Weapons are categorized in overlapping drop pools (Early, Mid, Late stages).
+Weapons are categorized in overlapping drop pools (Early, Mid, Late stages), on a 10x ATK curve from Trash Tier to the Ultimate Elemental chase weapons:
+*   **Trash Tier:** Shattered Scrap (ATK 2).
+*   **Early Game (F1-F20):** ATK 3-6 — Rusty Sword, Bone Dagger, Mythril Hammer, Mage Masher, Flametongue, Ice Lance, Partisan, Glass Sword, Broadsword, Ash Wand, Bone Club, Defender.
+*   **Mid Game (F21-F50):** ATK 8-15 — Thunder Rod, Ifrit's Blade, Elven Bow, Blood Sword, Coral Sword, Dark Knight's Blade, Assassin's Dagger, Flamberge, Trident, Bio-Blade, Murasame, Gale Bow, Kotetsu, Diamond Mace.
+*   **Late Game (F51-F99):** ATK 16-30 — Firaga Edge, Ice Brand, Blitz Whip, Rune Axe, Excalibur, Holy Lance, Ultima Weapon, Ragnarok, Gungnir, Save the Queen, Blood Lance, Deathbringer, Apocalypse, Masamune.
+*   **Ultimate Elemental Chase (F80-F99):** ATK 32 — Laevateinn, Vajra, Niflheim.
 
 | Weapon Name | Base ATK | Element | Special Effect / Passive | Drop Source | Lore / Flavor Text |
 |-------------|----------|---------|---------------------------|--------------|---------------------|
-| Laevateinn  | 9        | Fire    | 2x damage vs a Burning target. | Late Tier pool | "The legendary fire sword that reduces everything to ash. It burns hottest when the fuel is already lit." |
-| Vajra       | 9        | Volt    | Ranged 1-2, pierces the tile behind the target, and guarantees a Stun on hit. | Late Tier pool | "A spear of mythic thunder. It never misses, and its strike freezes the nervous system." |
-| Niflheim    | 9        | Frost   | Instantly executes a Chilled enemy at or below 25% HP. | Late Tier pool | "A axe colder than the void. It does not cut; it simply shatters what is already frozen." |
+| Laevateinn  | 32       | Fire    | 2x damage vs a Burning target. | Late Tier pool | "The legendary fire sword that reduces everything to ash. It burns hottest when the fuel is already lit." |
+| Vajra       | 32       | Volt    | Ranged 1-2, pierces the tile behind the target, and guarantees a Stun on hit. | Late Tier pool | "A spear of mythic thunder. It never misses, and its strike freezes the nervous system." |
+| Niflheim    | 32       | Frost   | Instantly executes a Chilled enemy at or below 25% HP. | Late Tier pool | "A blade colder than the void. It does not cut; it simply shatters what is already frozen." |
 | Rusty Sword  | 3        | Physical | None (Starter weapon).                            | Starter | "Your service weapon from a timeline long forgotten. It remembers the taste of blood, but its edge has dulled across a thousand failed resets." |
-| Bone Dagger  | 2        | Physical | Free to equip/swap even mid-combat.               | Chests (Early)  | "Carved from the femur of a fallen Watchwarden. It demands so little weight to wield, you can draw it between the ticks of a clock." |
-| Flametongue  | 3        | Fire     | Attacking removes Chilled from yourself.          | Ember-Bat          | "A campfire given an edge. It never quite stops smoldering." |
-| Mage Masher  | 3        | Volt     | 10% chance on hit to restore 1 Stamina.           | Volt-Turret        | "A duelist's parrying blade, repurposed. It hums faintly, siphoning static off every failed guard." |
-| Ice Lance    | 4        | Frost    | Ranged attack, pierces 2 tiles in a line.         | Frost-Wraith       | "A shard of the Undercroft, sharpened. It skewers straight through whatever stands in its way." |
-| Thunder Rod  | 4        | Volt     | On hit: also strikes both tiles flanking the target. | Chests (Early/Mid) | "A lightning rod bent into a weapon. The charge always finds more than one target." |
-| Assassin's Dagger | 5  | Chrono   | Knocks the enemy back 2 tiles and randomly reassigns their element. | Time-Weaver (Elite) | "It bends reality upon impact. You never quite know what you'll leave behind." |
-| Coral Sword  | 5        | Volt     | On hit: pulls the enemy 1 tile closer; 25% chance to Stun. | Volt-Hound  | "Grown, not forged, in a flooded sub-level that used to be a power station." |
-| Dark Knight's Blade | 8 | Physical | Blood Magic: you take 2 HP damage per swing.      | Bone-Knight        | "It cuts deeper than any living wrist could bear to swing it." |
-| Diamond Mace | 5        | Frost    | Deals 2x damage to Chilled enemies.               | Frost-Sentinel     | "Faceted ice that never melts. It shatters what the cold has already made brittle." |
-| Save the Queen | 6      | Frost    | Negates the first hit taken on each floor.        | Frost-Sentinel     | "A ceremonial blade, repurposed for a war it wasn't built for. It still remembers how to shield someone." |
-| Ifrit's Blade | 6       | Fire     | Cleaves the 3 tiles in front on every attack.     | Inferno-Golem | "A shard of the Undercroft's opposite — a sliver of something that never stopped burning." |
-| Blitz Whip   | 6        | Volt     | On hit: lightning chains to 1 additional nearby enemy. | Storm-Caller | "Live current, coiled. It never stops looking for a second target." |
-| Ice Brand    | 6        | Frost    | On kill: spreads Chilled to nearby enemies.       | Glacial-Knight | "A killing blow with this blade leaves the cold looking for somewhere else to go." |
-| Excalibur    | 8        | Physical | Ignores 50% of the target's DEF.                  | Chests (Mid/Late)  | "A relic from a story that didn't happen here — armor simply forgets to matter around it." |
-| Masamune     | 10       | Chrono   | Kills refund 3 Turns to the turn counter.         | Chests (Mid/Late)  | "A legendary blade... Mythic-tier — it steals back a real handful of moments with every kill." |
+| Bone Dagger  | 3        | Physical | Free to equip/swap even mid-combat.               | Chests (Early)  | "Carved from the femur of a fallen Watchwarden. It demands so little weight to wield, you can draw it between the ticks of a clock." |
+| Flametongue  | 4        | Fire     | Attacking removes Chilled from yourself.          | Ember-Bat          | "A campfire given an edge. It never quite stops smoldering." |
+| Mage Masher  | 4        | Volt     | 10% chance on hit to restore 1 Stamina.           | Volt-Turret        | "A duelist's parrying blade, repurposed. It hums faintly, siphoning static off every failed guard." |
+| Ice Lance    | 5        | Frost    | Ranged attack, pierces 2 tiles in a line.         | Frost-Wraith       | "A shard of the Undercroft, sharpened. It skewers straight through whatever stands in its way." |
+| Thunder Rod  | 8        | Volt     | On hit: also strikes both tiles flanking the target. | Chests (Early/Mid) | "A lightning rod bent into a weapon. The charge always finds more than one target." |
+| Assassin's Dagger | 10 | Chrono   | Knocks the enemy back 2 tiles and randomly reassigns their element. | Time-Weaver (Elite) | "It bends reality upon impact. You never quite know what you'll leave behind." |
+| Coral Sword  | 10       | Volt     | On hit: pulls the enemy 1 tile closer; 25% chance to Stun. | Volt-Hound  | "Grown, not forged, in a flooded sub-level that used to be a power station." |
+| Dark Knight's Blade | 15 | Physical | Blood Magic: you take 2 HP damage per swing.      | Bone-Knight        | "It cuts deeper than any living wrist could bear to swing it." |
+| Diamond Mace | 10       | Frost    | Deals 2x damage to Chilled enemies.               | Frost-Sentinel     | "Faceted ice that never melts. It shatters what the cold has already made brittle." |
+| Save the Queen | 18     | Frost    | Negates the first hit taken on each floor.        | Frost-Sentinel     | "A ceremonial blade, repurposed for a war it wasn't built for. It still remembers how to shield someone." |
+| Ifrit's Blade | 11      | Fire     | Cleaves the 3 tiles in front on every attack.     | Inferno-Golem | "A shard of the Undercroft's opposite — a sliver of something that never stopped burning." |
+| Blitz Whip   | 16       | Volt     | On hit: lightning chains to 1 additional nearby enemy. | Storm-Caller | "Live current, coiled. It never stops looking for a second target." |
+| Ice Brand    | 16       | Frost    | On kill: spreads Chilled to nearby enemies.       | Glacial-Knight | "A killing blow with this blade leaves the cold looking for somewhere else to go." |
+| Excalibur    | 22       | Physical | Ignores 50% of the target's DEF.                  | Chests (Mid/Late)  | "A relic from a story that didn't happen here — armor simply forgets to matter around it." |
+| Masamune     | 26       | Chrono   | Kills refund 3 Turns to the turn counter.         | Chests (Mid/Late)  | "A legendary blade... Mythic-tier — it steals back a real handful of moments with every kill." |
 
 ### B. Skills
 Costs Stamina. Up to 4 equipped at a time (Q/E/R/F). Evolve through 3 levels.
@@ -105,7 +111,7 @@ Costs Stamina. Up to 4 equipped at a time (Q/E/R/F). Evolve through 3 levels.
 *   **The Chronomancer:** Recall, Haste, Time-Stop, Paradox, Ultima. (Focus: Time Manipulation)
 
 ### C. Monsters
-Stats scale with floor depth (+8% every 5 floors). Elites and Mini-bosses do not scale as their floors are fixed.
+Regular-enemy stats scale with floor depth (+8% compounding every 5 floors, `Math.pow(1.08, floor((floor-1)/5))`, applied to hp/maxHp/attack). Mini-bosses and the Final Boss are exempt from this formula — their stats are hand-tuned per encounter (see Boss Evolution below).
 
 | Monster              | Element | Behavior / Lore |
 |----------------------|---------|-----------------|
@@ -119,12 +125,27 @@ Stats scale with floor depth (+8% every 5 floors). Elites and Mini-bosses do not
 | **Frost-Sentinel**   | Frost   | AOE frost cross. "Statues of old kings, animated by the cold." |
 | **Clockwork Scarab** | Chrono  | Flees, steals 3 Turns. "A gnawing little paradox... it bites for time." |
 | **Time-Weaver (Elite)**| Chrono| Teleports away. "The Lich's corrupted apprentices." |
-| **Inferno-Golem**    | Fire    | F10 Boss. Magma Slam. |
-| **Storm-Caller**     | Volt    | F20 Boss. Chain Bolt. |
-| **Glacial-Knight**   | Frost   | F30 Boss. Frozen Sweep, Ice Barricade. |
-| **Chrono-Lich**      | Chrono  | F99 Final Boss. Summons grunts, Time-Blast, Rewind. "Hoarding what remains of the Hourglass in a mad bid to ascend." |
+| **Inferno-Golem**    | Fire    | F10/F40/F70 Mini-Boss. Magma Slam, evolving per Boss Evolution below. |
+| **Storm-Caller**     | Volt    | F20/F50/F80 Mini-Boss. Chain Bolt, evolving per Boss Evolution below. |
+| **Glacial-Knight**   | Frost   | F30/F60/F90 Mini-Boss. Frozen Sweep, Ice-Barricade, evolving per Boss Evolution below. |
+| **Chrono-Lich**      | Chrono  | F99 Final Boss. HP 4500, ATK 120, DEF 25. Summons grunts, Time-Blast, Rewind. "Hoarding what remains of the Hourglass in a mad bid to ascend." |
 
 *Enemies can spawn with Elite Affixes (Shielded, Swift, Colossal, etc.), guaranteeing a Relic/Weapon drop.*
+
+#### Boss Evolution (Mk I / II / III)
+Each mini-boss is fought 3 times across the descent. Stats are hand-tuned per floor (not a flat multiplier), and each return trip adds new mechanics on top of the last:
+
+| Boss | Floor (Mk) | HP | ATK | DEF | New Mechanics |
+|------|-----------|----|----|----|----------------|
+| Inferno-Golem | 10 (Mk I) | 120 | 6 | 2 | Magma Slam (3x3 AOE). |
+| Inferno-Golem | 40 (Mk II) | 650 | 24 | 6 | Cross-shaped Magma Slam; Ember Aura (self-centered pulse every 4 turns); summons up to 2 Ash-Fiends. |
+| Inferno-Golem | 70 (Mk III) | 2400 | 75 | 12 | Magma Slam widens to 5x5; Supernova (3-turn channel that wipes the player unless sheltered beside a spawned Obsidian Pillar); summons up to 2 Hellfire-Magi. |
+| Storm-Caller | 20 (Mk I) | 180 | 10 | 3 | Chain Bolt (4-tile line, forks once off a wall); 4 copper cover pillars; summons up to 2 Volt-Hounds. |
+| Storm-Caller | 50 (Mk II) | 850 | 35 | 8 | Chain Bolt forks twice with a 25% Stun; Magnetic Pull (drags the player to a pillar and Stuns 1 turn); summons up to 2 Storm-Stalkers. |
+| Storm-Caller | 80 (Mk III) | 2900 | 90 | 16 | Overload Rain (3-turn channel, safe only beside a surviving pillar; each cast permanently shatters one); summons up to 2 Tesla-Coils. |
+| Glacial-Knight | 30 (Mk I) | 260 | 12 | 5 | Frozen Sweep (8 adjacent tiles, 50% Chill); spawns Ice-Barricades (expire after 5 turns). |
+| Glacial-Knight | 60 (Mk II) | 1100 | 45 | 12 | Glacial Lunge (straight-line charge that smashes Ice-Barricades and slides the player back 2 tiles on impact); summons up to 2 Void-Spirits. |
+| Glacial-Knight | 90 (Mk III) | 3500 | 110 | 24 | Ice-Barricades become permanent (only a Fire weapon melts them); Permafrost Storm drains an extra 2 Turns whenever a Chilled player moves; summons up to 2 Glacial-Monoliths. |
 
 ### D. Accessories
 | Accessory      | Passive                                   | Lore / Flavor Text |
@@ -156,7 +177,13 @@ Include Potions (HP restores) and Tactical Consumables (grenades, scrolls, runes
 Infinite-stacking passives lost on loop reset. Found in chests or via Elites. Examples: Phoenix Feather (revive), Giant's Anvil (+ATK, no Dash), Vampire's Cape (lifesteal), Static Generator (auto-Stun).
 
 ### G. Cursed Rifts
-Rare tile events (12% chance/floor) triggering 1 of 6 events: Rift Shop, Blood-Infused Anvil, Frozen Watchwarden, Paradox Mirror, Chrono-Lich's Projection, or Echo Geode.
+Rare tile events (12% chance/floor) triggering 1 of 6 events, rolled uniformly:
+1. **Rift Shop:** Buy a Relic with Echoes at an escalating price (50/150/300).
+2. **Blood-Infused Anvil:** Sacrifice 50% of current HP for +2 permanent ATK on the equipped weapon.
+3. **Frozen Watchwarden:** Sacrifice 1 Potion for +1 Level on a random active skill.
+4. **Paradox Mirror:** A Shadow Warden spawns, mirroring the player's own HP/ATK/DEF exactly.
+5. **Chrono-Lich's Projection:** Accept: -10 Max HP for a guaranteed Late-Tier weapon chest. Decline: 2 Bone-Knights ambush.
+6. **Echo Geode:** Mine for +15 Echoes per turn (up to 5 turns), risking an ambush on turns 3 and 5.
 
 ---
 
@@ -164,6 +191,10 @@ Rare tile events (12% chance/floor) triggering 1 of 6 events: Rift Shop, Blood-I
 *   **Turn-Based Loop:** Player moves/attacks/skills, then enemies act, then turns decrement. 100 turns per floor limit. Wait (Space) grants +1 DEF (Brace).
 *   **Combat:** Bumping into enemies attacks. Damage = `max(1, ATK - DEF) * Elemental_Multiplier`. Skills cost stamina, regenerated per turn. Kills with skills refund stamina.
 *   **Echo Economy:** Earn Echoes from kills and Flawless Floors (no damage taken on floor). Spend Echoes in the Hub on permanent Stats, Skill unlocks, and Gear Slot unlocks. Unwanted items can be Melted for Echoes.
+    *   Standard Curve (Max HP/Max Stamina/Turn Bonus): Levels 1-10 cost 50/100/200/300/500/750/1000/1500/2000/2500, then +500/level uncapped.
+    *   Base ATK Curve: Levels 1-10 cost 100/300/600/1200/2400/4000/6000/9000/12000/15000, then +3000/level uncapped.
+    *   Skill Tiers (Core/Advanced/Chronomancer): 50/100/200, 150/300/600, 400/800/1500 per level.
+    *   One-time Gear Slots: Second Weapon Slot 1500, Second Accessory Slot 1000, Third Accessory Slot 2500 (requires the second).
 *   **Biomes & Hub:** 10-floor biomes with Mini-Bosses at the end. Mini-Bosses drop Temporal Anchors (checkpoints) to warp to from the Hub. Hub features upgrade shop, shortcut gate, and NPCs.
 *   **Dungeon Generation:** Deterministic layouts per loop (seeded), dynamic chest loot (rolled fresh each loop). Cursed Rifts and Room Events (Echo Well, Chrono-Anvil) are randomized. Dynamic Floor Events (10% chance) add high-risk/high-reward challenges (e.g., Pacifist's Burden, The Bleeding Timeline, The Shadow's Pursuit) to occasional floors with unique rules and visual tints.
 
