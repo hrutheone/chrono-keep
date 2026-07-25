@@ -3,7 +3,7 @@ import { logLine } from './turns';
 import { playBlockedSfx, playEquipSfx } from './audio';
 import { triggerScreenShake } from './animation';
 import { notifyFloatingText } from './floatingText';
-import { createWeapon, rollLateTierWeapon, rollSameTierWeapon } from './content';
+import { createWeapon, floorScaledAtkBonus, rollLateTierWeapon, rollSameTierWeapon } from './content';
 import { reforgeWeapon } from './inventory';
 import { effectiveTileAt, TILE } from './mapgen';
 import type { GameState } from './types';
@@ -35,8 +35,9 @@ export function triggerChronoAnvil(state: GameState, x: number, y: number): void
     } else if (roll < 0.4) {
       // Upgrade
       if (state.run.equippedWeapon) {
-        state.run.equippedWeapon.upgradeBonus = (state.run.equippedWeapon.upgradeBonus ?? 0) + 2;
-        state.run.equippedWeapon.atk += 2;
+        const bonus = floorScaledAtkBonus(floor);
+        state.run.equippedWeapon.upgradeBonus = (state.run.equippedWeapon.upgradeBonus ?? 0) + bonus;
+        state.run.equippedWeapon.atk += bonus;
       }
       notifyFloatingText(x, y, 'RESONANCE INCREASED', 'immune');
       logLine(state, 'UPGRADE! Your weapon feels sharper.');

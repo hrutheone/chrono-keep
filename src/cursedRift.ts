@@ -1,7 +1,6 @@
 // Cursed Rift event roulette — five random outcomes when the player steps onto a Cursed Rift.
 
 import {
-  BLOOD_ANVIL_ATK_BONUS,
   BLOOD_ANVIL_HP_COST_FRACTION,
   ECHO_GEODE_AMBUSH_CHANCE,
   ECHO_GEODE_AMBUSH_TURNS,
@@ -11,6 +10,7 @@ import {
   RIFT_SHOP_PRICES,
   SKILLS,
   createEnemy,
+  floorScaledAtkBonus,
   pickRandomUnheldRelics,
   relicName,
   rollCursedRiftEvent,
@@ -118,14 +118,15 @@ export function buyRiftShopRelic(state: GameState, effect: string): void {
   saveGame(state);
 }
 
-/** Event 2: sacrifices 50% of current HP for +2 permanent ATK on the equipped weapon. */
+/** Event 2: sacrifices 50% of current HP for a floor-scaled permanent ATK bonus on the equipped weapon. */
 export function resolveBloodAnvil(state: GameState, accept: boolean): void {
   if (accept && state.run.equippedWeapon) {
     const cost = Math.floor(state.run.currentHp * BLOOD_ANVIL_HP_COST_FRACTION);
+    const bonus = floorScaledAtkBonus(state.run.currentFloor);
     state.run.currentHp = Math.max(1, state.run.currentHp - cost);
-    state.run.equippedWeapon.atk += BLOOD_ANVIL_ATK_BONUS;
-    state.run.equippedWeapon.upgradeBonus = (state.run.equippedWeapon.upgradeBonus ?? 0) + BLOOD_ANVIL_ATK_BONUS;
-    logLine(state, `The Anvil drinks ${cost} HP — ${state.run.equippedWeapon.name} is permanently sharper (+${BLOOD_ANVIL_ATK_BONUS} ATK).`);
+    state.run.equippedWeapon.atk += bonus;
+    state.run.equippedWeapon.upgradeBonus = (state.run.equippedWeapon.upgradeBonus ?? 0) + bonus;
+    logLine(state, `The Anvil drinks ${cost} HP — ${state.run.equippedWeapon.name} is permanently sharper (+${bonus} ATK).`);
     playEquipSfx();
   } else if (accept) {
     logLine(state, 'You have no weapon for the Anvil to sharpen.');

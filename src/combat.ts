@@ -10,18 +10,18 @@ import {
   createRelicItemByEffect,
   createTimeShard,
   createWeapon,
+  depthMultiplier,
   enemyKillBounty,
   pickRandomUnheldRelic,
   rollEliteDrop,
   rollEnemyDrop,
   weaknessOf,
-  applyEliteWeaponBonus,
   rollWeaponForDepth,
 } from './content';
 import type { WeaponKey } from './content';
 import { elementSynergyBonus, hasAccessoryPassive, totalAtk, totalDef } from './inventory';
 import { TILE, isWalkableAt } from './mapgen';
-import { openBossGate } from './arenas';
+import { miniBossRepeatNumber, openBossGate } from './arenas';
 import { logLine } from './turns';
 import { awardEchoes, markFloorDamageTaken } from './echoes';
 import { triggerVictory } from './victory';
@@ -299,10 +299,10 @@ const ELITE_ENEMY_KINDS = new Set<Enemy['kind']>(['TIME_WEAVER']);
 
 // Mini-Boss definitions.
 const MINI_BOSS_KINDS = new Set<Enemy['kind']>(['INFERNO_GOLEM', 'STORM_CALLER', 'GLACIAL_KNIGHT']);
-const MINI_BOSS_WEAPON: Partial<Record<Enemy['kind'], WeaponKey>> = {
-  INFERNO_GOLEM: 'IFRITS_BLADE',
-  STORM_CALLER: 'BLITZ_WHIP',
-  GLACIAL_KNIGHT: 'ICE_BRAND',
+const MINI_BOSS_WEAPON: Partial<Record<Enemy['kind'], readonly [WeaponKey, WeaponKey, WeaponKey]>> = {
+  INFERNO_GOLEM: ['IFRITS_BLADE_I', 'IFRITS_BLADE_II', 'IFRITS_BLADE_III'],
+  STORM_CALLER: ['BLITZ_WHIP_I', 'BLITZ_WHIP_II', 'BLITZ_WHIP_III'],
+  GLACIAL_KNIGHT: ['ICE_BRAND_I', 'ICE_BRAND_II', 'ICE_BRAND_III'],
 };
 
 /** Handles enemy death and drops. */
@@ -444,14 +444,13 @@ export function killEnemy(state: GameState, enemy: Enemy, source: 'bump' | 'skil
   }
 
   if (MINI_BOSS_KINDS.has(enemy.kind)) {
-    const weaponKey = MINI_BOSS_WEAPON[enemy.kind]!;
+    const weaponKey = MINI_BOSS_WEAPON[enemy.kind]![miniBossRepeatNumber(state.run.currentFloor)];
     const weapon = createWeapon(weaponKey, `${enemy.id}-weapon`);
-    applyEliteWeaponBonus(weapon, state.run.currentFloor);
     state.dungeon.items.push({ item: weapon, x: enemy.x, y: enemy.y });
     state.dungeon.items.push({ item: createAnchorItem(`${enemy.id}-anchor`), x: enemy.x, y: enemy.y });
     state.dungeon.items.push({ item: createTimeShard(`${enemy.id}-shard-1`), x: enemy.x, y: enemy.y });
     state.dungeon.items.push({ item: createTimeShard(`${enemy.id}-shard-2`), x: enemy.x, y: enemy.y });
-    awardEchoes(state, 25, 'Mini-Boss kill');
+    awardEchoes(state, Math.round(25 * depthMultiplier(state.run.currentFloor)), 'Mini-Boss kill');
     openBossGate(state);
     logLine(state, `${ENEMY_NAME[enemy.kind]} falls — the way down opens.`);
     return;

@@ -201,6 +201,11 @@ export function depthMultiplier(floorNumber: number): number {
   return Math.pow(1.08, Math.floor((floorNumber - 1) / 5));
 }
 
+/** Shared "+X permanent ATK" scaling for Blood Anvil / Chrono-Anvil Upgrade: 1 at F1, 8 by F99. */
+export function floorScaledAtkBonus(floorNumber: number): number {
+  return Math.min(8, 1 + Math.floor((floorNumber - 1) / 14));
+}
+
 // Base Echo bounty for a normal-enemy kill (before Depth Multiplier scaling).
 const ENEMY_KILL_BASE_BOUNTY = 1;
 
@@ -336,6 +341,17 @@ const WEAPONS = {
   LAEVATEINN: { name: 'Laevateinn', atk: 32, element: 'FIRE', passive: 'cremate', lore: 'The legendary fire sword that reduces everything to ash. It burns hottest when the fuel is already lit.' },
   VAJRA: { name: 'Vajra', atk: 32, element: 'VOLT', passive: 'gungnir_pierce', lore: 'A spear of mythic thunder. It never misses, and its strike freezes the nervous system.' },
   NIFLHEIM: { name: 'Niflheim', atk: 32, element: 'FROST', passive: 'shatter_execute', lore: 'A blade colder than the void. It does not cut; it simply shatters what is already frozen.' },
+
+  // --- Mini-Boss trophies (Mk I/II/III fixed drops, not in any chest/Elite pool) ---
+  IFRITS_BLADE_I: { name: "Ifrit's Blade I", atk: 7, element: 'FIRE', passive: 'cleave_3_front', lore: "A shard of the Undercroft's opposite — a sliver of something that never stopped burning." },
+  IFRITS_BLADE_II: { name: "Ifrit's Blade II", atk: 16, element: 'FIRE', passive: 'cleave_3_front', lore: "A shard of the Undercroft's opposite — a sliver of something that never stopped burning." },
+  IFRITS_BLADE_III: { name: "Ifrit's Blade III", atk: 28, element: 'FIRE', passive: 'cleave_3_front', lore: "A shard of the Undercroft's opposite — a sliver of something that never stopped burning." },
+  BLITZ_WHIP_I: { name: 'Blitz Whip I', atk: 7, element: 'VOLT', passive: 'chain_lightning_1', lore: "Live current, coiled. It never stops looking for a second target." },
+  BLITZ_WHIP_II: { name: 'Blitz Whip II', atk: 16, element: 'VOLT', passive: 'chain_lightning_1', lore: "Live current, coiled. It never stops looking for a second target." },
+  BLITZ_WHIP_III: { name: 'Blitz Whip III', atk: 28, element: 'VOLT', passive: 'chain_lightning_1', lore: "Live current, coiled. It never stops looking for a second target." },
+  ICE_BRAND_I: { name: 'Ice Brand I', atk: 7, element: 'FROST', passive: 'chill_spread_on_kill', lore: 'A killing blow with this blade leaves the cold looking for somewhere else to go.' },
+  ICE_BRAND_II: { name: 'Ice Brand II', atk: 16, element: 'FROST', passive: 'chill_spread_on_kill', lore: 'A killing blow with this blade leaves the cold looking for somewhere else to go.' },
+  ICE_BRAND_III: { name: 'Ice Brand III', atk: 28, element: 'FROST', passive: 'chill_spread_on_kill', lore: 'A killing blow with this blade leaves the cold looking for somewhere else to go.' },
 } as const satisfies Record<string, { name: string; atk: number; element: Element; passive: string; lore: string }>;
 
 export type WeaponKey = keyof typeof WEAPONS;
@@ -1224,12 +1240,13 @@ export function rollWeaponForDepth(floorNumber: number, id: string): Weapon {
 }
 
 // Elite weapon-drop ATK bonus range, layered on top of the tier's base atk and mirrored into upgradeBonus for the UI suffix.
-const ELITE_DROP_ATK_BONUS_LATE: readonly [number, number] = [2, 4];
-const ELITE_DROP_ATK_BONUS_MID: readonly [number, number] = [1, 3];
-const ELITE_DROP_ATK_BONUS_EARLY: readonly [number, number] = [1, 2];
+const ELITE_DROP_ATK_BONUS_LATE: readonly [number, number] = [1, 8];
+const ELITE_DROP_ATK_BONUS_MID: readonly [number, number] = [1, 6];
+const ELITE_DROP_ATK_BONUS_EARLY: readonly [number, number] = [1, 3];
 
+/** Quadratic low-end skew — low rolls come up far more often than the max. */
 function getRandomBonus(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
+  return min + Math.floor((max - min + 1) * Math.random() ** 2);
 }
 
 export function applyEliteWeaponBonus(weapon: Weapon, currentFloor: number): void {
@@ -1335,7 +1352,6 @@ export const RIFT_SHOP_PRICES: readonly number[] = [50, 150, 300];
 
 // Event 2: Blood-Infused Anvil.
 export const BLOOD_ANVIL_HP_COST_FRACTION = 0.5;
-export const BLOOD_ANVIL_ATK_BONUS = 2;
 
 // Event 3: Frozen Watchwarden.
 export const WATCHWARDEN_SKILL_LEVEL_BONUS = 1;
