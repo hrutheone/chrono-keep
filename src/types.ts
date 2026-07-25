@@ -9,12 +9,13 @@ export type CursedRiftEventKind =
   | 'blood_anvil'
   | 'frozen_watchwarden'
   | 'paradox_mirror'
+  | 'chrono_lich_projection'
   | 'echo_geode';
 
 /** The Cursed Rift's currently-active roulette event. Only 'rift_shop'/'echo_geode' use their own fields. */
 export interface CursedRiftEvent {
   kind: CursedRiftEventKind;
-  // Where the triggering Rift tile was
+  // Where the triggering Rift tile was — 'chrono_lich_projection' spawns its chest here.
   riftX: number;
   riftY: number;
   shopOffers: string[];

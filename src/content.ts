@@ -30,16 +30,16 @@ export const BESTIARY: Record<EnemyKind, EnemyTemplate> = {
   VOLT_TURRET: { hp: 25, attack: 6, defense: 1, speed: 0, element: 'VOLT' },
   FROST_WRAITH: { hp: 18, attack: 5, defense: 2, speed: 1, element: 'FROST' },
   TIME_WEAVER: { hp: 40, attack: 8, defense: 4, speed: 1, element: 'CHRONO' },
-  CHRONO_LICH: { hp: 600, attack: 22, defense: 8, speed: 1, element: 'CHRONO' },
+  CHRONO_LICH: { hp: 4500, attack: 120, defense: 25, speed: 1, element: 'CHRONO' },
 
   BONE_KNIGHT: { hp: 22, attack: 5, defense: 6, speed: 1, element: 'PHYSICAL' },
   CINDER_SHAMAN: { hp: 14, attack: 6, defense: 1, speed: 1, element: 'FIRE' },
   VOLT_HOUND: { hp: 10, attack: 6, defense: 0, speed: 2, element: 'VOLT' },
   FROST_SENTINEL: { hp: 20, attack: 5, defense: 5, speed: 0, element: 'FROST' },
 
-  INFERNO_GOLEM: { hp: 120, attack: 9, defense: 2, speed: 1, element: 'FIRE' },
-  STORM_CALLER: { hp: 100, attack: 11, defense: 3, speed: 1, element: 'VOLT' },
-  GLACIAL_KNIGHT: { hp: 140, attack: 10, defense: 5, speed: 1, element: 'FROST' },
+  INFERNO_GOLEM: { hp: 120, attack: 6, defense: 2, speed: 1, element: 'FIRE' },
+  STORM_CALLER: { hp: 180, attack: 10, defense: 3, speed: 1, element: 'VOLT' },
+  GLACIAL_KNIGHT: { hp: 260, attack: 12, defense: 5, speed: 1, element: 'FROST' },
 
   CLOCKWORK_SCARAB: { hp: 6, attack: 1, defense: 9, speed: 1, element: 'CHRONO' },
 
@@ -176,6 +176,21 @@ export function createEnemy(kind: EnemyKind, id: string, x: number, y: number): 
   };
 }
 
+// Hand-tuned Mk I/II/III mini-boss stats by the Arena floor they appear on — exempt from Depth Scaling.
+export const BOSS_EVOLUTION: Record<number, { hp: number; attack: number; defense: number }> = {
+  10: { hp: 120, attack: 6, defense: 2 }, // Inferno-Golem Mk I
+  40: { hp: 650, attack: 24, defense: 6 }, // Inferno-Golem Mk II
+  70: { hp: 2400, attack: 75, defense: 12 }, // Inferno-Golem Mk III
+
+  20: { hp: 180, attack: 10, defense: 3 }, // Storm-Caller Mk I
+  50: { hp: 850, attack: 35, defense: 8 }, // Storm-Caller Mk II
+  80: { hp: 2900, attack: 90, defense: 16 }, // Storm-Caller Mk III
+
+  30: { hp: 260, attack: 12, defense: 5 }, // Glacial-Knight Mk I
+  60: { hp: 1100, attack: 45, defense: 12 }, // Glacial-Knight Mk II
+  90: { hp: 3500, attack: 110, defense: 24 }, // Glacial-Knight Mk III
+};
+
 /** Which 10-floor Biome a floor belongs to (1-10). Floor 99 caps Biome 10. */
 export function biomeOf(floorNumber: number): number {
   return Math.min(10, Math.floor((floorNumber - 1) / 10) + 1);
@@ -270,57 +285,57 @@ export function enemyCountRangeForFloor(floorNumber: number): { min: number; max
 }
 
 const WEAPONS = {
-  SHATTERED_SCRAP: { name: 'Shattered Scrap', atk: 4, element: 'PHYSICAL', passive: 'none', lore: 'A ruined husk of what was once a weapon. Better than nothing... barely.' },
+  SHATTERED_SCRAP: { name: 'Shattered Scrap', atk: 2, element: 'PHYSICAL', passive: 'none', lore: 'A ruined husk of what was once a weapon. Better than nothing... barely.' },
   // --- Early game (F1-F20) ---
   RUSTY_SWORD: { name: 'Rusty Sword', atk: 3, element: 'PHYSICAL', passive: 'none', lore: 'Your service weapon from a timeline long forgotten. It remembers the taste of blood, but its edge has dulled across a thousand failed resets.' },
-  BONE_DAGGER: { name: 'Bone Dagger', atk: 2, element: 'PHYSICAL', passive: 'free_swap', lore: 'Carved from the femur of a fallen Watchwarden. It demands so little weight to wield, you can draw it between the ticks of a clock.' },
-  MYTHRIL_HAMMER: { name: 'Mythril Hammer', atk: 5, element: 'PHYSICAL', passive: 'heavy_stamina', lore: 'Too heavy for a living arm to swing twice. Yours is not quite living anymore.' },
-  MAGE_MASHER: { name: 'Mage Masher', atk: 3, element: 'VOLT', passive: 'stamina_leech_10', lore: "A duelist's parrying blade, repurposed. It hums faintly, siphoning static off every failed guard." },
-  FLAMETONGUE: { name: 'Flametongue', atk: 3, element: 'FIRE', passive: 'cure_chill_on_attack', lore: 'A campfire given an edge. It never quite stops smoldering.' },
-  ICE_LANCE: { name: 'Ice Lance', atk: 4, element: 'FROST', passive: 'pierce_ranged_2', lore: 'A shard of the Undercroft, sharpened. It skewers straight through whatever stands in its way.' },
-  PARTISAN: { name: 'Partisan', atk: 4, element: 'PHYSICAL', passive: 'knockback_1', lore: "The citadel guard's parade weapon, still fit for shoving intruders back where they came from." },
-  GLASS_SWORD: { name: 'Glass Sword', atk: 7, element: 'PHYSICAL', passive: 'glass_cannon', lore: 'Impossibly sharp, impossibly fragile — one hard shock and it shatters in your hand.' },
-  BROADSWORD: { name: 'Broadsword', atk: 4, element: 'PHYSICAL', passive: 'none', lore: 'Reliable, unremarkable steel. No tricks, no curses — just a blade that cuts.' },
-  ASH_WAND: { name: 'Ash Wand', atk: 3, element: 'FIRE', passive: 'ranged_no_adjacent_3', lore: 'Charred at the tip from one use too many. Best kept at a comfortable distance.' },
+  BONE_DAGGER: { name: 'Bone Dagger', atk: 3, element: 'PHYSICAL', passive: 'free_swap', lore: 'Carved from the femur of a fallen Watchwarden. It demands so little weight to wield, you can draw it between the ticks of a clock.' },
+  MYTHRIL_HAMMER: { name: 'Mythril Hammer', atk: 6, element: 'PHYSICAL', passive: 'heavy_stamina', lore: 'Too heavy for a living arm to swing twice. Yours is not quite living anymore.' },
+  MAGE_MASHER: { name: 'Mage Masher', atk: 4, element: 'VOLT', passive: 'stamina_leech_10', lore: "A duelist's parrying blade, repurposed. It hums faintly, siphoning static off every failed guard." },
+  FLAMETONGUE: { name: 'Flametongue', atk: 4, element: 'FIRE', passive: 'cure_chill_on_attack', lore: 'A campfire given an edge. It never quite stops smoldering.' },
+  ICE_LANCE: { name: 'Ice Lance', atk: 5, element: 'FROST', passive: 'pierce_ranged_2', lore: 'A shard of the Undercroft, sharpened. It skewers straight through whatever stands in its way.' },
+  PARTISAN: { name: 'Partisan', atk: 5, element: 'PHYSICAL', passive: 'knockback_1', lore: "The citadel guard's parade weapon, still fit for shoving intruders back where they came from." },
+  GLASS_SWORD: { name: 'Glass Sword', atk: 6, element: 'PHYSICAL', passive: 'glass_cannon', lore: 'Impossibly sharp, impossibly fragile — one hard shock and it shatters in your hand.' },
+  BROADSWORD: { name: 'Broadsword', atk: 5, element: 'PHYSICAL', passive: 'none', lore: 'Reliable, unremarkable steel. No tricks, no curses — just a blade that cuts.' },
+  ASH_WAND: { name: 'Ash Wand', atk: 4, element: 'FIRE', passive: 'ranged_no_adjacent_3', lore: 'Charred at the tip from one use too many. Best kept at a comfortable distance.' },
   BONE_CLUB: { name: 'Bone Club', atk: 6, element: 'PHYSICAL', passive: 'def_minus_1_equipped', lore: 'All offense, no guard. Swinging it wide enough to matter leaves you wide open.' },
-  DEFENDER: { name: 'Defender', atk: 3, element: 'PHYSICAL', passive: 'def_plus_1_equipped', lore: "A watchman's sidearm, balanced for blocking as much as striking." },
+  DEFENDER: { name: 'Defender', atk: 4, element: 'PHYSICAL', passive: 'def_plus_1_equipped', lore: "A watchman's sidearm, balanced for blocking as much as striking." },
 
   // --- Mid game (F21-F50) ---
-  THUNDER_ROD: { name: 'Thunder Rod', atk: 4, element: 'VOLT', passive: 'arc_3', lore: 'A lightning rod bent into a weapon. The charge always finds more than one target.' },
-  IFRITS_BLADE: { name: "Ifrit's Blade", atk: 6, element: 'FIRE', passive: 'cleave_3_front', lore: "A shard of the Undercroft's opposite — a sliver of something that never stopped burning." },
-  ELVEN_BOW: { name: 'Elven Bow', atk: 5, element: 'FROST', passive: 'ranged_no_adjacent_4', lore: 'Older than the citadel itself. The string still remembers a forest that no longer exists.' },
-  BLOOD_SWORD: { name: 'Blood Sword', atk: 4, element: 'PHYSICAL', passive: 'lifesteal_2_on_hit', lore: 'It drinks a little with every cut, and gives a little back.' },
-  CORAL_SWORD: { name: 'Coral Sword', atk: 5, element: 'VOLT', passive: 'pull_1_stun_25', lore: 'Grown, not forged, in a flooded sub-level that used to be a power station.' },
-  DARK_KNIGHTS_BLADE: { name: "Dark Knight's Blade", atk: 8, element: 'PHYSICAL', passive: 'blood_magic_2', lore: 'It cuts deeper than any living wrist could bear to swing it.' },
-  ASSASSINS_DAGGER: { name: "Assassin's Dagger", atk: 5, element: 'CHRONO', passive: 'knockback_2_randomize_element', lore: 'It bends reality upon impact. You never quite know what you\'ll leave behind.' },
-  FLAMBERGE: { name: 'Flamberge', atk: 6, element: 'FIRE', passive: 'ignite_behind', lore: 'Wave-bladed and cursed. The fire it leaves behind burns longer than the cut itself.' },
-  TRIDENT: { name: 'Trident', atk: 5, element: 'VOLT', passive: 'wall_slam_bonus', lore: "Fished from the drowned reactor level. It's happiest when it has something to pin down." },
-  BIO_BLADE: { name: 'Bio-Blade', atk: 5, element: 'PHYSICAL', passive: 'stun_50_vs_chilled', lore: 'Serrated to find the nerve under numbed flesh.' },
-  MURASAME: { name: 'Murasame', atk: 6, element: 'PHYSICAL', passive: 'kill_refund_turn', lore: 'A blade with a taste for finality. It never lingers on a kill.' },
-  GALE_BOW: { name: 'Gale Bow', atk: 4, element: 'VOLT', passive: 'ranged_push_3', lore: 'Strung with live wire. Every loosed bolt arrives on a gust that shoves back.' },
-  KOTETSU: { name: 'Kotetsu', atk: 4, element: 'PHYSICAL', passive: 'combo_stack', lore: 'A dueling blade that rewards patience — it finds its rhythm the longer a fight runs.' },
-  DIAMOND_MACE: { name: 'Diamond Mace', atk: 5, element: 'FROST', passive: 'bonus_vs_chilled_2x', lore: 'Faceted ice that never melts. It shatters what the cold has already made brittle.' },
+  THUNDER_ROD: { name: 'Thunder Rod', atk: 8, element: 'VOLT', passive: 'arc_3', lore: 'A lightning rod bent into a weapon. The charge always finds more than one target.' },
+  IFRITS_BLADE: { name: "Ifrit's Blade", atk: 11, element: 'FIRE', passive: 'cleave_3_front', lore: "A shard of the Undercroft's opposite — a sliver of something that never stopped burning." },
+  ELVEN_BOW: { name: 'Elven Bow', atk: 9, element: 'FROST', passive: 'ranged_no_adjacent_4', lore: 'Older than the citadel itself. The string still remembers a forest that no longer exists.' },
+  BLOOD_SWORD: { name: 'Blood Sword', atk: 9, element: 'PHYSICAL', passive: 'lifesteal_2_on_hit', lore: 'It drinks a little with every cut, and gives a little back.' },
+  CORAL_SWORD: { name: 'Coral Sword', atk: 10, element: 'VOLT', passive: 'pull_1_stun_25', lore: 'Grown, not forged, in a flooded sub-level that used to be a power station.' },
+  DARK_KNIGHTS_BLADE: { name: "Dark Knight's Blade", atk: 15, element: 'PHYSICAL', passive: 'blood_magic_2', lore: 'It cuts deeper than any living wrist could bear to swing it.' },
+  ASSASSINS_DAGGER: { name: "Assassin's Dagger", atk: 10, element: 'CHRONO', passive: 'knockback_2_randomize_element', lore: 'It bends reality upon impact. You never quite know what you\'ll leave behind.' },
+  FLAMBERGE: { name: 'Flamberge', atk: 11, element: 'FIRE', passive: 'ignite_behind', lore: 'Wave-bladed and cursed. The fire it leaves behind burns longer than the cut itself.' },
+  TRIDENT: { name: 'Trident', atk: 10, element: 'VOLT', passive: 'wall_slam_bonus', lore: "Fished from the drowned reactor level. It's happiest when it has something to pin down." },
+  BIO_BLADE: { name: 'Bio-Blade', atk: 10, element: 'PHYSICAL', passive: 'stun_50_vs_chilled', lore: 'Serrated to find the nerve under numbed flesh.' },
+  MURASAME: { name: 'Murasame', atk: 12, element: 'PHYSICAL', passive: 'kill_refund_turn', lore: 'A blade with a taste for finality. It never lingers on a kill.' },
+  GALE_BOW: { name: 'Gale Bow', atk: 9, element: 'VOLT', passive: 'ranged_push_3', lore: 'Strung with live wire. Every loosed bolt arrives on a gust that shoves back.' },
+  KOTETSU: { name: 'Kotetsu', atk: 9, element: 'PHYSICAL', passive: 'combo_stack', lore: 'A dueling blade that rewards patience — it finds its rhythm the longer a fight runs.' },
+  DIAMOND_MACE: { name: 'Diamond Mace', atk: 10, element: 'FROST', passive: 'bonus_vs_chilled_2x', lore: 'Faceted ice that never melts. It shatters what the cold has already made brittle.' },
 
   // --- Late game (F51-F99) ---
-  FIRAGA_EDGE: { name: 'Firaga Edge', atk: 7, element: 'FIRE', passive: 'bonus_vs_burning_2x', lore: "Forged in a furnace that never actually existed, except in this loop's version of the past." },
-  ICE_BRAND: { name: 'Ice Brand', atk: 6, element: 'FROST', passive: 'chill_spread_on_kill', lore: 'A killing blow with this blade leaves the cold looking for somewhere else to go.' },
-  BLITZ_WHIP: { name: 'Blitz Whip', atk: 6, element: 'VOLT', passive: 'chain_lightning_1', lore: "Live current, coiled. It never stops looking for a second target." },
-  RUNE_AXE: { name: 'Rune Axe', atk: 10, element: 'PHYSICAL', passive: 'execute_20_heavy', lore: 'Too heavy to swing carelessly. It ends fights that are already nearly over.' },
-  EXCALIBUR: { name: 'Excalibur', atk: 8, element: 'PHYSICAL', passive: 'ignore_def_50', lore: "A relic from a story that didn't happen here — armor simply forgets to matter around it." },
-  HOLY_LANCE: { name: 'Holy Lance', atk: 8, element: 'FIRE', passive: 'pierce_ranged_3_fire_hazard', lore: 'Consecrated steel, or close enough. What it pierces, it also leaves burning.' },
-  ULTIMA_WEAPON: { name: 'Ultima Weapon', atk: 8, element: 'PHYSICAL', passive: 'heal_missing_10_on_kill', lore: 'The last thing a lot of things ever see. It gives a little of your own future back.' },
-  RAGNAROK: { name: 'Ragnarok', atk: 9, element: 'PHYSICAL', passive: 'permanent_def_reduction_1', lore: 'Every strike leaves the armor a little less than it was — and it never grows back.' },
-  GUNGNIR: { name: 'Gungnir', atk: 8, element: 'VOLT', passive: 'pierce_ranged_2_dash', lore: 'A spear that never really stops moving, even after it lands.' },
-  SAVE_THE_QUEEN: { name: 'Save the Queen', atk: 6, element: 'FROST', passive: 'negate_first_hit_per_floor', lore: "A ceremonial blade, repurposed for a war it wasn't built for. It still remembers how to shield someone." },
-  BLOOD_LANCE: { name: 'Blood Lance', atk: 7, element: 'FIRE', passive: 'pierce_ranged_2_lifesteal_3', lore: 'It burns going in and gives something back coming out.' },
-  DEATHBRINGER: { name: 'Deathbringer', atk: 8, element: 'CHRONO', passive: 'execute_chance_5', lore: "It doesn't always kill outright. It doesn't need to, often enough." },
-  APOCALYPSE: { name: 'Apocalypse', atk: 14, element: 'CHRONO', passive: 'max_hp_minus_10_equipped', lore: 'Devastating in the hand, and it costs you something just to hold it.' },
-  MASAMUNE: { name: 'Masamune', atk: 10, element: 'CHRONO', passive: 'kill_refund_turns_3', lore: 'A legendary blade, somehow, in a timeline that has no business having legends. Mythic-tier — it steals back a real handful of moments with every kill.' },
+  FIRAGA_EDGE: { name: 'Firaga Edge', atk: 18, element: 'FIRE', passive: 'bonus_vs_burning_2x', lore: "Forged in a furnace that never actually existed, except in this loop's version of the past." },
+  ICE_BRAND: { name: 'Ice Brand', atk: 16, element: 'FROST', passive: 'chill_spread_on_kill', lore: 'A killing blow with this blade leaves the cold looking for somewhere else to go.' },
+  BLITZ_WHIP: { name: 'Blitz Whip', atk: 16, element: 'VOLT', passive: 'chain_lightning_1', lore: "Live current, coiled. It never stops looking for a second target." },
+  RUNE_AXE: { name: 'Rune Axe', atk: 24, element: 'PHYSICAL', passive: 'execute_20_heavy', lore: 'Too heavy to swing carelessly. It ends fights that are already nearly over.' },
+  EXCALIBUR: { name: 'Excalibur', atk: 22, element: 'PHYSICAL', passive: 'ignore_def_50', lore: "A relic from a story that didn't happen here — armor simply forgets to matter around it." },
+  HOLY_LANCE: { name: 'Holy Lance', atk: 22, element: 'FIRE', passive: 'pierce_ranged_3_fire_hazard', lore: 'Consecrated steel, or close enough. What it pierces, it also leaves burning.' },
+  ULTIMA_WEAPON: { name: 'Ultima Weapon', atk: 22, element: 'PHYSICAL', passive: 'heal_missing_10_on_kill', lore: 'The last thing a lot of things ever see. It gives a little of your own future back.' },
+  RAGNAROK: { name: 'Ragnarok', atk: 25, element: 'PHYSICAL', passive: 'permanent_def_reduction_1', lore: 'Every strike leaves the armor a little less than it was — and it never grows back.' },
+  GUNGNIR: { name: 'Gungnir', atk: 22, element: 'VOLT', passive: 'pierce_ranged_2_dash', lore: 'A spear that never really stops moving, even after it lands.' },
+  SAVE_THE_QUEEN: { name: 'Save the Queen', atk: 18, element: 'FROST', passive: 'negate_first_hit_per_floor', lore: "A ceremonial blade, repurposed for a war it wasn't built for. It still remembers how to shield someone." },
+  BLOOD_LANCE: { name: 'Blood Lance', atk: 20, element: 'FIRE', passive: 'pierce_ranged_2_lifesteal_3', lore: 'It burns going in and gives something back coming out.' },
+  DEATHBRINGER: { name: 'Deathbringer', atk: 22, element: 'CHRONO', passive: 'execute_chance_5', lore: "It doesn't always kill outright. It doesn't need to, often enough." },
+  APOCALYPSE: { name: 'Apocalypse', atk: 30, element: 'CHRONO', passive: 'max_hp_minus_10_equipped', lore: 'Devastating in the hand, and it costs you something just to hold it.' },
+  MASAMUNE: { name: 'Masamune', atk: 26, element: 'CHRONO', passive: 'kill_refund_turns_3', lore: 'A legendary blade, somehow, in a timeline that has no business having legends. Mythic-tier — it steals back a real handful of moments with every kill.' },
 
   // --- Ultimate Elemental (F80-99 chase weapons) ---
-  LAEVATEINN: { name: 'Laevateinn', atk: 9, element: 'FIRE', passive: 'cremate', lore: 'The legendary fire sword that reduces everything to ash. It burns hottest when the fuel is already lit.' },
-  VAJRA: { name: 'Vajra', atk: 9, element: 'VOLT', passive: 'gungnir_pierce', lore: 'A spear of mythic thunder. It never misses, and its strike freezes the nervous system.' },
-  NIFLHEIM: { name: 'Niflheim', atk: 9, element: 'FROST', passive: 'shatter_execute', lore: 'A blade colder than the void. It does not cut; it simply shatters what is already frozen.' },
+  LAEVATEINN: { name: 'Laevateinn', atk: 32, element: 'FIRE', passive: 'cremate', lore: 'The legendary fire sword that reduces everything to ash. It burns hottest when the fuel is already lit.' },
+  VAJRA: { name: 'Vajra', atk: 32, element: 'VOLT', passive: 'gungnir_pierce', lore: 'A spear of mythic thunder. It never misses, and its strike freezes the nervous system.' },
+  NIFLHEIM: { name: 'Niflheim', atk: 32, element: 'FROST', passive: 'shatter_execute', lore: 'A blade colder than the void. It does not cut; it simply shatters what is already frozen.' },
 } as const satisfies Record<string, { name: string; atk: number; element: Element; passive: string; lore: string }>;
 
 export type WeaponKey = keyof typeof WEAPONS;
@@ -1280,6 +1295,7 @@ export const CURSED_RIFT_EVENT_KINDS: readonly CursedRiftEventKind[] = [
   'blood_anvil',
   'frozen_watchwarden',
   'paradox_mirror',
+  'chrono_lich_projection',
   'echo_geode',
 ];
 
@@ -1308,6 +1324,10 @@ export const CURSED_RIFT_EVENT_INFO: Record<CursedRiftEventKind, CursedRiftEvent
     title: 'The Paradox Mirror',
     flavor: 'The Rift shatters. Something wearing your face steps out of the pieces.',
   },
+  chrono_lich_projection: {
+    title: "The Chrono-Lich's Projection",
+    flavor: 'A flickering echo of Him leans in, amused. He always has an offer.',
+  },
   echo_geode: {
     title: 'The Echo Geode',
     flavor: 'A jagged crystal, humming with trapped memories, ready to be struck.',
@@ -1325,6 +1345,8 @@ export const BLOOD_ANVIL_ATK_BONUS = 2;
 // Event 3: Frozen Watchwarden.
 export const WATCHWARDEN_SKILL_LEVEL_BONUS = 1;
 
+// Event 5: The Chrono-Lich's Projection.
+export const LICH_PROJECTION_MAX_HP_COST = 10;
 
 // Event 6: Echo Geode.
 export const ECHO_GEODE_MAX_TURNS = 5;
