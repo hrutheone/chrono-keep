@@ -7,11 +7,20 @@ import { resetVisualLerps } from './animation';
 import { resetCameraLerp } from './camera';
 import {
   applyEliteAffixStats,
+  biomeOf,
+  COPPER_PILLAR_MAX,
+  COPPER_PILLAR_MIN,
+  COPPER_PILLAR_PLACEMENT_ATTEMPTS,
+  COPPER_PILLAR_TEACHING_BIOMES,
   createEnemy,
   ELITE_AFFIX_KEYS,
   ELITE_SPAWN_CHANCE,
   enemyCountRangeForFloor,
   enemyPoolForFloor,
+  ICE_SLICK_PATCH_MAX,
+  ICE_SLICK_PATCH_MIN,
+  ICE_SLICK_PATCH_SHAPES,
+  ICE_SLICK_TEACHING_BIOMES,
   rollChestItem,
   scaleEnemyForDepth,
   scaleEnemyForEchoMagnet,
@@ -47,8 +56,10 @@ export const TILE = {
   TORCH: 14,
   // Storm-Caller Mk II/III arena hazard.
   VOLT_HAZARD: 15,
-  // Glacial-Knight Mk II/III arena hazard — slides the player, deals no damage.
+  // Glacial-Knight Mk II/III arena hazard, also taught procedurally on ice-Biome floors — slides the player, deals no damage.
   ICE_SLICK: 16,
+  // Static line-of-sight cover, procedurally taught on volt-Biome floors ahead of the Storm-Caller.
+  COPPER_PILLAR: 17,
 } as const;
 
 /** Turn-budget guarantee: spawn -> Stairs within 40 walked tiles. */
@@ -127,7 +138,7 @@ function randInt(rng: Rng, lo: number, hi: number): number {
   return lo + Math.floor(rng() * (hi - lo + 1));
 }
 
-function pick<T>(rng: Rng, arr: T[]): T {
+function pick<T>(rng: Rng, arr: readonly T[]): T {
   return arr[randInt(rng, 0, arr.length - 1)];
 }
 
@@ -184,6 +195,60 @@ function shortestPath(tiles: number[][], from: Point, to: Point): Point[] | null
     path.push({ x: idx % N, y: Math.floor(idx / N) });
   }
   return path.reverse();
+}
+
+/** Scatters 1-2 non-damaging Ice Slick patches (rooms and corridors alike) to teach the Glacial-Knight's slide. */
+function placeIceSlickPatches(rng: Rng, tiles: number[][], occupied: Set<number>): void {
+  const patchCount = randInt(rng, ICE_SLICK_PATCH_MIN, ICE_SLICK_PATCH_MAX);
+  for (let i = 0; i < patchCount; i++) {
+    const shape = pick(rng, ICE_SLICK_PATCH_SHAPES);
+    const origins: Point[] = [];
+    for (let y = 0; y < N; y++) {
+      for (let x = 0; x < N; x++) {
+        const fits = shape.every(({ x: ox, y: oy }) => {
+          const tx = x + ox;
+          const ty = y + oy;
+          return tx < N && ty < N && tiles[ty][tx] === TILE.FLOOR && !occupied.has(ty * N + tx);
+        });
+        if (fits) origins.push({ x, y });
+      }
+    }
+    if (origins.length === 0) continue;
+    const origin = pick(rng, origins);
+    for (const { x: ox, y: oy } of shape) {
+      const tx = origin.x + ox;
+      const ty = origin.y + oy;
+      tiles[ty][tx] = TILE.ICE_SLICK;
+      occupied.add(ty * N + tx);
+    }
+  }
+}
+
+/** Places 1-2 static Copper Pillars (open-room cover) without ever cutting off the Stairs. */
+function placeCopperPillars(
+  rng: Rng,
+  tiles: number[][],
+  spawn: Point,
+  stairs: Point,
+  candidates: (ok: (x: number, y: number) => boolean) => Point[],
+  occupied: Set<number>,
+): void {
+  const pillarCount = randInt(rng, COPPER_PILLAR_MIN, COPPER_PILLAR_MAX);
+  let placed = 0;
+  for (let attempt = 0; placed < pillarCount && attempt < COPPER_PILLAR_PLACEMENT_ATTEMPTS; attempt++) {
+    const spots = candidates((x, y) => tiles[y][x] === TILE.FLOOR && !occupied.has(y * N + x));
+    if (spots.length === 0) break;
+    const pos = pick(rng, spots);
+    tiles[pos.y][pos.x] = TILE.COPPER_PILLAR;
+    const dist = walkDistances(tiles, spawn.x, spawn.y);
+    const stairsDist = dist[stairs.y * N + stairs.x];
+    if (stairsDist < 0 || stairsDist > PATH_BUDGET) {
+      tiles[pos.y][pos.x] = TILE.FLOOR;
+      continue;
+    }
+    occupied.add(pos.y * N + pos.x);
+    placed += 1;
+  }
 }
 
 /** Generates a floor from the save seed. */
@@ -450,6 +515,7 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
       const pos = pick(rng, spots);
       riftX = pos.x;
       riftY = pos.y;
+      occupied.add(pos.y * N + pos.x);
     }
   }
 
@@ -475,6 +541,12 @@ function tryGenerate(rng: Rng, floorNumber: number): GeneratedFloor | null {
       tiles[pos.y][pos.x] = TILE.CHRONO_ANVIL;
       occupied.add(pos.y * N + pos.x);
     }
+  }
+
+  // Teasing & Teaching: safe procedural previews of arena-exclusive gimmicks, ahead of their Mini-Boss.
+  if (ICE_SLICK_TEACHING_BIOMES.has(biomeOf(floorNumber))) placeIceSlickPatches(rng, tiles, occupied);
+  if (COPPER_PILLAR_TEACHING_BIOMES.has(biomeOf(floorNumber))) {
+    placeCopperPillars(rng, tiles, spawn, stairs, candidates, occupied);
   }
 
   return {

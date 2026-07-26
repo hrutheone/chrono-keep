@@ -150,6 +150,8 @@ function slideOnIce(state: GameState, startX: number, startY: number, dx: number
     const ny = y + dy;
     if (!isWalkableAt(state, nx, ny)) break;
     if (state.dungeon.enemies.some((e) => e.x === nx && e.y === ny)) break;
+    const nextTile = effectiveTileAt(state, nx, ny);
+    if (nextTile === TILE.FIRE_HAZARD || nextTile === TILE.VOLT_HAZARD) break;
     x = nx;
     y = ny;
   }

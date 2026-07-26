@@ -530,6 +530,14 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
         drawRef(ctx, TREE_STAGE_SPRITES[stage], screenX, screenY);
         continue;
       }
+      if (row[tx] === TILE.COPPER_PILLAR) {
+        drawTintedRef(ctx, SPRITES.WALL, screenX, screenY, COLOR_VOLT);
+        continue;
+      }
+      if (row[tx] === TILE.ICE_SLICK) {
+        drawTintedRef(ctx, SPRITES.ICE_SLICK, screenX, screenY, COLOR_FROST);
+        continue;
+      }
       const ref = TILE_REFS[row[tx]];
       if (ref) drawRef(ctx, ref, screenX, screenY);
       if (!isFixedLayoutFloor && row[tx] === TILE.FLOOR) {
@@ -771,7 +779,7 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     const row = state.dungeon.tiles[ty];
     for (let tx = lightStartX; tx < lightEndX; tx++) {
       const tile = row[tx];
-      if (tile === TILE.FIRE_HAZARD || tile === TILE.FROST_HAZARD || tile === TILE.ECHO_WELL || tile === TILE.CHRONO_ANVIL || tile === TILE.SHOP_TERMINAL || tile === TILE.SHORTCUT_GATE || tile === TILE.TORCH) {
+      if (tile === TILE.FIRE_HAZARD || tile === TILE.FROST_HAZARD || tile === TILE.ICE_SLICK || tile === TILE.ECHO_WELL || tile === TILE.CHRONO_ANVIL || tile === TILE.SHOP_TERMINAL || tile === TILE.SHORTCUT_GATE || tile === TILE.TORCH) {
         const sx = (tx - camX) * TILE_SIZE + TILE_SIZE / 2;
         const sy = (ty - camY) * TILE_SIZE + TILE_SIZE / 2;
         let radius = TILE_SIZE * 2.5;
@@ -826,13 +834,13 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
     const row = state.dungeon.tiles[ty];
     for (let tx = lightStartX; tx < lightEndX; tx++) {
       const tile = row[tx];
-      if (tile === TILE.FIRE_HAZARD || tile === TILE.FROST_HAZARD || tile === TILE.ECHO_WELL || tile === TILE.CHRONO_ANVIL || tile === TILE.SHOP_TERMINAL || tile === TILE.SHORTCUT_GATE || tile === TILE.TORCH) {
+      if (tile === TILE.FIRE_HAZARD || tile === TILE.FROST_HAZARD || tile === TILE.ICE_SLICK || tile === TILE.ECHO_WELL || tile === TILE.CHRONO_ANVIL || tile === TILE.SHOP_TERMINAL || tile === TILE.SHORTCUT_GATE || tile === TILE.TORCH) {
         const sx = (tx - camX) * TILE_SIZE + TILE_SIZE / 2;
         const sy = (ty - camY) * TILE_SIZE + TILE_SIZE / 2;
-        
+
         if (tile === TILE.FIRE_HAZARD || tile === TILE.TORCH) {
           drawColoredLight(sx, sy, TILE_SIZE * 2.5 + fireFlicker, 'rgba(255, 120, 0, 0.15)');
-        } else if (tile === TILE.FROST_HAZARD || tile === TILE.ECHO_WELL) {
+        } else if (tile === TILE.FROST_HAZARD || tile === TILE.ICE_SLICK || tile === TILE.ECHO_WELL) {
           drawColoredLight(sx, sy, TILE_SIZE * 2.5, 'rgba(0, 150, 255, 0.15)');
         } else if (tile === TILE.SHOP_TERMINAL || tile === TILE.SHORTCUT_GATE) {
           drawColoredLight(sx, sy, TILE_SIZE * 2.5, 'rgba(150, 0, 255, 0.15)');

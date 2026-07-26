@@ -196,6 +196,23 @@ export function biomeOf(floorNumber: number): number {
   return Math.min(10, Math.floor((floorNumber - 1) / 10) + 1);
 }
 
+// Teasing & Teaching: safe procedural previews of arena-exclusive gimmicks, ahead of their Mini-Boss.
+export const ICE_SLICK_TEACHING_BIOMES = new Set([3, 6, 9]);
+export const COPPER_PILLAR_TEACHING_BIOMES = new Set([2, 5, 8]);
+
+export const ICE_SLICK_PATCH_MIN = 1;
+export const ICE_SLICK_PATCH_MAX = 2;
+// Offsets from a patch's origin tile; either a 1x3 strip (either orientation) or a 2x2 block.
+export const ICE_SLICK_PATCH_SHAPES: readonly { x: number; y: number }[][] = [
+  [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }],
+  [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 0, y: 2 }],
+  [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }],
+];
+
+export const COPPER_PILLAR_MIN = 1;
+export const COPPER_PILLAR_MAX = 2;
+export const COPPER_PILLAR_PLACEMENT_ATTEMPTS = 20;
+
 /** Depth Multiplier: +8% compounding every 5 floors. */
 export function depthMultiplier(floorNumber: number): number {
   return Math.pow(1.08, Math.floor((floorNumber - 1) / 5));
