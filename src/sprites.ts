@@ -59,6 +59,8 @@ export const SPRITES = {
   FIRE_HAZARD: { col: 15, row: 10 }, // orange flame
   TORCH: { col: 3, row: 15 }, // wall torch light source
   FROST_HAZARD: { col: 14, row: 18 }, // blue water droplet
+  VOLT_HAZARD: { col: 29, row: 12 }, // radial spark burst, tinted COLOR_VOLT at render time
+  ICE_SLICK: { col: 30, row: 12 }, // scattered shine, tinted COLOR_FROST at render time
   SHOP_TERMINAL: { col: 5, row: 8 }, // bed
   CURSED_RIFT: { col: 6, row: 2 }, // dark red brick pattern — ominous texture
   ECHO_WELL: { col: 14, row: 5 }, // solid glowing-blue pool tile

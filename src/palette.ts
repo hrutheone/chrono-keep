@@ -27,6 +27,8 @@ export const COLOR_FIRE = '#ff8c1a';
 export const COLOR_VOLT = '#fff33d';
 export const COLOR_FROST = '#b3e8ff';
 export const COLOR_CHRONO = '#c792ff';
+/** Avalanche's icicle telegraph — brighter/whiter than the Frost Pulse's COLOR_FROST so the two warnings read as distinct threats. */
+export const COLOR_ICICLE = '#eaffff';
 
 /** Physical has no elemental accent — reuses the neutral amber. */
 export const ELEMENT_COLOR: Record<Element, string> = {

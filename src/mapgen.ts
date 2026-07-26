@@ -45,6 +45,10 @@ export const TILE = {
   TREE: 12,
   SMUGGLER: 13,
   TORCH: 14,
+  // Storm-Caller Mk II/III arena hazard.
+  VOLT_HAZARD: 15,
+  // Glacial-Knight Mk II/III arena hazard — slides the player, deals no damage.
+  ICE_SLICK: 16,
 } as const;
 
 /** Turn-budget guarantee: spawn -> Stairs within 40 walked tiles. */
@@ -66,6 +70,8 @@ const WALKABLE = new Set<number>([
   TILE.FROST_HAZARD,
   TILE.ECHO_WELL,
   TILE.CHRONO_ANVIL,
+  TILE.VOLT_HAZARD,
+  TILE.ICE_SLICK,
 ]);
 
 /** Shared walkability rule (generator pathing and player movement agree). */

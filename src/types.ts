@@ -135,7 +135,7 @@ export interface GameState {
       x: number;
       y: number;
       turnsUntil: number;
-      payload: 'stun' | 'fire_aoe' | 'chill_pulse';
+      payload: 'stun' | 'fire_aoe' | 'chill_pulse' | 'icicle' | 'volt_beam';
       sourceAttack: number;
       hazard?: boolean;
       hazardTurns?: number;

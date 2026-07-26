@@ -10,6 +10,8 @@ import {
   COLOR_FLASH,
   COLOR_FIRE,
   COLOR_FROST,
+  COLOR_VOLT,
+  COLOR_ICICLE,
   COLOR_CHRONO,
   BIOME_WALL_TINTS,
 } from './palette';
@@ -161,6 +163,8 @@ const TILE_REFS: Partial<Record<number, SpriteRef>> = {
   [TILE.BOSS_GATE]: SPRITES.BOSS_GATE,
   [TILE.FIRE_HAZARD]: SPRITES.FIRE_HAZARD,
   [TILE.FROST_HAZARD]: SPRITES.FROST_HAZARD,
+  [TILE.VOLT_HAZARD]: SPRITES.VOLT_HAZARD,
+  [TILE.ICE_SLICK]: SPRITES.ICE_SLICK,
   [TILE.SHOP_TERMINAL]: SPRITES.SHOP_TERMINAL,
   [TILE.ECHO_WELL]: SPRITES.ECHO_WELL,
   [TILE.CHRONO_ANVIL]: SPRITES.CHRONO_ANVIL,
@@ -553,6 +557,14 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
       drawTintedRef(ctx, ref, sx, sy, wallTint, rot);
       continue;
     }
+    if (t.tileType === TILE.VOLT_HAZARD) {
+      drawTintedRef(ctx, SPRITES.VOLT_HAZARD, sx, sy, COLOR_VOLT);
+      continue;
+    }
+    if (t.tileType === TILE.ICE_SLICK) {
+      drawTintedRef(ctx, SPRITES.ICE_SLICK, sx, sy, COLOR_FROST);
+      continue;
+    }
     const ref = TILE_REFS[t.tileType];
     if (ref) drawRef(ctx, ref, sx, sy);
   }
@@ -565,7 +577,16 @@ export function renderWorld(ctx: CanvasRenderingContext2D, state: GameState, vie
       const tileSx = t.x - camX;
       const tileSy = t.y - camY;
       if (tileSx < -1 || tileSx >= VIEWPORT_TILES_W + 1 || tileSy < -1 || tileSy >= VIEWPORT_TILES_H + 1) continue;
-      ctx.fillStyle = t.payload === 'fire_aoe' ? COLOR_FIRE : t.payload === 'chill_pulse' ? COLOR_FROST : COLOR_ENEMY_LIGHT;
+      ctx.fillStyle =
+        t.payload === 'fire_aoe'
+          ? COLOR_FIRE
+          : t.payload === 'chill_pulse'
+            ? COLOR_FROST
+            : t.payload === 'icicle'
+              ? COLOR_ICICLE
+              : t.payload === 'volt_beam'
+                ? COLOR_VOLT
+                : COLOR_ENEMY_LIGHT;
       ctx.fillRect(Math.round(tileSx * TILE_SIZE), Math.round(tileSy * TILE_SIZE), TILE_SIZE, TILE_SIZE);
     }
     ctx.globalAlpha = 1;

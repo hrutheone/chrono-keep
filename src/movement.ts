@@ -139,6 +139,23 @@ export function consumeStunnedAction(state: GameState): boolean {
   return true;
 }
 
+// Glacial-Knight Mk II/III's Ice Slicks.
+const ICE_SLICK_SLIDE_TILES = 2;
+
+function slideOnIce(state: GameState, startX: number, startY: number, dx: number, dy: number): { x: number; y: number } {
+  let x = startX;
+  let y = startY;
+  for (let i = 0; i < ICE_SLICK_SLIDE_TILES; i++) {
+    const nx = x + dx;
+    const ny = y + dy;
+    if (!isWalkableAt(state, nx, ny)) break;
+    if (state.dungeon.enemies.some((e) => e.x === nx && e.y === ny)) break;
+    x = nx;
+    y = ny;
+  }
+  return { x, y };
+}
+
 /** Try to move or attack. */
 export function tryMove(state: GameState, dx: number, dy: number, facing: Facing): Promise<void> {
   state.run.facing = facing;
@@ -203,10 +220,19 @@ export function tryMove(state: GameState, dx: number, dy: number, facing: Facing
     }
   }
 
-  pickupItemsAt(state, nx, ny);
-  tryEchoWell(state, nx, ny);
-  if (effectiveTileAt(state, nx, ny) === TILE.CHRONO_ANVIL) {
-    triggerChronoAnvil(state, nx, ny);
+  let landX = nx;
+  let landY = ny;
+  if (effectiveTileAt(state, nx, ny) === TILE.ICE_SLICK) {
+    ({ x: landX, y: landY } = slideOnIce(state, nx, ny, dx, dy));
+    state.run.playerX = landX;
+    state.run.playerY = landY;
+    logLine(state, 'You slide across the ice!');
+  }
+
+  pickupItemsAt(state, landX, landY);
+  tryEchoWell(state, landX, landY);
+  if (effectiveTileAt(state, landX, landY) === TILE.CHRONO_ANVIL) {
+    triggerChronoAnvil(state, landX, landY);
     return Promise.resolve();
   }
   if (tryDescendIfOnStairs(state)) return Promise.resolve();

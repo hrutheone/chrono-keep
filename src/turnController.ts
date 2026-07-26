@@ -4,7 +4,8 @@ import { applyEnemyStatus, applyPlayerStatus, computeDamage, consumeHitStopFlag,
 import { runEnemyPhase, tickBossRewind } from './enemyAI';
 import { TILE, effectiveTileAt } from './mapgen';
 import { HUB_FLOOR, enterHub } from './hub';
-import { isPermafrostStormFloor } from './arenas';
+import { isArenaFloor, isPermafrostStormFloor } from './arenas';
+import { arenaHazardDamage, tickArenaHazards } from './arenaHazards';
 import { resetRunForNewLoop } from './state';
 import { logLine } from './turns';
 import { markFloorDamageTaken } from './echoes';
@@ -23,40 +24,89 @@ function isHazardAt(state: GameState, x: number, y: number): boolean {
   return effectiveTileAt(state, x, y) === TILE.FIRE_HAZARD;
 }
 
+// Ambient Arena Fire/Frost hazard contact damage scales by floor tier (arenaHazardDamage); regular dungeon floors keep the flat baseline.
+const FROST_HAZARD_DAMAGE = 1;
+
+function ambientHazardDamage(state: GameState, baseline: number): number {
+  return isArenaFloor(state.run.currentFloor) ? arenaHazardDamage(state.run.currentFloor) : baseline;
+}
+
 function applyFireHazard(state: GameState): void {
+  const dmg = ambientHazardDamage(state, 0);
   if (isHazardAt(state, state.run.playerX, state.run.playerY)) {
     if (!hasAccessoryPassive(state, 'burn_immune')) applyPlayerStatus(state, 'BURN', 3);
+    if (dmg > 0) {
+      state.run.lastDamageSource = { kind: 'HAZARD', element: 'FIRE' };
+      state.run.currentHp = Math.max(0, state.run.currentHp - dmg);
+      markFloorDamageTaken(state);
+      logLine(state, `The flames sear you for ${dmg}.`);
+      notifyFloatingText(state.run.playerX, state.run.playerY, `${dmg}`, 'damage');
+    }
   }
 
-  for (const enemy of state.dungeon.enemies) {
-    if (isHazardAt(state, enemy.x, enemy.y)) {
-      enemy.status = 'BURN';
-      enemy.statusTurns = 3;
+  for (const enemy of [...state.dungeon.enemies]) {
+    if (!isHazardAt(state, enemy.x, enemy.y)) continue;
+    enemy.status = 'BURN';
+    enemy.statusTurns = 3;
+    if (dmg > 0) {
+      enemy.hp -= dmg;
+      notifyFloatingText(enemy.x, enemy.y, `${dmg}`, 'damage');
+      if (enemy.hp <= 0) killEnemy(state, enemy, 'bump');
     }
   }
 }
-
-// Frost Hazard chip damage.
-const FROST_HAZARD_DAMAGE = 1;
 
 function isFrostHazardAt(state: GameState, x: number, y: number): boolean {
   return effectiveTileAt(state, x, y) === TILE.FROST_HAZARD;
 }
 
 function applyFrostHazard(state: GameState): void {
+  const dmg = ambientHazardDamage(state, FROST_HAZARD_DAMAGE);
   if (isFrostHazardAt(state, state.run.playerX, state.run.playerY)) {
     state.run.lastDamageSource = { kind: 'HAZARD', element: 'FROST' };
-    state.run.currentHp = Math.max(0, state.run.currentHp - FROST_HAZARD_DAMAGE);
+    state.run.currentHp = Math.max(0, state.run.currentHp - dmg);
     markFloorDamageTaken(state);
-    logLine(state, `The frost gnaws at you for ${FROST_HAZARD_DAMAGE}.`);
-    notifyFloatingText(state.run.playerX, state.run.playerY, `${FROST_HAZARD_DAMAGE}`, 'damage');
+    logLine(state, `The frost gnaws at you for ${dmg}.`);
+    notifyFloatingText(state.run.playerX, state.run.playerY, `${dmg}`, 'damage');
   }
   // Iterate enemy snapshot.
   for (const enemy of [...state.dungeon.enemies]) {
     if (!isFrostHazardAt(state, enemy.x, enemy.y)) continue;
-    enemy.hp -= FROST_HAZARD_DAMAGE;
-    notifyFloatingText(enemy.x, enemy.y, `${FROST_HAZARD_DAMAGE}`, 'damage');
+    enemy.hp -= dmg;
+    notifyFloatingText(enemy.x, enemy.y, `${dmg}`, 'damage');
     if (enemy.hp <= 0) killEnemy(state, enemy, 'bump');
+  }
+}
+
+// Storm-Caller Mk II/III's Tesla Pulse — ICE_SLICK deliberately isn't checked here, it only slides the player.
+const VOLT_STUN_CHANCE = 0.25;
+
+function isVoltHazardAt(state: GameState, x: number, y: number): boolean {
+  return effectiveTileAt(state, x, y) === TILE.VOLT_HAZARD;
+}
+
+function applyVoltHazard(state: GameState): void {
+  const dmg = arenaHazardDamage(state.run.currentFloor);
+  if (isVoltHazardAt(state, state.run.playerX, state.run.playerY)) {
+    state.run.lastDamageSource = { kind: 'HAZARD', element: 'VOLT' };
+    state.run.currentHp = Math.max(0, state.run.currentHp - dmg);
+    markFloorDamageTaken(state);
+    logLine(state, `The electrified floor shocks you for ${dmg}.`);
+    notifyFloatingText(state.run.playerX, state.run.playerY, `${dmg}`, 'damage');
+    if (Math.random() < VOLT_STUN_CHANCE) {
+      applyPlayerStatus(state, 'STUN', 1);
+      logLine(state, 'You are Stunned!');
+    }
+  }
+  for (const enemy of [...state.dungeon.enemies]) {
+    if (!isVoltHazardAt(state, enemy.x, enemy.y)) continue;
+    enemy.hp -= dmg;
+    notifyFloatingText(enemy.x, enemy.y, `${dmg}`, 'damage');
+    if (enemy.hp <= 0) {
+      killEnemy(state, enemy, 'bump');
+      continue;
+    }
+    if (Math.random() < VOLT_STUN_CHANCE) applyEnemyStatus(enemy, 'STUN', 1);
   }
 }
 
@@ -162,6 +212,36 @@ function detonateTelegraph(state: GameState, t: GameState['dungeon']['telegraphT
     return;
   }
 
+  // Glacial-Knight Mk III's Avalanche — flat arenaHazardDamage, not attacker-scaled, and always Chills.
+  if (t.payload === 'icicle') {
+    if (hitsPlayer) {
+      const dmg = arenaHazardDamage(state.run.currentFloor);
+      state.run.lastDamageSource = { kind: 'HAZARD', element: 'FROST' };
+      state.run.currentHp = Math.max(0, state.run.currentHp - dmg);
+      markFloorDamageTaken(state);
+      logLine(state, `The icicle crashes down for ${dmg}!`);
+      notifyFloatingText(t.x, t.y, `${dmg}`, 'damage');
+      applyPlayerStatus(state, 'CHILLED', 3);
+      logLine(state, 'You are Chilled!');
+    }
+    return;
+  }
+
+  // Storm-Caller Mk III's Overload Current — flat arenaHazardDamage and a guaranteed Stun (not a % chance).
+  if (t.payload === 'volt_beam') {
+    if (hitsPlayer) {
+      const dmg = arenaHazardDamage(state.run.currentFloor);
+      state.run.lastDamageSource = { kind: 'HAZARD', element: 'VOLT' };
+      state.run.currentHp = Math.max(0, state.run.currentHp - dmg);
+      markFloorDamageTaken(state);
+      logLine(state, `The Overload Current arcs through you for ${dmg}!`);
+      notifyFloatingText(t.x, t.y, `${dmg}`, 'damage');
+      applyPlayerStatus(state, 'STUN', 1);
+      logLine(state, 'You are Stunned!');
+    }
+    return;
+  }
+
   // 'chill_pulse'
   if (hitsPlayer) {
     const dmg = computeDamage(t.sourceAttack, totalDef(state), 'FROST', playerElement(state));
@@ -214,6 +294,7 @@ function runTickPhase(state: GameState, actionKind: PlayerActionKind): void {
 
   applyFireHazard(state);
   applyFrostHazard(state);
+  applyVoltHazard(state);
   tickPlayerStatus(state);
   tickTempBuffs(state);
   tickTrollBlood(state);
@@ -223,6 +304,8 @@ function runTickPhase(state: GameState, actionKind: PlayerActionKind): void {
   tickEnemyOverrides(state);
   tickExpiringTiles(state);
   tickTelegraphTiles(state);
+  // Runs last: any hazard/telegraph it places this turn shouldn't be immediately decremented by the ticks above.
+  if (isArenaFloor(state.run.currentFloor)) tickArenaHazards(state);
 
   // Regenerate Stamina.
   if (actionKind !== 'skill') {

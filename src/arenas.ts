@@ -28,10 +28,10 @@ export function miniBossRepeatNumber(floor: number): number {
   return Math.floor((floor - 10) / 30);
 }
 
-const ARENA_W = 20;
-const ARENA_H = 20;
-const ARENA_X = 6;
-const ARENA_Y = 6;
+export const ARENA_W = 20;
+export const ARENA_H = 20;
+export const ARENA_X = 6;
+export const ARENA_Y = 6;
 
 interface ArenaLayout {
   tiles: number[][];
@@ -75,8 +75,9 @@ function buildRoom(): ArenaLayout {
   return { tiles, spawnX, spawnY, bossX, bossY };
 }
 
-/** Add permanent Fire Hazard strips for Inferno-Golem's arena. */
-function addGolemFeature(layout: ArenaLayout): void {
+/** Static Fire Hazard strips — Mk I only. Mk II/III take over the arena's fire layout dynamically (see arenaHazards.ts). */
+function addGolemFeature(layout: ArenaLayout, floor: number): void {
+  if (miniBossRepeatNumber(floor) !== 0) return;
   for (const y of [ARENA_Y + 7, ARENA_Y + 13]) {
     for (let x = ARENA_X + 1; x < ARENA_X + ARENA_W - 1; x++) layout.tiles[y][x] = TILE.FIRE_HAZARD;
   }
@@ -90,7 +91,7 @@ export const STORM_CALLER_PILLARS: readonly [number, number][] = [
   [ARENA_X + ARENA_W - 5, ARENA_Y + ARENA_H - 5],
 ];
 
-/** Add pillar cover for Storm-Caller's arena. */
+/** Add pillar cover for Storm-Caller's arena — permanent across Mk I/II/III. */
 function addStormCallerFeature(layout: ArenaLayout): void {
   for (const [x, y] of STORM_CALLER_PILLARS) {
     layout.tiles[y][x] = TILE.WALL;
@@ -101,10 +102,10 @@ function addStormCallerFeature(layout: ArenaLayout): void {
 }
 
 // Glacial-Knight's arena has no static features.
-const ARENA_FEATURES: Partial<Record<MiniBossKind, (layout: ArenaLayout) => void>> = {
-  INFERNO_GOLEM: addGolemFeature,
-  STORM_CALLER: addStormCallerFeature,
-};
+function addStaticArenaFeature(layout: ArenaLayout, kind: MiniBossKind, floor: number): void {
+  if (kind === 'INFERNO_GOLEM') addGolemFeature(layout, floor);
+  else if (kind === 'STORM_CALLER') addStormCallerFeature(layout);
+}
 
 /** Floor 90 only: Glacial-Knight Mk III's Permafrost Storm makes Chilled movement burn extra Turns. */
 export function isPermafrostStormFloor(floor: number): boolean {
@@ -117,7 +118,7 @@ export function enterArenaFloor(state: GameState, floor: number): void {
   resetCameraLerp();
   const layout = buildRoom();
   const kind = archetypeForFloor(floor);
-  ARENA_FEATURES[kind]?.(layout);
+  addStaticArenaFeature(layout, kind, floor);
 
   const evolution = BOSS_EVOLUTION[floor];
   const boss = createEnemy(kind, `arena-${floor}-boss`, layout.bossX, layout.bossY);

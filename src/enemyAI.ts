@@ -5,6 +5,7 @@ import type { EnemyKind } from './content';
 import { applyPlayerStatus, computeDamage, enemyAttackPlayer, killEnemy, playerElement } from './combat';
 import { isWalkableAt, TILE } from './mapgen';
 import { miniBossRepeatNumber, STORM_CALLER_PILLARS } from './arenas';
+import { spawnIceSlicks } from './arenaHazards';
 import { totalDef } from './inventory';
 import { markFloorDamageTaken } from './echoes';
 import { logLine } from './turns';
@@ -755,6 +756,8 @@ function castIceBarricade(state: GameState, enemy: Enemy): void {
   }
   logLine(state, `${ENEMY_NAME[enemy.kind]} raises an Ice-Barricade!`);
   playBossTelegraphSfx();
+  // Mk II only: the barricade cast also refreshes the arena's Ice Slicks.
+  if (miniBossRepeatNumber(state.run.currentFloor) === 1) spawnIceSlicks(state, enemy);
 }
 
 /** Doom-Guard behavior: below 50% HP, its Speed permanently rises to 2. */
